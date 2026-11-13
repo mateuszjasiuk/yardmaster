@@ -693,7 +693,7 @@ func TestBoardFinderFiltersAndFocuses(t *testing.T) {
 	if m.boardInput.Value() != "" {
 		t.Fatalf("reopened board should clear the query, got %q", m.boardInput.Value())
 	}
-	if rows, _ := m.boardView(); !rows[len(rows)-1].isNew {
+	if rows, _ := m.boardView(); rows[len(rows)-1].kind != rowNew {
 		t.Fatal("an empty query should show the grouped board with the new agent row")
 	}
 }
@@ -708,7 +708,7 @@ func TestBoardFinderMatchesWorktree(t *testing.T) {
 		t.Fatalf("no agent should match, got %d rows", len(nav))
 	}
 	m.boardInput.SetValue(m.current.worktree)
-	if rows, nav := m.boardView(); len(nav) != 1 || !rows[0].isAgent {
+	if rows, nav := m.boardView(); len(nav) != 1 || rows[0].kind != rowAgent {
 		t.Fatalf("the worktree name should match its agent, got %+v", rows)
 	}
 }
@@ -742,8 +742,9 @@ func TestBoardFinderListsIdleWorktreesAfterAgents(t *testing.T) {
 	m = mm.(Model)
 
 	// An empty query keeps the grouped board: no worktree rows.
-	for _, r := range func() []boardRow { rows, _ := m.boardView(); return rows }() {
-		if r.isWorktree {
+	empty, _ := m.boardView()
+	for _, r := range empty {
+		if r.kind == rowWorktree {
 			t.Fatalf("an empty query should not list idle worktrees, got %+v", r)
 		}
 	}
@@ -752,21 +753,18 @@ func TestBoardFinderListsIdleWorktreesAfterAgents(t *testing.T) {
 	// and the worktree that has an agent is not listed twice.
 	m.boardInput.SetValue("r/")
 	rows, nav := m.boardView()
-	if len(nav) != 3 || !rows[0].isAgent {
+	if len(nav) != 3 || rows[0].kind != rowAgent {
 		t.Fatalf("want the agent then two idle worktrees, got %+v", rows)
 	}
-	idle := map[string]bool{}
+	idle := map[string]string{}
 	for _, r := range rows[1:] {
-		if !r.isWorktree {
+		if r.kind != rowWorktree {
 			t.Fatalf("rows after the agent should be idle worktrees, got %+v", r)
 		}
-		idle[r.key] = r.live
+		idle[r.key] = r.status
 	}
-	if live, ok := idle["r/sch-885"]; !ok || live {
-		t.Fatalf("r/sch-885 should be listed as closed, got %v", idle)
-	}
-	if live, ok := idle["r/sch-901"]; !ok || !live {
-		t.Fatalf("r/sch-901 should be listed as open without agents, got %v", idle)
+	if idle["r/sch-885"] != "closed" || idle["r/sch-901"] != "no agent" {
+		t.Fatalf("want r/sch-885 closed and r/sch-901 open without agents, got %v", idle)
 	}
 	m.width = 100
 	if out := m.renderBoard(30); !strings.Contains(out, "closed") || !strings.Contains(out, "no agent") {
@@ -780,6 +778,24 @@ func TestBoardFinderListsIdleWorktreesAfterAgents(t *testing.T) {
 	m = mm.(Model)
 	if m.mode != modeNormal {
 		t.Fatalf("ctrl+d on a worktree row should do nothing, got mode %v", m.mode)
+	}
+}
+
+func TestBoardActionKeysFollowConfig(t *testing.T) {
+	m := modelWithAgents(1)
+	m.keys.BoardRemove = "ctrl+w"
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+
+	mm, _ = m.handleBoard(ctrlKey('d'))
+	m = mm.(Model)
+	if m.mode == modeConfirmAgentClose {
+		t.Fatal("ctrl+d should no longer remove once board_remove is changed")
+	}
+	mm, _ = m.handleBoard(ctrlKey('w'))
+	m = mm.(Model)
+	if m.mode != modeConfirmAgentClose {
+		t.Fatalf("the configured board_remove key should ask to remove, got mode %v", m.mode)
 	}
 }
 
@@ -806,7 +822,7 @@ func TestBoardOpensFromPicker(t *testing.T) {
 	}
 	// With no open workspaces the board still offers the "+ new agent" row.
 	rows, nav := m.buildBoard()
-	if len(nav) != 1 || !rows[nav[0]].isNew {
+	if len(nav) != 1 || rows[nav[0]].kind != rowNew {
 		t.Fatalf("empty board should hold only the new-agent row, got rows=%d nav=%d", len(rows), len(nav))
 	}
 	// An unrelated control key is swallowed while the board is open. The
@@ -2361,7 +2377,7 @@ func TestBoardSortsAttentionFirst(t *testing.T) {
 	m.attention[pid] = attnEntry{level: attnDone, key: "repo/a"}
 
 	rows, nav := m.buildBoard()
-	if len(rows) == 0 || rows[0].isAgent || rows[0].key != "repo/a" {
+	if len(rows) == 0 || rows[0].kind == rowAgent || rows[0].key != "repo/a" {
 		t.Fatalf("worktree with attention should sort first, got %+v", rows[0])
 	}
 	// nav: repo/a's agent, repo/b's agent, new row.

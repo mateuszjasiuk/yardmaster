@@ -678,8 +678,9 @@ func (m Model) notifZoneAt(x, y int) bool {
 
 // renderBoard draws the agent board overlay: the finder query, then every open
 // workspace's agents grouped under worktree header rows (attention sorted to the
-// top) with a trailing "+ new agent" row. While the query has text, only the
-// matching agents show, each with its worktree, windowed to the height.
+// top) with a trailing "+ new agent" row. While the query has text, the matching
+// agents show with their worktree, then the matching worktrees without agents,
+// windowed to the height.
 // Delegates to renderBoardForm in form state.
 func (m Model) renderBoard(h int) string {
 	if m.formOpen {
@@ -696,7 +697,7 @@ func (m Model) renderBoard(h int) string {
 	}
 	agentCount := 0
 	for _, r := range rows {
-		if r.isAgent {
+		if r.kind == rowAgent {
 			agentCount++
 		}
 	}
@@ -707,9 +708,7 @@ func (m Model) renderBoard(h int) string {
 		"  " + strings.Join([]string{
 			keyhint("type", "find"), keyhint("↑↓", "move"), keyhint("enter", "focus"), keyhint("esc", "close"),
 		}, separator),
-		"  " + strings.Join([]string{
-			keyhint("ctrl+e", "new"), keyhint("ctrl+r", "restart agent"), keyhint("ctrl+d", "remove agent"), keyhint("ctrl+x", "dismiss"),
-		}, separator),
+		"  " + strings.Join(boardActionHints(m.keys), separator),
 	}
 
 	var body []string
@@ -723,13 +722,26 @@ func (m Model) renderBoard(h int) string {
 	return renderPanel(lines, innerW, m.width, h)
 }
 
+// boardActionHints lists the board's action keys, leaving out disabled ones.
+func boardActionHints(k config.Keys) []string {
+	var hints []string
+	for _, h := range []struct{ key, desc string }{
+		{k.BoardNew, "new"}, {k.BoardRestart, "restart agent"}, {k.BoardRemove, "remove agent"}, {k.BoardDismiss, "dismiss"},
+	} {
+		if h.key != "" {
+			hints = append(hints, keyhint(h.key, h.desc))
+		}
+	}
+	return hints
+}
+
 // boardGroupLines draws the board with an empty query: agents under their
 // worktree headers, then the "+ new agent" row.
 func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) []string {
 	var lines []string
 	for i, r := range rows {
-		switch {
-		case r.isNew:
+		switch r.kind {
+		case rowNew:
 			if agentCount > 0 {
 				lines = append(lines, "")
 			}
@@ -738,14 +750,14 @@ func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) 
 			} else {
 				lines = append(lines, dimStyle.Render("  + new agent…"))
 			}
-		case r.isAgent:
+		case rowAgent:
 			content := m.boardAgentLine(r, false, innerW)
 			if i == selRow {
 				lines = append(lines, selBar(content, innerW))
 			} else {
 				lines = append(lines, content)
 			}
-		default: // worktree group header
+		case rowHeader:
 			if i > 0 {
 				lines = append(lines, "")
 			}
@@ -765,16 +777,17 @@ func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) 
 // worktree, windowed to rowsAvail lines around the selection like the palette.
 func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) []string {
 	if len(rows) == 0 {
-		return []string{dimStyle.Render("  no matching agents")}
+		return []string{dimStyle.Render("  no matching sessions")}
 	}
 
 	start, end := windowBounds(len(rows), selRow, rowsAvail)
 	var lines []string
 	for i := start; i < end; i++ {
 		var content string
-		if rows[i].isWorktree {
+		switch rows[i].kind {
+		case rowWorktree:
 			content = boardWorktreeLine(rows[i], innerW)
-		} else {
+		case rowAgent:
 			content = m.boardAgentLine(rows[i], true, innerW)
 		}
 		if i == selRow {
@@ -788,12 +801,8 @@ func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) [
 // boardWorktreeLine renders a worktree with no running agent, dimmed, lined up
 // with the agent rows' worktree column and tagged on the right.
 func boardWorktreeLine(r boardRow, innerW int) string {
-	tag := "closed"
-	if r.live {
-		tag = "no agent"
-	}
 	left := dimStyle.Render("     " + r.key)
-	right := dimStyle.Render(tag)
+	right := dimStyle.Render(r.status)
 	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 	return left + strings.Repeat(" ", gap) + right
 }

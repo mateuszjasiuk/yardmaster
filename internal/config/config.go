@@ -232,6 +232,13 @@ type Keys struct {
 	// worktrees, attention first, plus the new-agent launcher. Legacy-named: the
 	// fuzzy-searchable command palette is CommandPalette (below), not this.
 	Palette string `toml:"palette"`
+	// BoardNew / BoardRestart / BoardRemove / BoardDismiss act on the board's
+	// selected agent. They work only while the board is open, and are chords
+	// because the board's search takes every plain letter and digit.
+	BoardNew     string `toml:"board_new"`
+	BoardRestart string `toml:"board_restart"`
+	BoardRemove  string `toml:"board_remove"`
+	BoardDismiss string `toml:"board_dismiss"`
 	// NextAgent / PrevAgent cycle the focused agent within the worktree.
 	NextAgent string `toml:"next_agent"`
 	PrevAgent string `toml:"prev_agent"`
@@ -311,6 +318,7 @@ func Default() Config {
 			GotoEditor: "alt+1", GotoAgent: "alt+2", GotoTerm: "alt+3",
 			Picker:  "ctrl+g",
 			Palette: "alt+a", NextAgent: "f4", PrevAgent: "f3",
+			BoardNew: "ctrl+e", BoardRestart: "ctrl+r", BoardRemove: "ctrl+d", BoardDismiss: "ctrl+x",
 			NextWorktree: "ctrl+l", PrevWorktree: "ctrl+h", ToggleStacks: "ctrl+y", StackPopup: "ctrl+s", SidePanel: "ctrl+\\", SideBySide: "ctrl+shift+\\",
 			Help: "f1", GlobalConfig: "alt+g", Attention: "alt+n", Highlight: "ctrl+q", Back: "alt+b",
 			TermSplitV: "alt+v", TermSplitH: "alt+s",

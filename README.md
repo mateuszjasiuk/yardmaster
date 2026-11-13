@@ -125,6 +125,10 @@ goto_agent  = "alt+2"  # jump to the agent view
 goto_term   = "alt+3"  # jump to the terminal view
 picker      = "ctrl+g" # return to the CT picker
 palette     = "alt+a"  # agent board: find, focus, create, restart, or remove agents
+board_new     = "ctrl+e" # in the board: new agent
+board_restart = "ctrl+r" # in the board: restart the selected agent
+board_remove  = "ctrl+d" # in the board: remove the selected agent (asks first)
+board_dismiss = "ctrl+x" # in the board: dismiss the selected agent's "your turn"
 next_agent  = "f4"     # next agent in the active worktree
 prev_agent  = "f3"     # previous agent in the active worktree
 next_worktree = "ctrl+l" # next worktree in the bar, like tabs (wraps)
@@ -389,7 +393,8 @@ of a repo, worktree or agent name (`885` finds `sch-885-…`), and the best matc
 selected. Worktrees without a running agent match too, listed after the agents: `enter` opens
 them like the deck does. `enter` on an agent focuses it, and `esc` closes the board. `ctrl+e` creates an agent, `ctrl+r`
 restarts the selected one in place, `ctrl+d` removes it, and `ctrl+x` dismisses its "your turn"
-marker.
+marker. These four are chords because the search takes every letter; change them with the
+`board_*` keys.
 
 The bar lists every open worktree after its icons, in a fixed order, coloured by what its agents
 are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you, and

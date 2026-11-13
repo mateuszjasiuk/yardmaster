@@ -225,14 +225,20 @@ type attnEntry struct {
 	startedAt int64  // unix ms of the owning process's start, from AgentStatus.StartedAt; 0 = unknown
 }
 
-// boardRow is one row of the agent board: a non-navigable worktree group
-// header, a selectable agent row, the trailing "+ new agent" row, or, while
-// searching, a worktree with no running agent.
+// boardRowKind is what a board row is. The zero value is none of them, so a row
+// built without a kind is never mistaken for a header or an agent.
+type boardRowKind int
+
+const (
+	rowHeader   boardRowKind = iota + 1 // worktree group header, not selectable
+	rowAgent                            // an agent
+	rowNew                              // the trailing "+ new agent" row
+	rowWorktree                         // while searching: a worktree with no running agent
+)
+
+// boardRow is one row of the agent board.
 type boardRow struct {
-	isAgent    bool // navigable agent row
-	isNew      bool // navigable "+ new agent" row
-	isWorktree bool // navigable worktree without agents; live when it is open
-	live       bool
+	kind boardRowKind
 
 	key      string // workspace key ("repo/branch")
 	repo     string // for activate()
@@ -243,7 +249,7 @@ type boardRow struct {
 	pid      int
 	label    string // display name
 	provider agent.Provider
-	status   string    // right-hand status column
+	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
 }
 
@@ -2134,7 +2140,7 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 		attn := m.agentAttn(pid)
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
-			isAgent: true, key: key, repo: repoName, worktree: wtName, path: path,
+			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
 			status: m.boardStatus(pid, attn), attn: attn,
 		})
@@ -2243,13 +2249,13 @@ func (m Model) buildBoard() (rows []boardRow, nav []int) {
 	})
 
 	for _, g := range groups {
-		rows = append(rows, boardRow{key: g.key, repo: g.repo, worktree: g.worktree, path: g.path, attn: g.attn})
+		rows = append(rows, boardRow{kind: rowHeader, key: g.key, repo: g.repo, worktree: g.worktree, path: g.path, attn: g.attn})
 		for _, r := range g.agents {
 			nav = append(nav, len(rows))
 			rows = append(rows, r)
 		}
 	}
-	rows = append(rows, boardRow{isNew: true})
+	rows = append(rows, boardRow{kind: rowNew})
 	nav = append(nav, len(rows)-1)
 	return rows, nav
 }
@@ -2287,8 +2293,8 @@ func (m Model) boardStatus(pid int, attn attnLevel) string {
 }
 
 // boardView is the board as the user sees it: the grouped board while the query
-// is empty, otherwise only the matching agent rows, best match first. Rows with
-// the same score keep the board's order.
+// is empty, otherwise the matching agents, best match first, then the matching
+// worktrees without agents. Rows with the same score keep the board's order.
 func (m Model) boardView() (rows []boardRow, nav []int) {
 	rows, nav = m.buildBoard()
 	q := m.boardQuery()
@@ -2296,20 +2302,13 @@ func (m Model) boardView() (rows []boardRow, nav []int) {
 		return rows, nav
 	}
 
-	var (
-		agents []boardRow
-		texts  []string
-	)
+	var agents []boardRow
 	for _, r := range rows {
-		if r.isAgent {
+		if r.kind == rowAgent {
 			agents = append(agents, r)
-			texts = append(texts, r.key+" · "+r.label)
 		}
 	}
-	var found []boardRow
-	for _, idx := range fuzzyRank(q, texts) {
-		found = append(found, agents[idx])
-	}
+	found := rankBoardRows(q, agents, func(r boardRow) string { return r.key + " · " + r.label })
 	found = append(found, m.idleWorktreeMatches(q, rows)...)
 
 	rows, nav = found, nil
@@ -2328,25 +2327,34 @@ func (m Model) idleWorktreeMatches(q string, board []boardRow) []boardRow {
 		onBoard[r.key] = true
 	}
 
-	var (
-		idle  []boardRow
-		texts []string
-	)
+	var idle []boardRow
 	for _, it := range m.active {
 		key := wsKey(it.repo.Name, it.view.WT.Name)
 		if onBoard[key] {
 			continue
 		}
+		status := "closed"
+		if it.view.Live {
+			status = "no agent"
+		}
 		idle = append(idle, boardRow{
-			isWorktree: true, live: it.view.Live,
+			kind: rowWorktree, status: status,
 			key: key, repo: it.repo.Name, worktree: it.view.WT.Name, path: it.view.WT.Path,
 		})
-		texts = append(texts, key)
+	}
+	return rankBoardRows(q, idle, func(r boardRow) string { return r.key })
+}
+
+// rankBoardRows returns the rows whose text matches q, best match first.
+func rankBoardRows(q string, rows []boardRow, text func(boardRow) string) []boardRow {
+	texts := make([]string, len(rows))
+	for i, r := range rows {
+		texts[i] = text(r)
 	}
 
 	var out []boardRow
 	for _, idx := range fuzzyRank(q, texts) {
-		out = append(out, idle[idx])
+		out = append(out, rows[idx])
 	}
 	return out
 }
@@ -2363,14 +2371,14 @@ func (m Model) openBoard() (tea.Model, tea.Cmd) {
 	m.boardCursor = 0
 	rows, nav := m.boardView()
 	for i, ri := range nav {
-		if rows[ri].isAgent && rows[ri].attn >= attnDone {
+		if rows[ri].kind == rowAgent && rows[ri].attn >= attnDone {
 			m.boardCursor = i
 			return m, focus
 		}
 	}
 	for i, ri := range nav {
 		r := rows[ri]
-		if r.isAgent && m.current != nil && r.key == m.current.key &&
+		if r.kind == rowAgent && m.current != nil && r.key == m.current.key &&
 			m.current.ws != nil && r.agentIdx == m.current.ws.ActiveAgent {
 			m.boardCursor = i
 			break
@@ -2405,7 +2413,7 @@ func (m Model) closeBoard() Model {
 }
 
 // handleBoard routes key events while the agent board is open. Letters and
-// digits go to the query, so the row actions sit on ctrl chords.
+// digits go to the query, so the row actions sit on chords (keys.Board*).
 func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeConfirmAgentClose:
@@ -2440,35 +2448,36 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.boardCursor++
 		}
 		return m, nil
-	case "ctrl+e":
+	case m.keys.BoardNew:
 		return m.openNewAgentForm(), nil
-	case "ctrl+r":
-		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
+	case m.keys.BoardRestart:
+		if r, ok := rowAt(m.boardCursor); ok && r.kind == rowAgent {
 			if m.boardAgentActive(r) {
 				return m.beginAgentRestartConfirm(r), nil
 			}
 			return m.restartBoardAgent(r)
 		}
 		return m, nil
-	case "ctrl+d":
-		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
+	case m.keys.BoardRemove:
+		if r, ok := rowAt(m.boardCursor); ok && r.kind == rowAgent {
 			return m.beginAgentCloseConfirm(r), nil
 		}
 		return m, nil
-	case "ctrl+x":
-		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
+	case m.keys.BoardDismiss:
+		if r, ok := rowAt(m.boardCursor); ok && r.kind == rowAgent {
 			m.dropSeen(r.pid)
 		}
 		return m, nil
 	case "enter":
 		if r, ok := rowAt(m.boardCursor); ok {
-			switch {
-			case r.isNew:
+			switch r.kind {
+			case rowNew:
 				return m.openNewAgentForm(), nil
-			case r.isWorktree:
+			case rowWorktree:
 				return m.closeBoard().activate(r.repo, r.worktree, r.path)
+			case rowAgent:
+				return m.focusBoardAgent(r)
 			}
-			return m.focusBoardAgent(r)
 		}
 		return m, nil
 	}
@@ -2596,7 +2605,7 @@ func (m Model) jumpAttention() (tea.Model, tea.Cmd) {
 	rows, nav := m.buildBoard()
 	var candidates []boardRow
 	for _, ri := range nav {
-		if r := rows[ri]; r.isAgent && r.attn >= attnDone {
+		if r := rows[ri]; r.kind == rowAgent && r.attn >= attnDone {
 			candidates = append(candidates, r)
 		}
 	}
@@ -2844,7 +2853,7 @@ func (m Model) paletteCommands() []paletteCmd {
 	)
 	rows, _ := m.buildBoard()
 	for _, r := range rows {
-		if !r.isAgent {
+		if r.kind != rowAgent {
 			continue
 		}
 		identity := r.repo + "/" + r.worktree + " — " + r.label
@@ -3119,8 +3128,8 @@ func (m Model) activateGlobalConfig() (tea.Model, tea.Cmd) {
 // field. Agents are no longer manually named — claude names the session
 // after its topic — so the form opens straight on the prompt.
 func (m Model) openNewAgentForm() tea.Model {
-	m, _ = m.showBoard()
-	m.boardInput.Blur() // the prompt takes the keys; esc gives them back
+	m.boardOpen = true
+	m.boardInput.Blur() // the prompt takes the keys and pastes; esc gives them back
 	m.formOpen = true
 	m.formFocus = formFieldPrompt
 	m.formProvider = m.defaultAgentProvider
