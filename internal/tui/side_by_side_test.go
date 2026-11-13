@@ -250,3 +250,68 @@ func TestClickFocusesTerminalPanes(t *testing.T) {
 		t.Fatalf("a zoomed pane fills the screen, so a click keeps its focus, active=%d", ws.ActiveTerm)
 	}
 }
+
+func TestSideBySideFollowsTheFirstAndLastAgent(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	ws := m.current.ws
+	w, _ := m.sessionSize()
+	left, right := sideBySideWidths(w)
+
+	for len(ws.Agents) > 0 {
+		agent := ws.Agents[0]
+		mm, _ := m.closeBoardAgent(boardRow{isAgent: true, key: m.current.key, agentIdx: 0, pid: agent.Pid()})
+		m = mm.(Model)
+	}
+	if got := sizeOf(ws.Editor).W; got != w {
+		t.Fatalf("with its last agent closed, nvim should get the full width, got %d", got)
+	}
+
+	sz := m.sizesFor(m.current.key).Agent
+	if sz.W != right {
+		t.Fatalf("the first agent should start at its half, %d, got %d", right, sz.W)
+	}
+	if _, err := m.mgr.SpawnAgent(m.current.key, t.TempDir(), session.Spec{Kind: session.Agent, Argv: []string{"cat"}}, sz.W, sz.H); err != nil {
+		t.Fatal(err)
+	}
+	m.resizeSessions()
+	if got := sizeOf(ws.Editor).W; got != left || !m.sideBySideShown() {
+		t.Fatalf("once an agent runs, nvim should be back on the left at %d, got %d", left, got)
+	}
+}
+
+func TestSideBySideShowsTheAgentPickedWithF4(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	sz := m.sizesFor(m.current.key).Agent
+	second, err := m.mgr.SpawnAgent(m.current.key, t.TempDir(), session.Spec{Kind: session.Agent, Argv: []string{"cat"}}, sz.W, sz.H)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.current.ws.ActiveAgent = 0
+
+	mm, _ := m.handleKey(tea.KeyPressMsg{Code: tea.KeyF4})
+	m = mm.(Model)
+	panes := m.sessionPanes()
+	if len(panes) != 2 || panes[1].s != second {
+		t.Fatal("F4 should put the next agent on the right")
+	}
+	if got := sizeOf(second).W; got != panes[1].w {
+		t.Fatalf("the next agent should already have the right pane's width %d, got %d", panes[1].w, got)
+	}
+}
+
+func TestSideBySideStaysOutOfOverlaysAndTheOrchestrator(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+
+	m.helpOpen = true
+	if len(m.visibleSessions()) != 0 {
+		t.Fatal("help covers the sessions, so none is visible")
+	}
+	if got, want := m.View().Content, m.renderBar()+"\n"+m.renderHelp(m.height-m.barHeight()); got != want {
+		t.Fatal("help should be drawn instead of the two panes")
+	}
+	m.helpOpen = false
+
+	if got := m.sizesFor(orchestratorKey).Agent.W; got != 150 {
+		t.Fatalf("the orchestrator should keep the full width, got %d", got)
+	}
+}

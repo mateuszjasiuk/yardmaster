@@ -368,6 +368,7 @@ func (m Model) openBackground(key, dir string, provider agent.Provider, prompt s
 		if err != nil {
 			return m, nil, err
 		}
+		m.resizeSessions() // nvim makes room when this is the current worktree's first agent
 		return m, tea.Batch(m.saveAgents(key), m.watchAgentEvents(spawned)), nil
 	}
 	specs, err := m.workspaceSpecsWithPrompt(key, provider, prompt)

@@ -1124,21 +1124,23 @@ func (m Model) sessionSize() (int, int) {
 
 // sizesFor is the size each kind of session in workspace key gets. Terminal
 // panes and the orchestrator fill the room for sessions; nvim and the agent
-// split it while the worktree is side by side. A worktree that isn't open yet
-// is assumed to start with an agent.
+// split it while the worktree is side by side. Agents get their half also
+// before the first one starts, so it starts at the width it is shown at. A
+// worktree that isn't open yet is assumed to start with nvim and an agent.
 func (m Model) sizesFor(key string) session.Sizes {
 	w, h := m.sessionSize()
 	sizes := session.SameSize(w, h)
-	if _, ok := orchestratorAccountOf(key); ok {
+	if _, ok := orchestratorAccountOf(key); ok || !m.sideBySideFits() {
 		return sizes
 	}
 
-	joined := m.sideBySideFits()
-	if ws, ok := m.mgr.Workspace(key); ok {
-		joined = m.sideBySideIn(ws)
+	left, right := sideBySideWidths(w)
+	ws, open := m.mgr.Workspace(key)
+	if !open || m.sideBySideIn(ws) {
+		sizes.Editor.W = left
 	}
-	if joined {
-		sizes.Editor.W, sizes.Agent.W = sideBySideWidths(w)
+	if !open || ws.Editor != nil {
+		sizes.Agent.W = right
 	}
 	return sizes
 }
@@ -2419,6 +2421,7 @@ func (m Model) boardAgentActive(r boardRow) bool {
 
 func (m Model) closeBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 	m.mgr.CloseAgent(r.key, r.agentIdx)
+	m.resizeSessions() // nvim takes the whole width when its last agent closes
 	m.clearAgentTracking(r.pid)
 	save := m.saveAgents(r.key)
 	_, nav := m.buildBoard()
@@ -3204,6 +3207,7 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 		m.lastScreens[m.current.key] = m.screen
 	}
 	m.current = &workspaceRef{repo: repoName, worktree: wtName, key: key, path: dir, ws: ws}
+	m.resizeSessions() // the sizes assumed it would start with an agent
 	if s, ok := m.lastScreens[key]; ok {
 		m.screen = s
 	} else {
@@ -4112,6 +4116,7 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 		return model, tea.Batch(cmd, restoredWatches, model.watchAgentEvents(spawned), model.flashCmd("agent launched"))
 	}
 
+	m.resizeSessions() // nvim makes room when this is the first agent
 	save := m.saveAgents(key)
 	m.screen = screenAgent
 	m.clearWorkspaceAttention()
