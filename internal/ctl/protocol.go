@@ -1,6 +1,6 @@
 // Package ctl is the control channel between a running ct and programs that
-// want to act on it: the `ct ctl` command, and through it the orchestrator
-// agent. The TUI serves one Unix socket per ct process; a client sends one
+// want to act on it: the `ct ctl` command, and through it the agents ct
+// started. The TUI serves one Unix socket per ct process; a client sends one
 // JSON request per connection and reads one JSON response.
 package ctl
 
@@ -128,7 +128,7 @@ type AgentInfo struct {
 }
 
 // Summary is the cheap view of one worktree's work: what git knows, plus the
-// agent's last words, so an orchestrator can follow progress without reading
+// agent's last words, so another session can follow progress without reading
 // whole transcripts.
 type Summary struct {
 	WorktreeInfo

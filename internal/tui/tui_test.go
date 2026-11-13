@@ -136,7 +136,7 @@ func TestTabAtMapsIcons(t *testing.T) {
 			}
 		}
 	}
-	want := []screen{screenPicker, screenEditor, screenAgent, screenOrchestrator, screenTerminal}
+	want := []screen{screenPicker, screenEditor, screenAgent, screenTerminal}
 	if len(seen) != len(want) {
 		t.Fatalf("expected tabs %v, got %v", want, seen)
 	}
@@ -3689,34 +3689,6 @@ func TestCreatingSpinnerTimerSelfDisarms(t *testing.T) {
 	m = mm.(Model)
 	if m.creatingTicking || cmd != nil {
 		t.Fatal("the tick should disarm once nothing is being set up")
-	}
-}
-
-func TestOrchestratorViewLeavesWorkspaceCurrent(t *testing.T) {
-	m := sampleModel()
-	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w"}
-	m.orchFrom = screenTerminal
-	m.screen = screenOrchestrator
-	// The jump keys act on the workspace underneath.
-	mm, _ := m.gotoScreen(screenAgent)
-	if got := mm.(Model); got.screen != screenAgent || got.current.key != "r/w" {
-		t.Fatalf("goto agent went to %v on %q", got.screen, got.current.key)
-	}
-	// The orchestrator key toggles back to the view it was opened from.
-	mm, _ = m.openOrchestrator()
-	if got := mm.(Model).screen; got != screenTerminal {
-		t.Fatalf("toggle went to %v, want the terminal it came from", got)
-	}
-	m.current = nil
-	mm, _ = m.openOrchestrator()
-	if got := mm.(Model).screen; got != screenPicker {
-		t.Fatalf("toggle with no workspace went to %v, want the deck", got)
-	}
-	// The view is never remembered as a workspace's last screen.
-	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w"}
-	mm, _ = m.returnToDeck()
-	if s, ok := mm.(Model).lastScreens["r/w"]; ok && s == screenOrchestrator {
-		t.Fatal("returnToDeck remembered the orchestrator view")
 	}
 }
 

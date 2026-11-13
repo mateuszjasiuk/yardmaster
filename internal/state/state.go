@@ -57,9 +57,6 @@ type AgentState struct {
 	Provider  agent.Provider `json:"provider"`
 	SessionID string         `json:"session_id"`
 	Label     string         `json:"label"`
-	// Role is set for agents with a special job ("orchestrator"), so the
-	// next open rebuilds them with the same instructions.
-	Role string `json:"role,omitempty"`
 }
 
 // dir returns ct's state directory (honoring XDG_STATE_HOME).

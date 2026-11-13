@@ -179,8 +179,6 @@ func (m Model) destinationGlyph(s screen) string {
 			return "edit"
 		case screenAgent:
 			return "agent"
-		case screenOrchestrator:
-			return "orch"
 		default:
 			return "term"
 		}
@@ -193,8 +191,6 @@ func (m Model) destinationGlyph(s screen) string {
 			return "E"
 		case screenAgent:
 			return "A"
-		case screenOrchestrator:
-			return "O"
 		default:
 			return "T"
 		}
@@ -206,8 +202,6 @@ func (m Model) destinationGlyph(s screen) string {
 		return iconEditor
 	case screenAgent:
 		return iconAgent
-	case screenOrchestrator:
-		return iconOrch
 	default:
 		return iconTerm
 	}
@@ -231,7 +225,6 @@ const (
 	iconAgent  = "󰚩"          // md-robot (U+F06A9)   — claude
 	iconTerm   = ""          // fa-terminal (U+F120) — term
 	iconPanes  = "\U0000F009" // fa-th-large (U+F009) — the split-pane grid
-	iconOrch   = "\U0000F0E8" // fa-sitemap (U+F0E8)  — the orchestrator
 	// Zoom toggle shown at the tail of the pane indicator (clickable): diagonal
 	// arrows expanding out to maximize the active pane, collapsing in to restore
 	// the split. Material Design Icons range — the classic Font Awesome
@@ -571,9 +564,6 @@ func (m Model) barZones() []barZone {
 		{screenPicker, ct},
 		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
-		// The orchestrator icon is a shortcut to its agent, reachable like the
-		// deck; it lights up while that agent is on screen.
-		{screenOrchestrator, glyph(m.destinationGlyph(screenOrchestrator), boldYellow, m.screen == screenOrchestrator, true)},
 		{screenTerminal, glyph(m.destinationGlyph(screenTerminal), boldAccent, m.screen == screenTerminal, has)},
 	}
 	// On narrow terminals, optional inactive destinations yield before the
@@ -1838,7 +1828,6 @@ func (m Model) renderHelp(h int) string {
 		row(m.keys.Picker, "back to the deck"),
 		row(m.keys.Back, "return to previous location"),
 		row(m.keys.GlobalConfig, "open home workspace (~)"),
-		row(m.keys.Orchestrator, "orchestrator view (press again to go back)"),
 		row(m.keys.Palette, "agent board"),
 		row(m.keys.CommandPalette, "command palette (every action)"),
 	)
@@ -1900,7 +1889,6 @@ func (m Model) navigationLegend() string {
 		m.destinationGlyph(screenPicker) + " deck",
 		m.destinationGlyph(screenEditor) + " editor",
 		m.destinationGlyph(screenAgent) + " agent",
-		m.destinationGlyph(screenOrchestrator) + " orchestrator",
 		m.destinationGlyph(screenTerminal) + " terminal",
 	}
 	return helpStyle.Render(strings.Join(parts, " · "))

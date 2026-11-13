@@ -3,7 +3,6 @@ package tui
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"github.com/KCaverly/caretaker/internal/ctl"
 	"github.com/KCaverly/caretaker/internal/repo"
 	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/state"
 )
 
 func TestClaudeProjectName(t *testing.T) {
@@ -160,7 +158,7 @@ func TestCtlRemoveParksUntilDeckIdle(t *testing.T) {
 	if it, ok := m.selectedActive(); !ok || it.view.WT.Name != "b" {
 		t.Fatalf("confirm targets %+v", it)
 	}
-	if !strings.Contains(strings.Join(m.confirm.context, "\n"), "orchestrator") {
+	if !strings.Contains(strings.Join(m.confirm.context, "\n"), "requested through ct ctl") {
 		t.Fatalf("context %v", m.confirm.context)
 	}
 }
@@ -194,75 +192,7 @@ func TestQueueStateRoundTrip(t *testing.T) {
 	}
 }
 
-func TestOrchestratorReposListEveryRepo(t *testing.T) {
-	m := ctlModel(t)
-	m.groups = append(m.groups, Group{Repo: repo.Repo{Name: "s", Path: "/s"}})
-	got := m.orchestratorRepos("")
-	want := []OrchestratorRepo{{Name: "r", Path: "/r"}, {Name: "s", Path: "/s"}}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Fatalf("repos = %v, want %v", got, want)
-	}
-}
-
-// TestSavedAgentsDropOldOrchestrators checks that an orchestrator saved in a
-// main checkout's pool (from when each repo ran its own) is not restored
-// there, and that the focused agent still points at the same agent.
-func TestSavedAgentsDropOldOrchestrators(t *testing.T) {
-	m := ctlModel(t)
-	pool := []state.AgentState{
-		{Provider: "claude", SessionID: "o", Role: orchestratorRole},
-		{Provider: "claude", SessionID: "a"},
-		{Provider: "claude", SessionID: "b"},
-	}
-	m.state.SetAgents("r/(main)", pool, 2)
-	saved, active := m.savedAgents("r/(main)")
-	if len(saved) != 2 || saved[0].SessionID != "a" || saved[active].SessionID != "b" {
-		t.Fatalf("saved = %+v active = %d", saved, active)
-	}
-	if m.onlyOldOrchestrators("r/(main)") {
-		t.Fatal("a pool with plain agents should be restored")
-	}
-	m.state.SetAgents("r/a", pool[:1], 0)
-	if !m.onlyOldOrchestrators("r/a") {
-		t.Fatal("a pool with only an old orchestrator should not be restored")
-	}
-	m.state.SetAgents(orchestratorKey, pool[:1], 0)
-	if saved, _ := m.savedAgents(orchestratorKey); len(saved) != 1 || saved[0].Role != orchestratorRole {
-		t.Fatalf("orchestrator workspace lost its orchestrator: %+v", saved)
-	}
-}
-
-func TestOrchestratorAgentSpecCarriesRoleModelAndNotes(t *testing.T) {
-	cfgDir := t.TempDir()
-	t.Setenv("CT_CONFIG", filepath.Join(cfgDir, "config.toml"))
-	cfg := config.Default()
-	cfg.Agent = "claude"
-	c := NewController(cfg)
-	spec, err := c.OrchestratorAgentSpec("", []OrchestratorRepo{{Name: "r", Path: "/r"}, {Name: "s", Path: "/s"}}, "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if spec.Role != orchestratorRole || spec.Title == "" {
-		t.Fatalf("spec role/title = %q %q", spec.Role, spec.Title)
-	}
-	argv := strings.Join(spec.Argv, " ")
-	for _, want := range []string{"--model sonnet", "--add-dir /r", "--add-dir /s", filepath.Join(cfgDir, "orchestrator")} {
-		if !strings.Contains(argv, want) {
-			t.Fatalf("argv missing %q: %s", want, argv)
-		}
-	}
-	for _, r := range []string{"r", "s"} {
-		tasks := filepath.Join(cfgDir, "orchestrator", r, "tasks.md")
-		if !strings.Contains(argv, tasks) {
-			t.Fatalf("instructions do not name %s", tasks)
-		}
-		if _, err := os.Stat(tasks); err != nil {
-			t.Fatalf("tasks.md not seeded: %v", err)
-		}
-	}
-	if idx := orchestratorIndex(&session.Workspace{Agents: []*session.Session{{}, {Role: orchestratorRole}}}); idx != 1 {
-		t.Fatalf("orchestratorIndex = %d, want 1", idx)
-	}
+func TestRepoOfKey(t *testing.T) {
 	if repoOfKey("r/a") != "r" {
 		t.Fatal("repoOfKey")
 	}
@@ -333,71 +263,6 @@ func TestClaudeAgentsGetTheirAccount(t *testing.T) {
 		if got != want {
 			t.Errorf("%s: CLAUDE_CONFIG_DIR = %q, want %q", dir, got, want)
 		}
-	}
-}
-
-// TestOrchestratorPerClaudeAccount checks that each Claude account gets its
-// own orchestrator: its key, its repos, its folder and its account.
-func TestOrchestratorPerClaudeAccount(t *testing.T) {
-	cfgDir := t.TempDir()
-	t.Setenv("CT_CONFIG", filepath.Join(cfgDir, "config.toml"))
-	privateDir := filepath.Join(cfgDir, ".mjclaude")
-	if err := os.MkdirAll(privateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Claude writes .claude.json at login, before ct ever trusts a folder there.
-	if err := os.WriteFile(filepath.Join(privateDir, ".claude.json"), []byte("{}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg := config.Default()
-	cfg.ClaudeAccounts = map[string]config.ClaudeAccount{"private": {ConfigDir: privateDir, Folders: []string{"/s"}}}
-	m := ctlModel(t)
-	m.ctrl = NewController(cfg)
-	m.groups = append(m.groups, Group{
-		Repo:      repo.Repo{Name: "s", Path: "/s"},
-		Worktrees: []WorktreeView{{WT: repo.Worktree{Repo: "s", Name: "(main)", Path: "/s", IsMain: true}}},
-	})
-
-	for _, account := range []string{"", "private"} {
-		if got, ok := orchestratorAccountOf(orchestratorKeyFor(account)); !ok || got != account {
-			t.Errorf("key round trip for %q gave %q %v", account, got, ok)
-		}
-	}
-	if _, ok := orchestratorAccountOf("r/a"); ok {
-		t.Error("a worktree key is not an orchestrator")
-	}
-	if got := m.orchestratorRepos("private"); len(got) != 1 || got[0].Name != "s" {
-		t.Errorf("private repos = %v", got)
-	}
-	if got := m.orchestratorRepos(""); len(got) != 1 || got[0].Name != "r" {
-		t.Errorf("default repos = %v", got)
-	}
-	m.current = &workspaceRef{repo: "s", worktree: "(main)", key: "s/(main)", path: "/s"}
-	if got := m.orchestratorAccount(); got != "private" {
-		t.Errorf("orchestrator account from a private worktree = %q", got)
-	}
-
-	spec, err := m.ctrl.OrchestratorAgentSpec("private", m.orchestratorRepos("private"), "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(spec.Env, "CLAUDE_CONFIG_DIR="+privateDir) {
-		t.Errorf("private orchestrator env = %v", spec.Env)
-	}
-	tasks := filepath.Join(cfgDir, "orchestrator-private", "s", "tasks.md")
-	if _, err := os.Stat(tasks); err != nil {
-		t.Errorf("private tasks.md not seeded: %v", err)
-	}
-	dir, err := m.ctrl.EnsureOrchestratorDir("private")
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, _ := os.ReadFile(filepath.Join(privateDir, ".claude.json"))
-	if !strings.Contains(string(data), dir) {
-		t.Errorf("private orchestrator folder not trusted in the private account: %s", data)
-	}
-	if got := m.orchDir(orchestratorKeyFor("private")); got != dir {
-		t.Errorf("orchDir = %q, want %q", got, dir)
 	}
 }
 
