@@ -22,9 +22,15 @@ const (
 )
 
 // sidePanelW is how many columns the side panel takes from the sessions, the
-// divider included: 0 when it is closed or the terminal is too narrow.
+// divider included: 0 when it is closed or the terminal is too narrow. While
+// side by side is on, the panel needs room for two sessions, so it hides
+// before they do.
 func (m Model) sidePanelW() int {
-	if !m.sidePanel || m.width-sidePanelWidth-1 < minSessionWidth {
+	need := minSessionWidth
+	if m.sideBySide {
+		need = sideBySideMinWidth
+	}
+	if !m.sidePanel || m.width-sidePanelWidth-1 < need {
 		return 0
 	}
 	return sidePanelWidth + 1
@@ -41,9 +47,8 @@ func (m Model) toggleSidePanel() (tea.Model, tea.Cmd) {
 	return m, m.writeStateCmd()
 }
 
-// withSidePanel draws the side panel to the left of a session body and moves
-// the session's cursor to the right by the panel's width.
-func (m Model) withSidePanel(body string, cursor *tea.Cursor) (string, *tea.Cursor) {
+// withSidePanel draws the side panel to the left of a session body.
+func (m Model) withSidePanel(body string) string {
 	h := m.height - m.barHeight()
 	rows := m.sidePanelRows(h)
 	texts := make([]string, len(rows))
@@ -51,10 +56,7 @@ func (m Model) withSidePanel(body string, cursor *tea.Cursor) (string, *tea.Curs
 		texts[i] = r.text
 	}
 
-	if cursor != nil {
-		cursor.X += m.sidePanelW()
-	}
-	return joinVerticalSplit(strings.Join(texts, "\n"), body, cFaint, h, sidePanelWidth), cursor
+	return joinVerticalSplit(strings.Join(texts, "\n"), body, cFaint, h, sidePanelWidth)
 }
 
 // sidePanelClick handles a left click on the side panel: a session's row opens

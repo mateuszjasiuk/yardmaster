@@ -93,6 +93,12 @@ const (
 	IconsASCII = "ascii"
 )
 
+// How the side without focus looks while nvim and the agent are side by side.
+const (
+	DimFaint = "faint"
+	DimGray  = "gray"
+)
+
 // Display configures terminal rendering choices.
 type Display struct {
 	// Icons selects persistent navigation and pane symbols: nerd, text, or ascii.
@@ -100,6 +106,9 @@ type Display struct {
 	// AgentStrip lists every open worktree on its own row under the bar,
 	// coloured by its agents' status. On by default.
 	AgentStrip bool `toml:"agent_strip"`
+	// SideBySideDim is how the side without focus looks side by side: faint
+	// keeps its colours darker, gray draws it in plain gray.
+	SideBySideDim string `toml:"side_by_side_dim"`
 }
 
 // Stack configures stacked-PR workflow behavior.
@@ -246,6 +255,8 @@ type Keys struct {
 	ToggleStacks string `toml:"toggle_stacks"`
 	// SidePanel opens or closes the session list on the left of the screen.
 	SidePanel string `toml:"side_panel"`
+	// SideBySide shows nvim and the agent next to each other, or one at a time.
+	SideBySide string `toml:"side_by_side"`
 	// StackPopup opens the current gh stack's PRs, reviews and checks.
 	StackPopup string `toml:"stack_popup"`
 	// Help toggles the key/legend overlay (works in the deck and in sessions).
@@ -314,7 +325,7 @@ func Default() Config {
 			GotoEditor: "alt+1", GotoAgent: "alt+2", GotoTerm: "alt+3",
 			Picker:  "ctrl+g",
 			Palette: "alt+a", NextAgent: "f4", PrevAgent: "f3",
-			NextWorktree: "ctrl+l", PrevWorktree: "ctrl+h", ToggleStacks: "ctrl+y", StackPopup: "ctrl+s", SidePanel: "ctrl+\\",
+			NextWorktree: "ctrl+l", PrevWorktree: "ctrl+h", ToggleStacks: "ctrl+y", StackPopup: "ctrl+s", SidePanel: "ctrl+\\", SideBySide: "ctrl+shift+\\",
 			Help: "f1", GlobalConfig: "alt+g", Orchestrator: "alt+o", Attention: "alt+n", Highlight: "ctrl+q", Back: "alt+b",
 			TermSplitV: "alt+v", TermSplitH: "alt+s",
 			TermZoom: "alt+z", TermClose: "alt+x",
@@ -326,7 +337,7 @@ func Default() Config {
 			Usage: "alt+u", CommandPalette: "alt+p",
 		},
 		Usage:        Usage{Threshold: 50},
-		Display:      Display{Icons: IconsNerd, AgentStrip: true},
+		Display:      Display{Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint},
 		Orchestrator: Orchestrator{Model: "sonnet"},
 		Plasma: Plasma{
 			Pattern: "classic", Palette: "aurora", Charset: "dots",
@@ -501,6 +512,11 @@ func (c *Config) validate() error {
 	case IconsNerd, IconsText, IconsASCII:
 	default:
 		return fmt.Errorf("config `display.icons` must be %q, %q, or %q", IconsNerd, IconsText, IconsASCII)
+	}
+	switch c.Display.SideBySideDim {
+	case DimFaint, DimGray:
+	default:
+		return fmt.Errorf("config `display.side_by_side_dim` must be %q or %q", DimFaint, DimGray)
 	}
 	if !c.Agents.Default.Valid() {
 		return fmt.Errorf("config `agents.default` must be %q or %q", agent.Claude, agent.Codex)

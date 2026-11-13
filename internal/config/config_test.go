@@ -151,33 +151,34 @@ func TestDefaultUsage(t *testing.T) {
 func TestDefaultKeymap(t *testing.T) {
 	d := Default()
 	cases := map[string]string{
-		"cycle":       d.Keys.Cycle,
-		"cycle_back":  d.Keys.CycleBack,
-		"goto_editor": d.Keys.GotoEditor,
-		"goto_agent":  d.Keys.GotoAgent,
-		"goto_term":   d.Keys.GotoTerm,
-		"palette":     d.Keys.Palette,
-		"global":      d.Keys.GlobalConfig,
-		"back":        d.Keys.Back,
-		"next_wt":     d.Keys.NextWorktree,
-		"prev_wt":     d.Keys.PrevWorktree,
-		"stacks":      d.Keys.ToggleStacks,
-		"popup":       d.Keys.StackPopup,
-		"side_panel":  d.Keys.SidePanel,
-		"split_v":     d.Keys.TermSplitV,
-		"split_h":     d.Keys.TermSplitH,
-		"zoom":        d.Keys.TermZoom,
-		"close":       d.Keys.TermClose,
-		"focus_left":  d.Keys.TermFocusLeft,
-		"focus_down":  d.Keys.TermFocusDown,
-		"focus_up":    d.Keys.TermFocusUp,
-		"focus_right": d.Keys.TermFocusRight,
+		"cycle":        d.Keys.Cycle,
+		"cycle_back":   d.Keys.CycleBack,
+		"goto_editor":  d.Keys.GotoEditor,
+		"goto_agent":   d.Keys.GotoAgent,
+		"goto_term":    d.Keys.GotoTerm,
+		"palette":      d.Keys.Palette,
+		"global":       d.Keys.GlobalConfig,
+		"back":         d.Keys.Back,
+		"next_wt":      d.Keys.NextWorktree,
+		"prev_wt":      d.Keys.PrevWorktree,
+		"stacks":       d.Keys.ToggleStacks,
+		"popup":        d.Keys.StackPopup,
+		"side_panel":   d.Keys.SidePanel,
+		"side_by_side": d.Keys.SideBySide,
+		"split_v":      d.Keys.TermSplitV,
+		"split_h":      d.Keys.TermSplitH,
+		"zoom":         d.Keys.TermZoom,
+		"close":        d.Keys.TermClose,
+		"focus_left":   d.Keys.TermFocusLeft,
+		"focus_down":   d.Keys.TermFocusDown,
+		"focus_up":     d.Keys.TermFocusUp,
+		"focus_right":  d.Keys.TermFocusRight,
 	}
 	want := map[string]string{
 		"cycle": "alt+]", "cycle_back": "alt+[",
 		"goto_editor": "alt+1", "goto_agent": "alt+2", "goto_term": "alt+3",
 		"palette": "alt+a", "global": "alt+g", "prompt": "alt+y", "back": "alt+b",
-		"next_wt": "ctrl+l", "prev_wt": "ctrl+h", "stacks": "ctrl+y", "popup": "ctrl+s", "side_panel": "ctrl+\\",
+		"next_wt": "ctrl+l", "prev_wt": "ctrl+h", "stacks": "ctrl+y", "popup": "ctrl+s", "side_panel": "ctrl+\\", "side_by_side": "ctrl+shift+\\",
 		"split_v": "alt+v", "split_h": "alt+s", "zoom": "alt+z", "close": "alt+x",
 		"focus_left": "alt+h", "focus_down": "alt+j", "focus_up": "alt+k", "focus_right": "alt+l",
 	}
@@ -303,6 +304,21 @@ func TestDisplayIconModes(t *testing.T) {
 	if err := c.validate(); err == nil || !strings.Contains(err.Error(), "nerd") ||
 		!strings.Contains(err.Error(), "text") || !strings.Contains(err.Error(), "ascii") {
 		t.Fatalf("invalid icon mode error = %v", err)
+	}
+}
+
+func TestDisplaySideBySideDim(t *testing.T) {
+	if d := Default(); d.Display.SideBySideDim != DimFaint {
+		t.Fatalf("default side_by_side_dim = %q, want %q", d.Display.SideBySideDim, DimFaint)
+	}
+	if cfg := loadTOML(t, "[display]\nside_by_side_dim = \"gray\"\n"); cfg.Display.SideBySideDim != DimGray {
+		t.Fatalf("side_by_side_dim = %q, want %q", cfg.Display.SideBySideDim, DimGray)
+	}
+	c := Default()
+	c.Root = t.TempDir()
+	c.Display.SideBySideDim = "blur"
+	if err := c.validate(); err == nil || !strings.Contains(err.Error(), "faint") || !strings.Contains(err.Error(), "gray") {
+		t.Fatalf("invalid side_by_side_dim error = %v", err)
 	}
 }
 

@@ -355,7 +355,6 @@ func (m Model) handleCtlSpawned(msg ctlSpawnedMsg) (tea.Model, tea.Cmd) {
 // closed one is opened with its saved pool, the prompt going to the agent
 // that was focused (or to a fresh one when nothing is saved).
 func (m Model) openBackground(key, dir string, provider agent.Provider, prompt string) (Model, tea.Cmd, error) {
-	w, h := m.sessionSize()
 	if m.mgr.Has(key) {
 		spec, err := m.ctrl.NewProviderAgentSpec(provider, randomAgentTitle(), prompt)
 		if err != nil {
@@ -364,10 +363,12 @@ func (m Model) openBackground(key, dir string, provider agent.Provider, prompt s
 		if spec, err = m.prepareAgentSpec(dir, spec); err != nil {
 			return m, nil, err
 		}
-		spawned, err := m.mgr.SpawnAgent(key, dir, spec, w, h)
+		sz := m.sizesFor(key).Agent
+		spawned, err := m.mgr.SpawnAgent(key, dir, spec, sz.W, sz.H)
 		if err != nil {
 			return m, nil, err
 		}
+		m.resizeSessions() // nvim makes room when this is the current worktree's first agent
 		return m, tea.Batch(m.saveAgents(key), m.watchAgentEvents(spawned)), nil
 	}
 	specs, err := m.workspaceSpecsWithPrompt(key, provider, prompt)
@@ -384,8 +385,7 @@ func (m Model) activateBackground(key, dir string, specs []session.Spec) (Model,
 	if err != nil {
 		return m, nil, err
 	}
-	w, h := m.sessionSize()
-	ws, err := m.mgr.Activate(key, dir, specs, w, h)
+	ws, err := m.mgr.Activate(key, dir, specs, m.sizesFor(key))
 	if err != nil {
 		return m, nil, err
 	}
@@ -815,8 +815,7 @@ func (m Model) showOrchestrator() (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, m.saveAgents(key), m.watchAgentEvents(spawned), m.flashCmd("orchestrator started"))
 	}
-	w, h := m.sessionSize()
-	m.mgr.ResizeWorkspace(key, w, h) // it may have sat through resizes in the background
+	m.mgr.ResizeWorkspace(key, m.sizesFor(key)) // it may have sat through resizes in the background
 	m.orchKey = key
 	if m.screen != screenOrchestrator {
 		m.orchFrom = m.screen
@@ -851,8 +850,8 @@ func (m Model) spawnOrchestrator(account string) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	w, h := m.sessionSize()
-	return m.mgr.SpawnAgent(key, dir, spec, w, h)
+	sz := m.sizesFor(key).Agent
+	return m.mgr.SpawnAgent(key, dir, spec, sz.W, sz.H)
 }
 
 // resetOrchestrator starts the orchestrator the user means over with a fresh
@@ -878,8 +877,8 @@ func (m Model) resetOrchestrator() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	old := ws.Agents[idx]
-	w, h := m.sessionSize()
-	replacement, err := m.mgr.ReplaceAgent(key, dir, idx, spec, w, h)
+	sz := m.sizesFor(key).Agent
+	replacement, err := m.mgr.ReplaceAgent(key, dir, idx, spec, sz.W, sz.H)
 	if err != nil {
 		m.setError("orchestrator restart error: " + err.Error())
 		return m, nil

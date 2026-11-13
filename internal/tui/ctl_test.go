@@ -283,7 +283,7 @@ func TestWorktreePathIncludesMainCheckout(t *testing.T) {
 
 func TestCtlOpenLeavesAnOpenWorkspaceAlone(t *testing.T) {
 	m := ctlModel(t)
-	if _, err := m.mgr.Activate("r/a", t.TempDir(), nil, 80, 24); err != nil {
+	if _, err := m.mgr.Activate("r/a", t.TempDir(), nil, session.SameSize(80, 24)); err != nil {
 		t.Fatal(err)
 	}
 	p, ch := pending(ctl.Request{Op: ctl.OpOpen, Worktree: "r/a"})

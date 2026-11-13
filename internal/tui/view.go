@@ -80,6 +80,8 @@ var (
 	boldAccent = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	boldYellow = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
 	boldRed    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
+	// dimPaneStyle draws the side without focus in gray.
+	dimPaneStyle = lipgloss.NewStyle().Foreground(cDim)
 
 	// Diff viewer line styles, hoisted like the deck's so they're never rebuilt
 	// per frame: added lines green, removed lines red, hunk headers in the
@@ -136,19 +138,19 @@ func (m Model) View() tea.View {
 		body = m.renderDeck(h - m.barHeight())
 	case m.screen == screenTerminal && m.current != nil && m.current.ws != nil:
 		sw, sh := m.sessionSize()
-		body, cursor = m.renderTermPanes(sw, sh)
-		body = m.appendSessionFooter(body)
+		body = m.appendSessionFooter(m.renderTermPanes(sw, sh))
+		cursor = m.sessionCursor()
+	case m.sideBySideShown():
+		body = m.appendSessionFooter(m.renderSideBySide())
+		cursor = m.sessionCursor()
 	default:
 		if s := m.activeSession(); s != nil {
-			body = s.Render()
-			if x, y, visible := s.Cursor(); visible {
-				cursor = tea.NewCursor(x, y+m.barHeight())
-			}
-			body = m.appendSessionFooter(body)
+			body = m.appendSessionFooter(s.Render())
+			cursor = m.sessionCursor()
 		}
 	}
 	if m.sidePanelShown() {
-		body, cursor = m.withSidePanel(body, cursor)
+		body = m.withSidePanel(body)
 	}
 
 	v := tea.NewView(chrome + "\n" + body)
@@ -560,11 +562,14 @@ func (m Model) barZones() []barZone {
 	}
 	ct := ctStyle.Render(m.destinationGlyph(screenPicker))
 
-	agent := glyph(m.destinationGlyph(screenAgent), boldPurple, m.screen == screenAgent, has)
+	// Side by side, nvim and the agent are both on screen, so both are lit; the
+	// gray pane shows which has focus.
+	joined := m.sideBySideShown()
+	agent := glyph(m.destinationGlyph(screenAgent), boldPurple, m.screen == screenAgent || joined, has)
 
 	zones := []barZone{
 		{screenPicker, ct},
-		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor, has)},
+		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
 		// The orchestrator icon is a shortcut to its agent, reachable like the
 		// deck; it lights up while that agent is on screen.
@@ -881,7 +886,7 @@ func (m Model) paletteLine(c paletteCmd, selected bool, innerW int) string {
 	left := "  " + nameStyle.Render(c.title)
 	content := left
 	if c.hint != "" {
-		right := helpStyle.Render(c.hint)
+		right := helpStyle.Render(keyLabel(c.hint))
 		gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 		content = left + strings.Repeat(" ", gap) + right
 	}
@@ -1805,6 +1810,7 @@ func (m Model) renderHelp(h int) string {
 	innerW := panelInnerWidth(m.width, 72)
 
 	row := func(key, desc string) string {
+		key = keyLabel(key)
 		k := padLine(key, 12)
 		if lipgloss.Width(key) > 12 {
 			k = key + " " // guarantee a gap when the key column overflows
@@ -1843,6 +1849,7 @@ func (m Model) renderHelp(h int) string {
 		row(m.keys.PrevWorktree+" / "+m.keys.NextWorktree, "prev / next worktree"),
 		row(m.keys.ToggleStacks, "collapse or expand stacks in the bar"),
 		row(m.keys.SidePanel, "session list on the left (toggle)"),
+		row(m.keys.SideBySide, "nvim and the agent side by side (toggle)"),
 		row(m.keys.StackPopup, "the stack's PRs, reviews and checks"),
 	)
 	if m.usageEnabled() {
@@ -2133,80 +2140,56 @@ func (m Model) centerFooter(content string) string {
 
 // renderTermPanes renders the terminal screen: either a single full-size pane,
 // a zoomed pane, or a split layout assembled from the pane tree.
-func (m Model) renderTermPanes(w, h int) (string, *tea.Cursor) {
+func (m Model) renderTermPanes(w, h int) string {
 	ws := m.current.ws
 	if len(ws.Terms) == 0 {
-		return "", nil
+		return ""
 	}
 	if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-		s := ws.Terms[ws.ActiveTerm]
-		body := s.Render()
-		var cursor *tea.Cursor
-		if x, y, visible := s.Cursor(); visible {
-			cursor = tea.NewCursor(x, y+m.barHeight())
-		}
-		return body, cursor
+		return ws.Terms[ws.ActiveTerm].Render()
 	}
-	return m.renderPaneNode(ws.TermLayout, 0, 0, w, h, ws)
+	return m.renderPaneNode(ws.TermLayout, w, h, ws)
 }
 
-// renderPaneNode recursively renders a split subtree into (x, y, w, h) of the
-// body, inserting styled dividers between panes.
-func (m Model) renderPaneNode(node *session.PaneNode, x, y, w, h int, ws *session.Workspace) (string, *tea.Cursor) {
+// renderPaneNode recursively renders a split subtree into a w×h block,
+// inserting styled dividers between panes.
+func (m Model) renderPaneNode(node *session.PaneNode, w, h int, ws *session.Workspace) string {
 	if node == nil || w < 1 || h < 1 {
-		return strings.Repeat(" ", w) + strings.Repeat("\n"+strings.Repeat(" ", w), h-1), nil
+		return strings.Repeat(" ", w) + strings.Repeat("\n"+strings.Repeat(" ", w), h-1)
 	}
 	if node.Dir == session.SplitNone {
 		if node.Idx >= len(ws.Terms) {
-			return "", nil
+			return ""
 		}
-		s := ws.Terms[node.Idx]
-		body := s.Render()
-		var cursor *tea.Cursor
-		if node.Idx == ws.ActiveTerm {
-			if cx, cy, visible := s.Cursor(); visible {
-				cursor = tea.NewCursor(x+cx, y+m.barHeight()+cy)
-			}
-		}
-		return body, cursor
+		return ws.Terms[node.Idx].Render()
 	}
 
 	if node.Dir == session.SplitV {
 		if w < 3 {
-			return m.renderPaneNode(node.A, x, y, w, h, ws)
+			return m.renderPaneNode(node.A, w, h, ws)
 		}
 		aW := max(1, int(node.Ratio*float64(w-1)))
 		bW := w - aW - 1
 		if bW < 1 {
 			bW, aW = 1, w-2
 		}
-		aBody, aCur := m.renderPaneNode(node.A, x, y, aW, h, ws)
-		bBody, bCur := m.renderPaneNode(node.B, x+aW+1, y, bW, h, ws)
-		divColor := m.paneAdjacentColor(node, ws.ActiveTerm)
-		body := joinVerticalSplit(aBody, bBody, divColor, h, aW)
-		if aCur != nil {
-			return body, aCur
-		}
-		return body, bCur
+		aBody := m.renderPaneNode(node.A, aW, h, ws)
+		bBody := m.renderPaneNode(node.B, bW, h, ws)
+		return joinVerticalSplit(aBody, bBody, m.paneAdjacentColor(node, ws.ActiveTerm), h, aW)
 	}
 
 	// SplitH
 	if h < 3 {
-		return m.renderPaneNode(node.A, x, y, w, h, ws)
+		return m.renderPaneNode(node.A, w, h, ws)
 	}
 	aH := max(1, int(node.Ratio*float64(h-1)))
 	bH := h - aH - 1
 	if bH < 1 {
 		bH, aH = 1, h-2
 	}
-	aBody, aCur := m.renderPaneNode(node.A, x, y, w, aH, ws)
-	bBody, bCur := m.renderPaneNode(node.B, x, y+aH+1, w, bH, ws)
-	divColor := m.paneAdjacentColor(node, ws.ActiveTerm)
-	body := joinHorizontalSplit(aBody, bBody, divColor, w, aH)
-	if aCur != nil {
-		return body, aCur
-	}
-	return body, bCur
+	aBody := m.renderPaneNode(node.A, w, aH, ws)
+	bBody := m.renderPaneNode(node.B, w, bH, ws)
+	return joinHorizontalSplit(aBody, bBody, m.paneAdjacentColor(node, ws.ActiveTerm), w, aH)
 }
 
 // paneAdjacentColor returns cAccent if the active pane is a direct child of
@@ -2295,8 +2278,19 @@ func header(label string, count int) string {
 }
 
 func keyhint(key, desc string) string {
-	return helpKeyStyle.Render(key) + helpStyle.Render(" "+desc)
+	return helpKeyStyle.Render(keyLabel(key)) + helpStyle.Render(" "+desc)
 }
+
+// shiftedKeys names a shifted symbol key by the symbol it types on a US
+// layout. Terminals report ctrl+| as ctrl+shift+\, and the config has to hold
+// that name, but people press ctrl+|.
+var shiftedKeys = strings.NewReplacer(
+	"shift+\\", "|", "shift+/", "?", "shift+[", "{", "shift+]", "}", "shift+;", ":",
+	"shift+'", "\"", "shift+,", "<", "shift+.", ">", "shift+-", "_", "shift+=", "+", "shift+`", "~",
+)
+
+// keyLabel is how a configured key is shown in hints.
+func keyLabel(key string) string { return shiftedKeys.Replace(key) }
 
 // selBar renders text as a solid full-width selection bar. Nested styles in a
 // row (provider, label, status) emit full ANSI resets, so reapply the selection

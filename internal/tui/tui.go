@@ -319,6 +319,17 @@ type Model struct {
 	stacksExpanded bool
 	// sidePanel is true while the session list on the left is open.
 	sidePanel bool
+	// sideBySide is true while nvim and the agent share the screen.
+	sideBySide bool
+	// sideBySideDim is how the side without focus looks: config.DimFaint or
+	// config.DimGray.
+	sideBySideDim string
+	// sideBySideFocus is the editor or agent screen last used in each side by
+	// side worktree, so cycling back from the terminal returns to it.
+	sideBySideFocus map[string]screen
+	// mouseDown is the session a mouse button was pressed in, until the
+	// release: the drag in between goes to it.
+	mouseDown *session.Session
 	// ghPopup is the open gh stack popup, nil when closed.
 	ghPopup *ghStackPopup
 	// ghPRs is what GitHub last said about each stack's PRs, by stack.
@@ -606,8 +617,10 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		ctrl: ctrl, mgr: mgr, state: saved,
 		stacksExpanded: saved.StacksExpanded,
 		sidePanel:      saved.SidePanel,
+		sideBySide:     saved.SideBySide,
 		keys:           ctrl.Keys(),
 		iconMode:       ctrl.DisplayIcons(),
+		sideBySideDim:  ctrl.SideBySideDim(),
 		agentStrip:     ctrl.AgentStrip(),
 		usageThreshold: ctrl.UsageThreshold(),
 		plasma:         plasmaField, plasmaWidthPct: pc.Width,
@@ -1110,8 +1123,33 @@ func (m Model) repaintCmd() tea.Cmd {
 	}
 }
 
+// sessionSize is the room for sessions: under the bar, right of the side
+// panel, above the footer. Terminal panes and the orchestrator fill it.
 func (m Model) sessionSize() (int, int) {
 	return m.width - m.sidePanelW(), max(1, m.height-m.barHeight()-m.sessionFooterH())
+}
+
+// sizesFor is the size each kind of session in workspace key gets. Terminal
+// panes and the orchestrator fill the room for sessions; nvim and the agent
+// split it while the worktree is side by side. Agents get their half also
+// before the first one starts, so it starts at the width it is shown at. A
+// worktree that isn't open yet is assumed to start with nvim and an agent.
+func (m Model) sizesFor(key string) session.Sizes {
+	w, h := m.sessionSize()
+	sizes := session.SameSize(w, h)
+	if _, ok := orchestratorAccountOf(key); ok || !m.sideBySideFits() {
+		return sizes
+	}
+
+	left, right := sideBySideWidths(w)
+	ws, open := m.mgr.Workspace(key)
+	if !open || m.sideBySideIn(ws) {
+		sizes.Editor.W = left
+	}
+	if !open || ws.Editor != nil {
+		sizes.Agent.W = right
+	}
+	return sizes
 }
 
 // resizeSessions sizes the current workspace and the orchestrator to the room
@@ -1119,12 +1157,11 @@ func (m Model) sessionSize() (int, int) {
 func (m Model) resizeSessions() {
 	// Only the current workspace is resized; background ones are brought up
 	// to date by Activate when they next become current.
-	w, h := m.sessionSize()
 	if m.current != nil {
-		m.mgr.ResizeWorkspace(m.current.key, w, h)
+		m.mgr.ResizeWorkspace(m.current.key, m.sizesFor(m.current.key))
 	}
 	if m.screen == screenOrchestrator && m.mgr.Has(m.orchKey) {
-		m.mgr.ResizeWorkspace(m.orchKey, w, h)
+		m.mgr.ResizeWorkspace(m.orchKey, m.sizesFor(m.orchKey))
 	}
 }
 
@@ -1137,8 +1174,7 @@ func (m Model) dismissHint() Model {
 	}
 	m.hintSeen = true
 	if m.current != nil {
-		w, h := m.sessionSize()
-		m.mgr.ResizeWorkspace(m.current.key, w, h)
+		m.mgr.ResizeWorkspace(m.current.key, m.sizesFor(m.current.key))
 	}
 	return m
 }
@@ -1325,9 +1361,7 @@ func (m Model) syncVisible() {
 
 // visibleSessions returns the sessions whose output is currently drawn:
 // nothing while the picker, setup, or a full-body overlay (help, board,
-// usage) is shown; the editor or focused agent on their screens; and on the
-// terminal screen either the focused pane (zoomed/single) or every pane in
-// the split layout. Mirrors the branch structure of View.
+// usage) is shown, else every session in sessionPanes.
 func (m Model) visibleSessions() []*session.Session {
 	// m.diffOpen is redundant today (the diff only opens over the picker, which
 	// already returns nil), but it is listed so a future entry point that opens
@@ -1335,28 +1369,13 @@ func (m Model) visibleSessions() []*session.Session {
 	if m.helpOpen || m.boardOpen || m.usageOpen || m.paletteOpen || m.diffOpen || m.stackOpen || m.ghPopup != nil || m.screen == screenPicker || m.screen == screenSetup {
 		return nil
 	}
-	if m.screen == screenOrchestrator {
-		if s := m.orchestratorSession(); s != nil {
-			return []*session.Session{s}
-		}
-		return nil
+
+	panes := m.sessionPanes()
+	ss := make([]*session.Session, len(panes))
+	for i, p := range panes {
+		ss[i] = p.s
 	}
-	if m.current == nil || m.current.ws == nil {
-		return nil
-	}
-	ws := m.current.ws
-	switch m.screen {
-	case screenEditor:
-		return []*session.Session{ws.Editor}
-	case screenAgent:
-		return []*session.Session{ws.ActiveAgentSession()}
-	case screenTerminal:
-		if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-			return []*session.Session{ws.ActiveTermSession()}
-		}
-		return ws.Terms
-	}
-	return nil
+	return ss
 }
 
 func (m Model) overlayOpen() bool {
@@ -1829,6 +1848,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.forwardMouse(msg)
+		m.mouseDown = nil
 		return m, nil
 	case tea.MouseWheelMsg:
 		// The diff viewer owns the wheel while open: it scrolls the diff rather
@@ -2409,6 +2429,7 @@ func (m Model) boardAgentActive(r boardRow) bool {
 
 func (m Model) closeBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 	m.mgr.CloseAgent(r.key, r.agentIdx)
+	m.resizeSessions() // nvim takes the whole width when its last agent closes
 	m.clearAgentTracking(r.pid)
 	save := m.saveAgents(r.key)
 	_, nav := m.buildBoard()
@@ -2451,8 +2472,8 @@ func (m Model) restartBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 		m.setError("restart error: " + err.Error())
 		return m, nil
 	}
-	w, h := m.sessionSize()
-	replacement, err := m.mgr.ReplaceAgent(r.key, r.path, r.agentIdx, spec, w, h)
+	sz := m.sizesFor(r.key).Agent
+	replacement, err := m.mgr.ReplaceAgent(r.key, r.path, r.agentIdx, spec, sz.W, sz.H)
 	if err != nil {
 		m.setError("restart error: " + err.Error())
 		return m, nil
@@ -2788,6 +2809,7 @@ func (m Model) paletteCommands() []paletteCmd {
 	cmds = append(cmds, paletteCmd{title: "show the stack's PRs and reviews", hint: m.keys.StackPopup, run: func(m Model) (tea.Model, tea.Cmd) { return m.openGhStackPopup() }})
 	cmds = append(cmds, paletteCmd{title: "collapse or expand stacks in the bar", hint: m.keys.ToggleStacks, run: func(m Model) (tea.Model, tea.Cmd) { return m.toggleStacks() }})
 	cmds = append(cmds, paletteCmd{title: "open or close the session list", hint: m.keys.SidePanel, run: func(m Model) (tea.Model, tea.Cmd) { return m.toggleSidePanel() }})
+	cmds = append(cmds, paletteCmd{title: "show nvim and the agent side by side, or one at a time", hint: m.keys.SideBySide, run: func(m Model) (tea.Model, tea.Cmd) { return m.toggleSideBySide() }})
 	cmds = append(cmds, paletteCmd{title: "open home workspace", hint: m.keys.GlobalConfig, run: func(m Model) (tea.Model, tea.Cmd) { return m.activateGlobalConfig() }})
 	cmds = append(cmds, paletteCmd{title: "open orchestrator", hint: m.keys.Orchestrator, run: func(m Model) (tea.Model, tea.Cmd) { return m.openOrchestrator() }})
 	cmds = append(cmds, paletteCmd{title: "new orchestrator session", run: func(m Model) (tea.Model, tea.Cmd) { return m.resetOrchestrator() }})
@@ -3166,7 +3188,6 @@ func (m Model) activate(repoName, wtName, dir string) (tea.Model, tea.Cmd) {
 
 func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, tea.Cmd) {
 	key := repoName + "/" + wtName
-	w, h := m.sessionSize()
 	wasActive := m.mgr.Has(key)
 	var specs []session.Spec
 	if !wasActive {
@@ -3180,7 +3201,7 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 			return m, m.loadCmd()
 		}
 	}
-	ws, err := m.mgr.Activate(key, dir, specs, w, h)
+	ws, err := m.mgr.Activate(key, dir, specs, m.sizesFor(key))
 	if err != nil {
 		m.setError("open error: " + err.Error())
 		return m, m.loadCmd()
@@ -3195,6 +3216,7 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 		m.lastScreens[m.current.key] = m.screen
 	}
 	m.current = &workspaceRef{repo: repoName, worktree: wtName, key: key, path: dir, ws: ws}
+	m.resizeSessions() // the sizes assumed it would start with an agent
 	if s, ok := m.lastScreens[key]; ok {
 		m.screen = s
 	} else {
@@ -3652,6 +3674,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.toggleStacks()
 		case m.keys.SidePanel:
 			return m.toggleSidePanel()
+		case m.keys.SideBySide:
+			return m.toggleSideBySide()
 		case m.keys.StackPopup:
 			return m.openGhStackPopup()
 		}
@@ -3679,6 +3703,7 @@ func (m Model) gotoScreen(s screen) (tea.Model, tea.Cmd) {
 	if m.current == nil {
 		return m, nil
 	}
+	m = m.rememberSideBySideFocus()
 	m.screen = s
 	if s == screenAgent {
 		m.clearWorkspaceAttention()
@@ -3777,7 +3802,7 @@ func (m Model) isReservedActionKey(s string) bool {
 	switch s {
 	case m.keys.Cycle, m.keys.CycleBack, m.keys.Picker, m.keys.Palette,
 		m.keys.Attention, m.keys.Highlight, m.keys.GlobalConfig, m.keys.Orchestrator, m.keys.NextAgent, m.keys.PrevAgent,
-		m.keys.NextWorktree, m.keys.PrevWorktree, m.keys.ToggleStacks, m.keys.SidePanel, m.keys.StackPopup,
+		m.keys.NextWorktree, m.keys.PrevWorktree, m.keys.ToggleStacks, m.keys.SidePanel, m.keys.SideBySide, m.keys.StackPopup,
 		m.keys.CommandPalette, m.keys.GotoEditor, m.keys.GotoAgent, m.keys.GotoTerm:
 		return true
 	}
@@ -3841,21 +3866,23 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.current == nil {
 			return m, nil // on the orchestrator view with no workspace to cycle into
 		}
-		if msg.String() == m.keys.Cycle {
-			m.screen = m.screen.next()
-		} else {
-			m.screen = m.screen.prev()
-		}
-		if m.screen == screenAgent {
-			m.clearWorkspaceAttention()
-		}
-		return m, nil
+		return m.cycleScreen(msg.String() == m.keys.Cycle), nil
 	case m.keys.Picker:
 		return m.returnToDeck()
 	case m.keys.NextAgent:
 		return m.rotateAgent(+1)
 	case m.keys.PrevAgent:
 		return m.rotateAgent(-1)
+	}
+	// Side by side, the pane focus keys also move between nvim and the agent.
+	// With no pane that way the key goes on to the program, which may use it.
+	if m.sideBySideShown() {
+		switch s := msg.String(); {
+		case s == m.keys.TermFocusLeft && m.screen == screenAgent:
+			return m.gotoScreen(screenEditor)
+		case s == m.keys.TermFocusRight && m.screen == screenEditor:
+			return m.gotoScreen(screenAgent)
+		}
 	}
 	if m.screen == screenTerminal && m.current != nil {
 		key := m.current.key
@@ -4026,7 +4053,6 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 	m.formOpen = false
 	m.boardOpen = false
 	m.promptInput.Blur()
-	w, h := m.sessionSize()
 	var restoredWatches tea.Cmd
 
 	isHome := m.formLocation == 1
@@ -4076,7 +4102,7 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		homeWS, err := m.mgr.Activate(homeKey, home, specs, w, h)
+		homeWS, err := m.mgr.Activate(homeKey, home, specs, m.sizesFor(homeKey))
 		if err != nil {
 			m.setError("open error: " + err.Error())
 			return m, nil
@@ -4092,7 +4118,8 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 		m.setError("spawn error: " + err.Error())
 		return m, nil
 	}
-	spawned, err := m.mgr.SpawnAgent(key, path, spec, w, h)
+	sz := m.sizesFor(key).Agent
+	spawned, err := m.mgr.SpawnAgent(key, path, spec, sz.W, sz.H)
 	if err != nil {
 		m.setError("spawn error: " + err.Error())
 		return m, nil
@@ -4108,6 +4135,7 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 		return model, tea.Batch(cmd, restoredWatches, model.watchAgentEvents(spawned), model.flashCmd("agent launched"))
 	}
 
+	m.resizeSessions() // nvim makes room when this is the first agent
 	save := m.saveAgents(key)
 	m.screen = screenAgent
 	m.clearWorkspaceAttention()
@@ -4149,15 +4177,15 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 				return mm, cmd
 			}
 		}
-		// Focus the terminal pane under the click before the click reaches the
-		// program running in it. Panes aren't drawn while an overlay is up, so a
-		// click then must not steal pane focus.
-		if m.screen == screenTerminal && m.current != nil &&
-			!m.helpOpen && !m.boardOpen && !m.usageOpen && !m.paletteOpen && !m.diffOpen && mo.Y >= m.barHeight() &&
-			mo.X >= m.sidePanelW() {
-			w, h := m.sessionSize()
-			m.mgr.FocusTermPaneAt(m.current.key, mo.X-m.sidePanelW(), mo.Y-m.barHeight(), w, h)
+	}
+	// Focus the pane under a left click before the click reaches the program
+	// running in it, and send the drag that follows to that pane.
+	m.mouseDown = nil
+	if p, ok := m.paneAt(mo.X, mo.Y); ok {
+		if mo.Button == tea.MouseLeft {
+			m = m.focusPane(p.s)
 		}
+		m.mouseDown = p.s
 	}
 	m.forwardMouse(msg)
 	return m, nil
@@ -4286,6 +4314,7 @@ func (m Model) selectTab(s screen) (tea.Model, tea.Cmd) {
 	}
 	if s == screenPicker || m.current != nil {
 		wasSession := m.screen != screenPicker
+		m = m.rememberSideBySideFocus()
 		m.screen = s
 		if s == screenAgent && m.current != nil {
 			m.clearWorkspaceAttention()
@@ -4297,13 +4326,10 @@ func (m Model) selectTab(s screen) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// forwardMouse relays a mouse event to the session under the pointer. In an
-// unzoomed split terminal layout it hit-tests the pane rectangles and delivers
-// pane-local coordinates to that pane's program, so a click or wheel scroll acts
-// on the pane it lands on rather than only the focused one; events over a
-// divider or the footer are dropped. Everywhere else it relays to the active
-// session translated below the bar. The emulator only encodes the event if the
-// program has enabled mouse reporting.
+// forwardMouse relays a mouse event to the session under the pointer, in that
+// session's own coordinates, so a click or wheel scroll acts on the pane it
+// lands on rather than only the focused one. The emulator only encodes the
+// event if the program has enabled mouse reporting.
 func (m Model) forwardMouse(msg tea.MouseMsg) {
 	if m.screen == screenPicker {
 		return
@@ -4316,53 +4342,25 @@ func (m Model) forwardMouse(msg tea.MouseMsg) {
 		return
 	}
 	mo := msg.Mouse()
-	pw := m.sidePanelW()
-	if mo.Y < m.barHeight() {
-		return
-	}
-	// Clicks and the wheel over the side panel stay out of the session. A drag
-	// that leaves the session over the panel still gets its motion and release,
-	// at the panel's edge, or the program would think the button is still down.
-	if mo.X < pw {
-		switch msg.(type) {
-		case tea.MouseClickMsg, tea.MouseWheelMsg:
+	p, ok := m.paneAt(mo.X, mo.Y)
+	// While a button is held, motion and the release belong to the pane the
+	// press landed in, wherever the pointer is now, at that pane's nearest
+	// edge; otherwise its program would think the button is still down. A
+	// release after a press outside every pane goes nowhere.
+	_, release := msg.(tea.MouseReleaseMsg)
+	_, motion := msg.(tea.MouseMotionMsg)
+	if release || motion && mo.Button != tea.MouseNone {
+		if p, ok = m.paneOf(m.mouseDown); !ok {
 			return
-		case tea.MouseMotionMsg:
-			if mo.Button == tea.MouseNone {
-				return
-			}
 		}
-		mo.X = pw
+		mo.X = clamp(mo.X, p.x, p.x+p.w-1)
+		mo.Y = clamp(mo.Y, p.y, p.y+p.h-1)
+	} else if !ok {
+		return // a click, wheel or hover over the bar, side panel, a divider or the footer
 	}
-	// Target session and the pane origin to subtract from the pointer. Default:
-	// the active session, offset only by the bar and the side panel (bx, by
-	// stay 0).
-	s := m.activeSession()
-	px := mo.X - pw
-	bx, by := 0, 0
-	if m.screen == screenTerminal && m.current != nil && m.current.ws != nil {
-		ws := m.current.ws
-		if !ws.TermZoomed && len(ws.Terms) > 1 && ws.TermLayout != nil {
-			w, h := m.sessionSize()
-			bounds := session.ComputePaneBounds(ws.TermLayout, 0, 0, w, h)
-			idx := session.PaneAt(bounds, px, mo.Y-m.barHeight())
-			if idx < 0 || idx >= len(ws.Terms) || ws.Terms[idx] == nil {
-				return // divider, footer, or outside every pane
-			}
-			for _, b := range bounds {
-				if b.Idx == idx {
-					bx, by = b.X, b.Y
-					break
-				}
-			}
-			s = ws.Terms[idx]
-		}
-	}
-	if s == nil {
-		return
-	}
-	shift := func(p tea.Mouse) uv.Mouse {
-		return uv.Mouse{X: p.X - pw - bx, Y: p.Y - m.barHeight() - by, Button: p.Button, Mod: uv.KeyMod(p.Mod)}
+	s := p.s
+	shift := func(pt tea.Mouse) uv.Mouse {
+		return uv.Mouse{X: pt.X - p.x, Y: pt.Y - p.y, Button: pt.Button, Mod: uv.KeyMod(pt.Mod)}
 	}
 	switch e := msg.(type) {
 	case tea.MouseClickMsg:
@@ -5355,6 +5353,7 @@ func (m *Model) stopWorkspace(key string) {
 		}
 	}
 	delete(m.highlighted, key)
+	delete(m.sideBySideFocus, key)
 	if m.current != nil && m.current.key == key {
 		m.current = nil
 		m.screen = screenPicker

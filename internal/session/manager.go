@@ -70,10 +70,37 @@ type Workspace struct {
 	// ActiveAgent indexes the focused agent in Agents (clamped to a valid index
 	// while any agent exists).
 	ActiveAgent int
-	// w, h is the body size last applied to this workspace's sessions. Only
-	// the current workspace is resized on terminal resize; others catch up in
-	// Activate when this differs from the requested size.
-	w, h int
+	// sizes is what was last applied to this workspace's sessions. Only the
+	// current workspace is resized on terminal resize; others catch up in
+	// Activate when this differs from the requested sizes.
+	sizes Sizes
+}
+
+// Size is a session's width and height in cells.
+type Size struct{ W, H int }
+
+// Sizes is the size each kind of session in a workspace runs at. They differ
+// when sessions share the screen side by side.
+type Sizes struct {
+	Editor, Agent, Term Size
+}
+
+// SameSize gives every kind of session the same w×h.
+func SameSize(w, h int) Sizes {
+	s := Size{W: w, H: h}
+	return Sizes{Editor: s, Agent: s, Term: s}
+}
+
+// of returns the size for a session of kind k.
+func (s Sizes) of(k Kind) Size {
+	switch k {
+	case Editor:
+		return s.Editor
+	case Terminal:
+		return s.Term
+	default:
+		return s.Agent
+	}
 }
 
 // ActiveAgentSession returns the focused agent, or nil if the pool is empty.
@@ -261,28 +288,29 @@ func (m *Manager) Workspace(key string) (*Workspace, bool) {
 }
 
 // Activate returns the Workspace for key, starting its sessions from specs (in
-// dir, sized w×h) if it isn't already running. Sessions are assigned by Kind:
-// the first Editor and Terminal specs become Editor/Term, and every Agent spec
-// joins the agent pool. An existing workspace is reused as-is.
-func (m *Manager) Activate(key, dir string, specs []Spec, w, h int) (*Workspace, error) {
+// dir, each kind at its size in sizes) if it isn't already running. Sessions
+// are assigned by Kind: the first Editor and Terminal specs become Editor/Term,
+// and every Agent spec joins the agent pool. An existing workspace is reused
+// as-is.
+func (m *Manager) Activate(key, dir string, specs []Spec, sizes Sizes) (*Workspace, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if ws, ok := m.spaces[key]; ok {
 		// A workspace that sat in the background through terminal resizes has
 		// stale pty sizes; bring it up to date now that it's becoming current.
-		if ws.w != w || ws.h != h {
-			m.resizeLocked(ws, w, h)
+		if ws.sizes != sizes {
+			m.resizeLocked(ws, sizes)
 		}
 		return ws, nil
 	}
 
-	sessions, err := startSpecs(specs, dir, w, h, m.signalDirty)
+	sessions, err := startSpecs(specs, dir, sizes, m.signalDirty)
 	if err != nil {
 		return nil, err
 	}
 
-	ws := &Workspace{w: w, h: h}
+	ws := &Workspace{sizes: sizes}
 	for i, sp := range specs {
 		s := sessions[i]
 		switch {
@@ -312,7 +340,7 @@ func (m *Manager) Activate(key, dir string, specs []Spec, w, h int) (*Workspace,
 // in parallel across cores. On any failure every session that did start is
 // closed; StartSpec already releases the companion of a spec it failed to start,
 // so activation stays all-or-nothing.
-func startSpecs(specs []Spec, dir string, w, h int, dirty func(*Session)) ([]*Session, error) {
+func startSpecs(specs []Spec, dir string, sizes Sizes, dirty func(*Session)) ([]*Session, error) {
 	sessions := make([]*Session, len(specs))
 	errs := make([]error, len(specs))
 	var wg sync.WaitGroup
@@ -320,7 +348,8 @@ func startSpecs(specs []Spec, dir string, w, h int, dirty func(*Session)) ([]*Se
 	for i := range specs {
 		go func(i int) {
 			defer wg.Done()
-			sessions[i], errs[i] = StartSpec(specs[i], dir, w, h, dirty)
+			sz := sizes.of(specs[i].Kind)
+			sessions[i], errs[i] = StartSpec(specs[i], dir, sz.W, sz.H, dirty)
 		}(i)
 	}
 	wg.Wait()
@@ -417,30 +446,30 @@ func (m *Manager) CloseAgent(key string, idx int) {
 	s.Close()
 }
 
-// ResizeWorkspace resizes key's editor and agents to w×h and recomputes its
-// terminal pane rectangles. Other workspaces are deliberately left alone —
-// resizing them means one pty ioctl (and a SIGWINCH redraw in the program)
-// per session for output nobody is watching; Activate brings a stale
-// workspace up to date when it next becomes current.
-func (m *Manager) ResizeWorkspace(key string, w, h int) {
+// ResizeWorkspace resizes key's editor and agents to their sizes in sizes and
+// recomputes its terminal pane rectangles. Other workspaces are deliberately
+// left alone — resizing them means one pty ioctl (and a SIGWINCH redraw in
+// the program) per session for output nobody is watching; Activate brings a
+// stale workspace up to date when it next becomes current.
+func (m *Manager) ResizeWorkspace(key string, sizes Sizes) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if ws, ok := m.spaces[key]; ok {
-		m.resizeLocked(ws, w, h)
+		m.resizeLocked(ws, sizes)
 	}
 }
 
-// resizeLocked applies w×h to every session of ws and records the size.
+// resizeLocked applies sizes to every session of ws and records them.
 // Callers must hold m.mu.
-func (m *Manager) resizeLocked(ws *Workspace, w, h int) {
-	ws.w, ws.h = w, h
+func (m *Manager) resizeLocked(ws *Workspace, sizes Sizes) {
+	ws.sizes = sizes
 	if ws.Editor != nil {
-		ws.Editor.Resize(w, h)
+		ws.Editor.Resize(sizes.Editor.W, sizes.Editor.H)
 	}
 	for _, a := range ws.Agents {
-		a.Resize(w, h)
+		a.Resize(sizes.Agent.W, sizes.Agent.H)
 	}
-	m.layoutTermPanesLocked(ws, w, h)
+	m.layoutTermPanesLocked(ws, sizes.Term.W, sizes.Term.H)
 }
 
 // layoutTermPanesLocked sizes the terminal panes for the workspace's current
@@ -572,23 +601,6 @@ func (m *Manager) FocusTermPaneDir(key string, dir FocusDir, w, h int) {
 	}
 	bounds := ComputePaneBounds(ws.TermLayout, 0, 0, w, h)
 	if idx := FocusPaneDir(bounds, ws.ActiveTerm, dir); idx >= 0 {
-		ws.ActiveTerm = idx
-	}
-}
-
-// FocusTermPaneAt focuses the terminal pane containing body-local point (x, y),
-// using the pane rectangles resolved for a w×h body. It's a no-op when the
-// workspace is unknown, has fewer than two panes, has no layout, is zoomed, or
-// when the point lands on a divider or outside every pane.
-func (m *Manager) FocusTermPaneAt(key string, x, y, w, h int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	ws, ok := m.spaces[key]
-	if !ok || len(ws.Terms) < 2 || ws.TermLayout == nil || ws.TermZoomed {
-		return
-	}
-	bounds := ComputePaneBounds(ws.TermLayout, 0, 0, w, h)
-	if idx := PaneAt(bounds, x, y); idx >= 0 {
 		ws.ActiveTerm = idx
 	}
 }

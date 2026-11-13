@@ -400,9 +400,15 @@ func (s *Session) Cursor() (x, y int, visible bool) {
 	return p.X, p.Y, s.cursorVisible.Load()
 }
 
-// Resize resizes both the emulator and the pty.
+// Resize resizes both the emulator and the pty. A session already at w×h, in
+// cells and in pixels, is left alone: a resize snaps a scrolled pane back to
+// live output and makes the program redraw everything.
 func (s *Session) Resize(w, h int) {
 	if w < 1 || h < 1 {
+		return
+	}
+	ws := winsize(w, h)
+	if cur, err := pty.GetsizeFull(s.pty); err == nil && *cur == *ws {
 		return
 	}
 	s.scrollForShrink(h)
@@ -412,7 +418,7 @@ func (s *Session) Resize(w, h int) {
 	// rather than show an arbitrary window of history.
 	s.setScrollOff(0)
 	s.renderCacheDirty.Store(true) // resize reshapes the buffer; drop the cache
-	_ = pty.Setsize(s.pty, winsize(w, h))
+	_ = pty.Setsize(s.pty, ws)
 }
 
 // scrollForShrink keeps the newest output visible when the pane loses rows

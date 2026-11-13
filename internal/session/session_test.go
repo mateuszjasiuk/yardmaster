@@ -14,6 +14,7 @@ import (
 
 	"github.com/KCaverly/caretaker/internal/agent"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/creack/pty"
 )
 
 // waitForFileEquals polls path until its contents equal want, or fails. Used
@@ -143,7 +144,7 @@ func TestDirtyOnlyForVisibleSessions(t *testing.T) {
 		{Kind: Terminal, Argv: []string{"cat"}},
 		{Kind: Agent, Argv: []string{"cat"}},
 	}
-	ws, err := m.Activate("r/w", t.TempDir(), specs, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +206,7 @@ func TestSetVisibleUnchangedSetFastPath(t *testing.T) {
 		{Kind: Terminal, Argv: []string{"cat"}},
 		{Kind: Agent, Argv: []string{"cat"}},
 	}
-	ws, err := m.Activate("r/w", t.TempDir(), specs, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,11 +432,11 @@ func TestManagerActivateReuses(t *testing.T) {
 	defer m.CloseAll()
 
 	specs := []Spec{{Kind: Terminal, Title: "term", Argv: []string{"sh", "-c", "sleep 5"}}}
-	ws1, err := m.Activate("repo/wt", t.TempDir(), specs, 80, 24)
+	ws1, err := m.Activate("repo/wt", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ws2, err := m.Activate("repo/wt", t.TempDir(), specs, 80, 24)
+	ws2, err := m.Activate("repo/wt", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,13 +461,13 @@ func TestActivateResizesStaleWorkspace(t *testing.T) {
 		{Kind: Editor, Argv: []string{"sleep", "5"}},
 		{Kind: Terminal, Argv: []string{"sleep", "5"}},
 	}
-	if _, err := m.Activate("r/w", t.TempDir(), specs, 80, 24); err != nil {
+	if _, err := m.Activate("r/w", t.TempDir(), specs, SameSize(80, 24)); err != nil {
 		t.Fatal(err)
 	}
 
 	// The terminal was resized while this workspace sat in the background;
 	// re-activating it at the new size must bring its sessions up to date.
-	ws, err := m.Activate("r/w", t.TempDir(), specs, 100, 30)
+	ws, err := m.Activate("r/w", t.TempDir(), specs, SameSize(100, 30))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,6 +477,47 @@ func TestActivateResizesStaleWorkspace(t *testing.T) {
 	if w, h := ws.Terms[0].Size(); w != 100 || h != 30 {
 		t.Fatalf("stale term pane not resized on activate: %dx%d, want 100x30", w, h)
 	}
+}
+
+func TestWorkspaceSizesPerKind(t *testing.T) {
+	m := NewManager()
+	defer m.CloseAll()
+
+	sleep := []string{"sleep", "5"}
+	specs := []Spec{
+		{Kind: Editor, Argv: sleep},
+		{Kind: Agent, Argv: sleep},
+		{Kind: Terminal, Argv: sleep},
+	}
+	sizes := Sizes{Editor: Size{W: 50, H: 20}, Agent: Size{W: 49, H: 20}, Term: Size{W: 100, H: 20}}
+	ws, err := m.Activate("r/w", t.TempDir(), specs, sizes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(when string, want Sizes) {
+		t.Helper()
+		for _, c := range []struct {
+			name string
+			s    *Session
+			want Size
+		}{{"editor", ws.Editor, want.Editor}, {"agent", ws.Agents[0], want.Agent}, {"term", ws.Terms[0], want.Term}} {
+			if w, h := c.s.Size(); w != c.want.W || h != c.want.H {
+				t.Errorf("%s: %s is %dx%d, want %dx%d", when, c.name, w, h, c.want.W, c.want.H)
+			}
+		}
+	}
+	check("started", sizes)
+
+	// Only the agent's width differs from what the workspace has; re-activating
+	// must still notice the change.
+	sizes.Agent.W = 60
+	if _, err := m.Activate("r/w", t.TempDir(), specs, sizes); err != nil {
+		t.Fatal(err)
+	}
+	check("activated", sizes)
+
+	m.ResizeWorkspace("r/w", SameSize(90, 30))
+	check("resized", SameSize(90, 30))
 }
 
 func TestManagerSpawnAndCloseAgent(t *testing.T) {
@@ -488,7 +530,7 @@ func TestManagerSpawnAndCloseAgent(t *testing.T) {
 		{Kind: Agent, Argv: sleep},
 		{Kind: Terminal, Argv: sleep},
 	}
-	ws, err := m.Activate("r/w", t.TempDir(), specs, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +752,7 @@ func TestManagerReplaceAgentTransactional(t *testing.T) {
 		{Kind: Agent, Title: "first", Argv: sleep, Provider: agent.Claude, SessionID: "first-id"},
 		{Kind: Agent, Title: "old", Argv: sleep, Provider: agent.Claude, SessionID: "old-id"},
 		{Kind: Agent, Title: "third", Argv: sleep, Provider: agent.Claude, SessionID: "third-id"},
-	}, 80, 24)
+	}, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +811,7 @@ func TestManagerReplaceAgentErrorsForMissingTarget(t *testing.T) {
 	if _, err := m.ReplaceAgent("missing", t.TempDir(), 0, spec, 80, 24); !errors.Is(err, errNoWorkspace) {
 		t.Fatalf("missing workspace error = %v, want %v", err, errNoWorkspace)
 	}
-	if _, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: []string{"sleep", "5"}}}, 80, 24); err != nil {
+	if _, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: []string{"sleep", "5"}}}, SameSize(80, 24)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.ReplaceAgent("r/w", t.TempDir(), 0, spec, 80, 24); !errors.Is(err, errNoAgent) {
@@ -835,6 +877,40 @@ func TestScrollbackWalksHistory(t *testing.T) {
 	}
 	if s.Render() != live {
 		t.Error("returning to the bottom should reproduce the live frame")
+	}
+}
+
+// A workspace resize reaches every pane, also ones whose size did not change;
+// those must keep their place in the history.
+func TestResizeToTheSameSizeKeepsTheScroll(t *testing.T) {
+	s := startNumbered(t, 60, 20, 10)
+	s.ScrollBy(-5)
+
+	s.Resize(20, 10)
+	if s.ScrollOffset() != 5 {
+		t.Fatalf("offset = %d after a resize to the same size, want 5", s.ScrollOffset())
+	}
+	s.Resize(30, 10)
+	if s.Scrolled() {
+		t.Fatal("a real resize should still return to the live output")
+	}
+}
+
+// Moving to a display with other cell pixels keeps the cell count, but the
+// program still needs the new pixel size, for images.
+func TestResizeSendsANewPixelSize(t *testing.T) {
+	s := startNumbered(t, 1, 20, 10)
+	cellW.Store(9)
+	cellH.Store(18)
+	t.Cleanup(func() { cellW.Store(0); cellH.Store(0) })
+
+	s.Resize(20, 10)
+	ws, err := pty.GetsizeFull(s.pty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws.X != 180 || ws.Y != 180 {
+		t.Fatalf("pty pixel size = %dx%d, want 180x180", ws.X, ws.Y)
 	}
 }
 
