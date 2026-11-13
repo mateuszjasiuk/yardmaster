@@ -86,10 +86,12 @@ func TestForwardMouseKeepsADragThatLeavesThePane(t *testing.T) {
 	waitForSession(t, m.current.ws.Terms[0], "ready")
 
 	pw, by := m.sidePanelW(), m.barHeight()
-	// A click on the panel stays out of the session; a press in the session
-	// arrives at its own cell (SGR is 1-based).
+	// A click on the panel and a release with no press in the session stay out
+	// of it; a press in the session arrives at its own cell (SGR is 1-based).
 	m.forwardMouse(tea.MouseClickMsg{X: 3, Y: by + 2, Button: tea.MouseLeft})
-	m.forwardMouse(tea.MouseClickMsg{X: pw + 5, Y: by + 2, Button: tea.MouseLeft})
+	m.forwardMouse(tea.MouseReleaseMsg{X: pw + 5, Y: by + 2, Button: tea.MouseLeft})
+	mm, _ = m.handleMouseClick(tea.MouseClickMsg{X: pw + 5, Y: by + 2, Button: tea.MouseLeft})
+	m = mm.(Model)
 	waitForLog(t, log, "\x1b[<0;6;3M")
 
 	// The release over the panel lands at the session's left edge.
@@ -97,8 +99,42 @@ func TestForwardMouseKeepsADragThatLeavesThePane(t *testing.T) {
 	waitForLog(t, log, "\x1b[<0;1;3m")
 
 	got, _ := os.ReadFile(log)
-	if n := strings.Count(string(got), "M"); n != 1 {
-		t.Fatalf("only the press in the session should reach it, got %q", got)
+	if strings.Count(string(got), "M") != 1 || strings.Count(string(got), "m") != 1 {
+		t.Fatalf("only the press in the session and its release should reach it, got %q", got)
+	}
+}
+
+func TestForwardMouseKeepsADragInThePaneItStartedIn(t *testing.T) {
+	m, ctrl, mgr := sidePanelModel(t, 150)
+	shell, log := mouseLogShell(t)
+	ctrl.cfg.Editor = shell
+	mm, _ := m.activate("repo", "drag", t.TempDir())
+	m = mm.(Model)
+	m.screen = screenEditor
+	if len(m.current.ws.Agents) == 0 {
+		if _, err := mgr.SpawnAgent("repo/drag", t.TempDir(), session.Spec{Kind: session.Agent, Argv: []string{"cat"}}, 10, 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m = pressSideBySide(t, m)
+	waitForSession(t, m.current.ws.Editor, "ready")
+
+	left, right := m.sessionPanes()[0], m.sessionPanes()[1]
+	y := left.y + 1
+	mm, _ = m.handleMouseClick(tea.MouseClickMsg{X: left.x + 4, Y: y, Button: tea.MouseLeft})
+	m = mm.(Model)
+	waitForLog(t, log, "\x1b[<0;5;2M")
+
+	// Dragging into the agent's pane still moves and releases in nvim, at its
+	// last column.
+	edge := strconv.Itoa(left.w)
+	m.forwardMouse(tea.MouseMotionMsg{X: right.x + 10, Y: y, Button: tea.MouseLeft})
+	waitForLog(t, log, "\x1b[<32;"+edge+";2M")
+	mm, _ = m.Update(tea.MouseReleaseMsg{X: right.x + 10, Y: y, Button: tea.MouseLeft})
+	m = mm.(Model)
+	waitForLog(t, log, "\x1b[<0;"+edge+";2m")
+	if m.mouseDown != nil {
+		t.Fatal("the release should end the drag")
 	}
 }
 

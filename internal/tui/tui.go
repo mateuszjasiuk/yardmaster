@@ -324,6 +324,9 @@ type Model struct {
 	// sideBySideFocus is the editor or agent screen last used in each side by
 	// side worktree, so cycling back from the terminal returns to it.
 	sideBySideFocus map[string]screen
+	// mouseDown is the session a mouse button was pressed in, until the
+	// release: the drag in between goes to it.
+	mouseDown *session.Session
 	// ghPopup is the open gh stack popup, nil when closed.
 	ghPopup *ghStackPopup
 	// ghPRs is what GitHub last said about each stack's PRs, by stack.
@@ -1841,6 +1844,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.forwardMouse(msg)
+		m.mouseDown = nil
 		return m, nil
 	case tea.MouseWheelMsg:
 		// The diff viewer owns the wheel while open: it scrolls the diff rather
@@ -4159,11 +4163,15 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 				return mm, cmd
 			}
 		}
-		// Focus the pane under the click before the click reaches the program
-		// running in it.
-		if p, ok := m.paneAt(mo.X, mo.Y); ok {
+	}
+	// Focus the pane under a left click before the click reaches the program
+	// running in it, and send the drag that follows to that pane.
+	m.mouseDown = nil
+	if p, ok := m.paneAt(mo.X, mo.Y); ok {
+		if mo.Button == tea.MouseLeft {
 			m = m.focusPane(p.s)
 		}
+		m.mouseDown = p.s
 	}
 	m.forwardMouse(msg)
 	return m, nil
@@ -4321,25 +4329,20 @@ func (m Model) forwardMouse(msg tea.MouseMsg) {
 	}
 	mo := msg.Mouse()
 	p, ok := m.paneAt(mo.X, mo.Y)
-	if !ok {
-		// Clicks and the wheel outside every pane (bar, side panel, divider,
-		// footer) stay out of the sessions. A drag that leaves its pane still
-		// gets its motion and release, at the pane's nearest edge, or the
-		// program would think the button is still down. The drag started in
-		// the focused pane, as a click focuses the pane it lands on.
-		switch msg.(type) {
-		case tea.MouseClickMsg, tea.MouseWheelMsg:
-			return
-		case tea.MouseMotionMsg:
-			if mo.Button == tea.MouseNone {
-				return
-			}
-		}
-		if p, ok = m.focusedPane(); !ok {
+	// While a button is held, motion and the release belong to the pane the
+	// press landed in, wherever the pointer is now, at that pane's nearest
+	// edge; otherwise its program would think the button is still down. A
+	// release after a press outside every pane goes nowhere.
+	_, release := msg.(tea.MouseReleaseMsg)
+	_, motion := msg.(tea.MouseMotionMsg)
+	if release || motion && mo.Button != tea.MouseNone {
+		if p, ok = m.paneOf(m.mouseDown); !ok {
 			return
 		}
 		mo.X = clamp(mo.X, p.x, p.x+p.w-1)
 		mo.Y = clamp(mo.Y, p.y, p.y+p.h-1)
+	} else if !ok {
+		return // a click, wheel or hover over the bar, side panel, a divider or the footer
 	}
 	s := p.s
 	shift := func(pt tea.Mouse) uv.Mouse {
@@ -5336,6 +5339,7 @@ func (m *Model) stopWorkspace(key string) {
 		}
 	}
 	delete(m.highlighted, key)
+	delete(m.sideBySideFocus, key)
 	if m.current != nil && m.current.key == key {
 		m.current = nil
 		m.screen = screenPicker

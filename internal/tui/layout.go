@@ -64,9 +64,8 @@ func (m Model) paneAt(x, y int) (sessionPane, bool) {
 	return sessionPane{}, false
 }
 
-// focusedPane returns the pane of the session that takes the keyboard.
-func (m Model) focusedPane() (sessionPane, bool) {
-	s := m.activeSession()
+// paneOf returns the pane session s is drawn in, if it is on screen.
+func (m Model) paneOf(s *session.Session) (sessionPane, bool) {
 	for _, p := range m.sessionPanes() {
 		if p.s == s {
 			return p, true
@@ -102,7 +101,7 @@ func (m Model) focusPane(s *session.Session) Model {
 // sessionCursor places the focused session's cursor on screen, or returns nil
 // when it hides its cursor.
 func (m Model) sessionCursor() *tea.Cursor {
-	p, ok := m.focusedPane()
+	p, ok := m.paneOf(m.activeSession())
 	if !ok {
 		return nil
 	}

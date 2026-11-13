@@ -14,6 +14,7 @@ import (
 
 	"github.com/KCaverly/caretaker/internal/agent"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/creack/pty"
 )
 
 // waitForFileEquals polls path until its contents equal want, or fails. Used
@@ -892,6 +893,24 @@ func TestResizeToTheSameSizeKeepsTheScroll(t *testing.T) {
 	s.Resize(30, 10)
 	if s.Scrolled() {
 		t.Fatal("a real resize should still return to the live output")
+	}
+}
+
+// Moving to a display with other cell pixels keeps the cell count, but the
+// program still needs the new pixel size, for images.
+func TestResizeSendsANewPixelSize(t *testing.T) {
+	s := startNumbered(t, 1, 20, 10)
+	cellW.Store(9)
+	cellH.Store(18)
+	t.Cleanup(func() { cellW.Store(0); cellH.Store(0) })
+
+	s.Resize(20, 10)
+	ws, err := pty.GetsizeFull(s.pty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws.X != 180 || ws.Y != 180 {
+		t.Fatalf("pty pixel size = %dx%d, want 180x180", ws.X, ws.Y)
 	}
 }
 

@@ -17,6 +17,7 @@ func (m Model) toggleSideBySide() (tea.Model, tea.Cmd) {
 	if m.state != nil {
 		m.state.SideBySide = m.sideBySide
 	}
+
 	m.resizeSessions()
 	return m, m.writeStateCmd()
 }
@@ -72,6 +73,7 @@ func (m Model) rememberSideBySideFocus() Model {
 	if !m.sideBySideShown() {
 		return m
 	}
+
 	if m.sideBySideFocus == nil {
 		m.sideBySideFocus = map[string]screen{}
 	}
