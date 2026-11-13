@@ -62,19 +62,6 @@ func mouseLogShell(t *testing.T) (shell, log string) {
 	return shell, log
 }
 
-// waitForScreen waits until s shows want, so its earlier output (such as a
-// mouse mode switch) has been read too.
-func waitForScreen(t *testing.T, s *session.Session, want string) {
-	t.Helper()
-	for range 100 {
-		if strings.Contains(s.Render(), want) {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("the session never showed %q", want)
-}
-
 // waitForLog waits until the log file holds want, and fails with what it holds.
 func waitForLog(t *testing.T, log, want string) {
 	t.Helper()
@@ -96,7 +83,7 @@ func TestForwardMouseKeepsADragThatLeavesThePane(t *testing.T) {
 	mm, _ := m.activate("repo", "mouse", t.TempDir())
 	m = pressSidePanel(t, mm.(Model))
 	m.screen = screenTerminal
-	waitForScreen(t, m.current.ws.Terms[0], "ready")
+	waitForSession(t, m.current.ws.Terms[0], "ready")
 
 	pw, by := m.sidePanelW(), m.barHeight()
 	// A click on the panel stays out of the session; a press in the session
@@ -122,7 +109,7 @@ func TestForwardMouseKeepsADragThatEndsOnADivider(t *testing.T) {
 	mm, _ := m.activate("repo", "mouse", t.TempDir())
 	m = mm.(Model)
 	m.screen = screenTerminal
-	waitForScreen(t, m.current.ws.Terms[0], "ready")
+	waitForSession(t, m.current.ws.Terms[0], "ready")
 	ctrl.cfg.Shell = "sh"
 	w, h := m.sessionSize()
 	if _, err := mgr.SplitTermPane("repo/mouse", t.TempDir(), ctrl.TermSpec(), session.SplitV, w, h); err != nil {

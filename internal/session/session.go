@@ -400,9 +400,14 @@ func (s *Session) Cursor() (x, y int, visible bool) {
 	return p.X, p.Y, s.cursorVisible.Load()
 }
 
-// Resize resizes both the emulator and the pty.
+// Resize resizes both the emulator and the pty. A session already at w×h is
+// left alone: a resize snaps a scrolled pane back to live output and makes the
+// program redraw everything.
 func (s *Session) Resize(w, h int) {
 	if w < 1 || h < 1 {
+		return
+	}
+	if cw, ch := s.Size(); cw == w && ch == h {
 		return
 	}
 	s.scrollForShrink(h)

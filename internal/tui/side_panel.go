@@ -22,9 +22,15 @@ const (
 )
 
 // sidePanelW is how many columns the side panel takes from the sessions, the
-// divider included: 0 when it is closed or the terminal is too narrow.
+// divider included: 0 when it is closed or the terminal is too narrow. While
+// side by side is on, the panel needs room for two sessions, so it hides
+// before they do.
 func (m Model) sidePanelW() int {
-	if !m.sidePanel || m.width-sidePanelWidth-1 < minSessionWidth {
+	need := minSessionWidth
+	if m.sideBySide {
+		need = sideBySideMinWidth
+	}
+	if !m.sidePanel || m.width-sidePanelWidth-1 < need {
 		return 0
 	}
 	return sidePanelWidth + 1

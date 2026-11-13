@@ -19,9 +19,10 @@ func (p sessionPane) contains(x, y int) bool {
 }
 
 // sessionPanes lists the sessions drawn on a session screen with their
-// rectangles: every pane of an unzoomed terminal split, else the active
-// session alone. The cursor and the mouse read it, so they agree on where each
-// session is. Empty when no session is on screen.
+// rectangles: nvim and the agent side by side, every pane of an unzoomed
+// terminal split, else the active session alone. The cursor and the mouse read
+// it, so they agree on where each session is. Empty when no session is on
+// screen.
 func (m Model) sessionPanes() []sessionPane {
 	s := m.activeSession()
 	if s == nil {
@@ -30,6 +31,14 @@ func (m Model) sessionPanes() []sessionPane {
 	x, y := m.sidePanelW(), m.barHeight()
 	w, h := m.sessionSize()
 
+	if m.sideBySideShown() {
+		ws := m.current.ws
+		left, right := sideBySideWidths(w)
+		return []sessionPane{
+			{s: ws.Editor, x: x, y: y, w: left, h: h},
+			{s: ws.ActiveAgentSession(), x: x + left + 1, y: y, w: right, h: h},
+		}
+	}
 	if m.screen == screenTerminal {
 		ws := m.current.ws
 		if !ws.TermZoomed && len(ws.Terms) > 1 && ws.TermLayout != nil {

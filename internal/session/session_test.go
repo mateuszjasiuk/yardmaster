@@ -879,6 +879,22 @@ func TestScrollbackWalksHistory(t *testing.T) {
 	}
 }
 
+// A workspace resize reaches every pane, also ones whose size did not change;
+// those must keep their place in the history.
+func TestResizeToTheSameSizeKeepsTheScroll(t *testing.T) {
+	s := startNumbered(t, 60, 20, 10)
+	s.ScrollBy(-5)
+
+	s.Resize(20, 10)
+	if s.ScrollOffset() != 5 {
+		t.Fatalf("offset = %d after a resize to the same size, want 5", s.ScrollOffset())
+	}
+	s.Resize(30, 10)
+	if s.Scrolled() {
+		t.Fatal("a real resize should still return to the live output")
+	}
+}
+
 func TestScrollbackClampsAtBothEnds(t *testing.T) {
 	s := startNumbered(t, 60, 20, 10)
 

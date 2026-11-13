@@ -319,6 +319,8 @@ type Model struct {
 	stacksExpanded bool
 	// sidePanel is true while the session list on the left is open.
 	sidePanel bool
+	// sideBySide is true while nvim and the agent share the screen.
+	sideBySide bool
 	// ghPopup is the open gh stack popup, nil when closed.
 	ghPopup *ghStackPopup
 	// ghPRs is what GitHub last said about each stack's PRs, by stack.
@@ -606,6 +608,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		ctrl: ctrl, mgr: mgr, state: saved,
 		stacksExpanded: saved.StacksExpanded,
 		sidePanel:      saved.SidePanel,
+		sideBySide:     saved.SideBySide,
 		keys:           ctrl.Keys(),
 		iconMode:       ctrl.DisplayIcons(),
 		agentStrip:     ctrl.AgentStrip(),
@@ -1116,18 +1119,25 @@ func (m Model) sessionSize() (int, int) {
 	return m.width - m.sidePanelW(), max(1, m.height-m.barHeight()-m.sessionFooterH())
 }
 
-// sessionSizes is the size each kind of session in a worktree gets.
-func (m Model) sessionSizes() session.Sizes {
-	return session.SameSize(m.sessionSize())
-}
-
-// sizesFor is the sizes for workspace key: the orchestrator always fills the
-// room for sessions, a worktree follows sessionSizes.
+// sizesFor is the size each kind of session in workspace key gets. Terminal
+// panes and the orchestrator fill the room for sessions; nvim and the agent
+// split it while the worktree is side by side. A worktree that isn't open yet
+// is assumed to start with an agent.
 func (m Model) sizesFor(key string) session.Sizes {
+	w, h := m.sessionSize()
+	sizes := session.SameSize(w, h)
 	if _, ok := orchestratorAccountOf(key); ok {
-		return session.SameSize(m.sessionSize())
+		return sizes
 	}
-	return m.sessionSizes()
+
+	joined := m.sideBySideFits()
+	if ws, ok := m.mgr.Workspace(key); ok {
+		joined = m.sideBySideIn(ws)
+	}
+	if joined {
+		sizes.Editor.W, sizes.Agent.W = sideBySideWidths(w)
+	}
+	return sizes
 }
 
 // resizeSessions sizes the current workspace and the orchestrator to the room
@@ -1339,9 +1349,7 @@ func (m Model) syncVisible() {
 
 // visibleSessions returns the sessions whose output is currently drawn:
 // nothing while the picker, setup, or a full-body overlay (help, board,
-// usage) is shown; the editor or focused agent on their screens; and on the
-// terminal screen either the focused pane (zoomed/single) or every pane in
-// the split layout. Mirrors the branch structure of View.
+// usage) is shown, else every session in sessionPanes.
 func (m Model) visibleSessions() []*session.Session {
 	// m.diffOpen is redundant today (the diff only opens over the picker, which
 	// already returns nil), but it is listed so a future entry point that opens
@@ -1349,28 +1357,13 @@ func (m Model) visibleSessions() []*session.Session {
 	if m.helpOpen || m.boardOpen || m.usageOpen || m.paletteOpen || m.diffOpen || m.stackOpen || m.ghPopup != nil || m.screen == screenPicker || m.screen == screenSetup {
 		return nil
 	}
-	if m.screen == screenOrchestrator {
-		if s := m.orchestratorSession(); s != nil {
-			return []*session.Session{s}
-		}
-		return nil
+
+	panes := m.sessionPanes()
+	ss := make([]*session.Session, len(panes))
+	for i, p := range panes {
+		ss[i] = p.s
 	}
-	if m.current == nil || m.current.ws == nil {
-		return nil
-	}
-	ws := m.current.ws
-	switch m.screen {
-	case screenEditor:
-		return []*session.Session{ws.Editor}
-	case screenAgent:
-		return []*session.Session{ws.ActiveAgentSession()}
-	case screenTerminal:
-		if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-			return []*session.Session{ws.ActiveTermSession()}
-		}
-		return ws.Terms
-	}
-	return nil
+	return ss
 }
 
 func (m Model) overlayOpen() bool {
@@ -3665,6 +3658,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.toggleStacks()
 		case m.keys.SidePanel:
 			return m.toggleSidePanel()
+		case m.keys.SideBySide:
+			return m.toggleSideBySide()
 		case m.keys.StackPopup:
 			return m.openGhStackPopup()
 		}
@@ -3790,7 +3785,7 @@ func (m Model) isReservedActionKey(s string) bool {
 	switch s {
 	case m.keys.Cycle, m.keys.CycleBack, m.keys.Picker, m.keys.Palette,
 		m.keys.Attention, m.keys.Highlight, m.keys.GlobalConfig, m.keys.Orchestrator, m.keys.NextAgent, m.keys.PrevAgent,
-		m.keys.NextWorktree, m.keys.PrevWorktree, m.keys.ToggleStacks, m.keys.SidePanel, m.keys.StackPopup,
+		m.keys.NextWorktree, m.keys.PrevWorktree, m.keys.ToggleStacks, m.keys.SidePanel, m.keys.SideBySide, m.keys.StackPopup,
 		m.keys.CommandPalette, m.keys.GotoEditor, m.keys.GotoAgent, m.keys.GotoTerm:
 		return true
 	}

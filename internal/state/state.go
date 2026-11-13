@@ -30,6 +30,8 @@ type State struct {
 	StacksExpanded bool `json:"stacks_expanded,omitempty"`
 	// SidePanel is true when the session list on the left is open.
 	SidePanel bool `json:"side_panel,omitempty"`
+	// SideBySide is true when nvim and the agent share the screen.
+	SideBySide bool `json:"side_by_side,omitempty"`
 	// Features maps "repo/name" to a feature: its manager and the worktrees
 	// that build it.
 	Features map[string]*Feature `json:"features,omitempty"`

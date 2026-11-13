@@ -22,7 +22,7 @@ func sidePanelModel(t *testing.T, width int) (Model, *Controller, *session.Manag
 	t.Cleanup(mgr.CloseAll)
 
 	m := New(ctrl, mgr)
-	m.sidePanel = false
+	m.sidePanel, m.sideBySide = false, false
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 	m = mm.(Model)
 	mm, _ = m.activate("repo", "wt", t.TempDir())
@@ -226,7 +226,7 @@ func TestStripMoreOpensTheSidePanel(t *testing.T) {
 	}
 
 	// "+N" can't show the panel on the deck, so it takes no click there.
-	m.sidePanel = false
+	m.sidePanel, m.sideBySide = false, false
 	m.screen = screenPicker
 	_, items = m.agentStripLayout()
 	mm, _, ok = m.stripClick(items[len(items)-1].start, 1)

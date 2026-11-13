@@ -138,6 +138,9 @@ func (m Model) View() tea.View {
 		sw, sh := m.sessionSize()
 		body = m.appendSessionFooter(m.renderTermPanes(sw, sh))
 		cursor = m.sessionCursor()
+	case m.sideBySideShown():
+		body = m.appendSessionFooter(m.renderSideBySide())
+		cursor = m.sessionCursor()
 	default:
 		if s := m.activeSession(); s != nil {
 			body = m.appendSessionFooter(s.Render())
