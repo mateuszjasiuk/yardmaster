@@ -412,11 +412,11 @@ worktree shows on the right.
   bar's strip runs out of room, its `+N` opens the list too.
 - **`ctrl+|`** (`ctrl+shift+\`) shows **nvim and the agent side by side**: nvim on the left,
   the focused agent on the right, half the width each. **`alt+1`** / **`alt+2`** or a click move
-  the keyboard between them, and the bar lights both icons and underlines the focused one. Cycling
-  treats the two as one stop (side by side → terminal → side by side) and comes back to the one
-  you used last; the terminal keeps the full width. Side by side needs 121 columns, and while it
-  is on, the session list hides first in windows under 150. Without an agent nvim fills the
-  width. ct remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
+  the keyboard between them. The bar lights both icons and puts the focused one on a dark
+  background, and the pane without focus turns gray. Cycling treats the two as one stop (side by
+  side → terminal → side by side) and comes back to the one you used last; the terminal keeps the
+  full width. Side by side needs 121 columns, and while it is on, the session list hides first in
+  windows under 150. Without an agent nvim fills the width. ct remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
   keyboard protocol); without it the key arrives as `ctrl+\`, so pick another `side_by_side` key.
 
 ### Agent providers and lifecycle

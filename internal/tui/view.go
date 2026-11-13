@@ -30,6 +30,7 @@ var (
 	cFg3    = lipgloss.Color("#BDAE93") // fg3
 	cDim    = lipgloss.Color("#928374") // gray
 	cFaint  = lipgloss.Color("#665C54") // bg3
+	cBg2    = lipgloss.Color("#504945") // bg2
 	cSelBg  = lipgloss.Color("#665C54") // bg3 (strong selection)
 	// cStackBg sits behind a gh stack in the agent strip, so you can see where
 	// it ends.
@@ -81,9 +82,13 @@ var (
 	boldYellow = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
 	boldRed    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
 	// While nvim and the agent are side by side both icons are lit, and the
-	// focused one is also underlined.
-	boldGreenUnder  = boldGreen.Underline(true)
-	boldPurpleUnder = boldPurple.Underline(true)
+	// focused one sits on a background. An underline doesn't show: Nerd Font
+	// icons are drawn over it.
+	markBg           = lipgloss.NewStyle().Background(cBg2)
+	boldGreenMarked  = boldGreen.Background(cBg2)
+	boldPurpleMarked = boldPurple.Background(cBg2)
+	// dimPaneStyle draws the side without focus in gray.
+	dimPaneStyle = lipgloss.NewStyle().Foreground(cDim)
 
 	// Diff viewer line styles, hoisted like the deck's so they're never rebuilt
 	// per frame: added lines green, removed lines red, hunk headers in the
@@ -268,12 +273,27 @@ func (m Model) renderBar() string {
 }
 
 func (m Model) renderBarLeft() string {
+	// The focused icon side by side gets a space of background on each side,
+	// taken from the gaps around it, so no icon moves (tabAt counts 3-space gaps).
+	mark := m.sideBySideShown()
+
 	left := "  "
+	prevMarked := false
 	for i, z := range m.barZones() {
+		isMarked := mark && z.s == m.screen
 		if i > 0 {
-			left += "   " // equidistant gap between icons
+			gap := "   " // equidistant gap between icons
+			if isMarked || prevMarked {
+				gap = "  "
+			}
+			left += gap
 		}
-		left += z.glyph
+		if isMarked {
+			left += markBg.Render(" ") + z.glyph + markBg.Render(" ")
+		} else {
+			left += z.glyph
+		}
+		prevMarked = isMarked
 	}
 	return left
 }
@@ -568,9 +588,9 @@ func (m Model) barZones() []barZone {
 	editorLit, agentLit := boldGreen, boldPurple
 	switch {
 	case joined && m.screen == screenEditor:
-		editorLit = boldGreenUnder
+		editorLit = boldGreenMarked
 	case joined:
-		agentLit = boldPurpleUnder
+		agentLit = boldPurpleMarked
 	}
 	agent := glyph(m.destinationGlyph(screenAgent), agentLit, m.screen == screenAgent || joined, has)
 

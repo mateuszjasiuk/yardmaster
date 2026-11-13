@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KCaverly/caretaker/internal/session"
 )
@@ -88,10 +91,25 @@ func sideBySideWidths(w int) (left, right int) {
 	return left, w - 1 - left
 }
 
-// renderSideBySide draws nvim and the agent next to each other. The divider
-// always borders the focused pane, so it is lit, as between two terminal panes.
+// renderSideBySide draws nvim and the agent next to each other, the one
+// without focus in gray. The divider always borders the focused pane, so it is
+// lit, as between two terminal panes.
 func (m Model) renderSideBySide() string {
 	panes := m.sessionPanes()
 	left, right := panes[0], panes[1]
-	return joinVerticalSplit(left.s.Render(), right.s.Render(), cAccent, left.h, left.w)
+	return joinVerticalSplit(m.sideBySidePane(left), m.sideBySidePane(right), cAccent, left.h, left.w)
+}
+
+// sideBySidePane is a pane's screen, dropped to plain gray text when it
+// doesn't have focus.
+func (m Model) sideBySidePane(p sessionPane) string {
+	if p.s == m.activeSession() {
+		return p.s.Render()
+	}
+
+	lines := splitLines(ansi.Strip(p.s.Render()))
+	for i, l := range lines {
+		lines[i] = dimPaneStyle.Render(l)
+	}
+	return strings.Join(lines, "\n")
 }

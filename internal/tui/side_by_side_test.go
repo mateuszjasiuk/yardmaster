@@ -336,14 +336,39 @@ func TestSideBySideLightsBothBarIcons(t *testing.T) {
 		t.Fatal("one at a time, the agent icon is dim while nvim is on screen")
 	}
 
+	plain := ansi.Strip(m.renderBarLeft())
 	m = pressSideBySide(t, m)
-	if editor, agent := icons(); editor != boldGreenUnder.Render(eg) || agent != boldPurple.Render(ag) {
-		t.Fatal("side by side with nvim focused: both lit, nvim underlined")
+	if editor, agent := icons(); editor != boldGreenMarked.Render(eg) || agent != boldPurple.Render(ag) {
+		t.Fatal("side by side with nvim focused: both lit, nvim on the background")
+	}
+	if got := ansi.Strip(m.renderBarLeft()); got != plain {
+		t.Fatalf("the background must not move the icons:\n%q\n%q", got, plain)
 	}
 	mm, _ := m.gotoScreen(screenAgent)
 	m = mm.(Model)
-	if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurpleUnder.Render(ag) {
-		t.Fatal("side by side with the agent focused: both lit, the agent underlined")
+	if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurpleMarked.Render(ag) {
+		t.Fatal("side by side with the agent focused: both lit, the agent on the background")
+	}
+	if !strings.Contains(m.renderBarLeft(), markBg.Render(" ")+boldPurpleMarked.Render(ag)+markBg.Render(" ")) {
+		t.Fatal("the focused icon should have a space of background on each side")
+	}
+}
+
+func TestSideBySideGraysThePaneWithoutFocus(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	left, right := m.sessionPanes()[0], m.sessionPanes()[1]
+
+	if got := m.sideBySidePane(left); got != left.s.Render() {
+		t.Fatal("the focused pane keeps its own colours")
+	}
+	got := m.sideBySidePane(right)
+	if ansi.Strip(got) != ansi.Strip(right.s.Render()) {
+		t.Fatal("the pane without focus keeps its text")
+	}
+	for _, l := range strings.Split(got, "\n") {
+		if l != dimPaneStyle.Render(ansi.Strip(l)) {
+			t.Fatalf("every line of the pane without focus should be plain gray: %q", l)
+		}
 	}
 }
 
