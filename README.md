@@ -142,7 +142,8 @@ usage       = "alt+u"  # plan usage for enabled agent providers
 help        = "f1"     # toggle the key/legend overlay (also "?" in the deck)
 command_palette = "alt+p" # fuzzy-searchable list of every action + its key
 
-# Terminal-screen-only pane keys.
+# Pane keys on the terminal screen; focus left / right also moves between nvim
+# and the agent while they are side by side.
 term_split_v    = "alt+v"  # new pane to the right
 term_split_h    = "alt+s"  # new pane below
 term_zoom       = "alt+z"  # zoom / restore the focused pane
@@ -186,6 +187,10 @@ auto_merge = false
 icons = "nerd" # nerd | text | ascii
 # List every open worktree on its own row under the bar, coloured by its agents.
 agent_strip = true
+# How the side without focus looks while nvim and the agent are side by side:
+# faint keeps its colours darker, gray draws it in plain gray (for terminals
+# that don't show faint text).
+side_by_side_dim = "faint" # faint | gray
 
 # The diff viewer (deck `v` and the stack `d` preview). All optional.
 [diff]
@@ -411,11 +416,11 @@ worktree shows on the right.
   hides in terminals under 89 columns and on the deck. ct remembers whether it is open. When the
   bar's strip runs out of room, its `+N` opens the list too.
 - **`ctrl+|`** (`ctrl+shift+\`) shows **nvim and the agent side by side**: nvim on the left,
-  the focused agent on the right, half the width each. **`alt+1`** / **`alt+2`** or a click move
-  the keyboard between them. The bar lights both icons and puts the focused one on a dark
-  background, and the pane without focus turns gray. Cycling treats the two as one stop (side by
-  side → terminal → side by side) and comes back to the one you used last; the terminal keeps the
-  full width. Side by side needs 121 columns, and while it is on, the session list hides first in
+  the focused agent on the right, half the width each. **`alt+1`** / **`alt+2`**, **`alt+h`** /
+  **`alt+l`** or a click move the keyboard between them; the pane without focus dims
+  (`display.side_by_side_dim`), and the bar lights both icons.
+  Cycling treats the two as one stop (side by side → terminal → side by side) and comes back to
+  the one you used last; the terminal keeps the full width. Side by side needs 121 columns, and while it is on, the session list hides first in
   windows under 150. Without an agent nvim fills the width. ct remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
   keyboard protocol); without it the key arrives as `ctrl+\`, so pick another `side_by_side` key.
 

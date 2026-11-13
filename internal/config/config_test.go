@@ -307,6 +307,21 @@ func TestDisplayIconModes(t *testing.T) {
 	}
 }
 
+func TestDisplaySideBySideDim(t *testing.T) {
+	if d := Default(); d.Display.SideBySideDim != DimFaint {
+		t.Fatalf("default side_by_side_dim = %q, want %q", d.Display.SideBySideDim, DimFaint)
+	}
+	if cfg := loadTOML(t, "[display]\nside_by_side_dim = \"gray\"\n"); cfg.Display.SideBySideDim != DimGray {
+		t.Fatalf("side_by_side_dim = %q, want %q", cfg.Display.SideBySideDim, DimGray)
+	}
+	c := Default()
+	c.Root = t.TempDir()
+	c.Display.SideBySideDim = "blur"
+	if err := c.validate(); err == nil || !strings.Contains(err.Error(), "faint") || !strings.Contains(err.Error(), "gray") {
+		t.Fatalf("invalid side_by_side_dim error = %v", err)
+	}
+}
+
 func TestExpandTilde(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

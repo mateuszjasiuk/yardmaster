@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/KCaverly/caretaker/internal/config"
 	"github.com/KCaverly/caretaker/internal/session"
 )
 
@@ -336,26 +337,50 @@ func TestSideBySideLightsBothBarIcons(t *testing.T) {
 		t.Fatal("one at a time, the agent icon is dim while nvim is on screen")
 	}
 
-	plain := ansi.Strip(m.renderBarLeft())
 	m = pressSideBySide(t, m)
-	if editor, agent := icons(); editor != boldGreenMarked.Render(eg) || agent != boldPurple.Render(ag) {
-		t.Fatal("side by side with nvim focused: both lit, nvim on the background")
+	for _, s := range []screen{screenEditor, screenAgent} {
+		mm, _ := m.gotoScreen(s)
+		m = mm.(Model)
+		if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurple.Render(ag) {
+			t.Fatalf("side by side with %v focused, both icons should be lit", s)
+		}
 	}
-	if got := ansi.Strip(m.renderBarLeft()); got != plain {
-		t.Fatalf("the background must not move the icons:\n%q\n%q", got, plain)
+}
+
+func TestSideBySideDimsThePaneWithoutFocus(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	left, right := m.sessionPanes()[0], m.sessionPanes()[1]
+	if m.sideBySideDim != config.DimFaint {
+		t.Fatalf("the default should be faint, got %q", m.sideBySideDim)
 	}
-	mm, _ := m.gotoScreen(screenAgent)
-	m = mm.(Model)
-	if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurpleMarked.Render(ag) {
-		t.Fatal("side by side with the agent focused: both lit, the agent on the background")
+
+	if got := m.sideBySidePane(left); got != left.s.Render() {
+		t.Fatal("the focused pane is drawn as it is")
 	}
-	if !strings.Contains(m.renderBarLeft(), markBg.Render(" ")+boldPurpleMarked.Render(ag)+markBg.Render(" ")) {
-		t.Fatal("the focused icon should have a space of background on each side")
+	if got, want := m.sideBySidePane(right), faintLines(right.s.Render()); got != want {
+		t.Fatal("the pane without focus should be faint over its own colours")
+	}
+}
+
+func TestFaintLinesKeepsColoursAndFaintThroughResets(t *testing.T) {
+	const f, reset = "\x1b[2m", "\x1b[m"
+	for in, want := range map[string]string{
+		"plain":                f + "plain" + reset,
+		"a\nb":                 f + "a" + reset + "\n" + f + "b" + reset,
+		"\x1b[32mgo\x1b[0m on": f + "\x1b[32m" + f + "go\x1b[0m" + f + " on" + reset,
+		"\x1b[38;2;1;2;3mx":    f + "\x1b[38;2;1;2;3m" + f + "x" + reset,
+		"\x1b[2Kcleared":       f + "\x1b[2Kcleared" + reset,
+		"cut \x1b[3":           f + "cut \x1b[3" + reset,
+	} {
+		if got := faintLines(in); got != want {
+			t.Errorf("faintLines(%q) =\n%q\nwant\n%q", in, got, want)
+		}
 	}
 }
 
 func TestSideBySideGraysThePaneWithoutFocus(t *testing.T) {
 	m := pressSideBySide(t, sideBySideModel(t, 150))
+	m.sideBySideDim = config.DimGray
 	left, right := m.sessionPanes()[0], m.sessionPanes()[1]
 
 	if got := m.sideBySidePane(left); got != left.s.Render() {
@@ -388,5 +413,33 @@ func TestKeyLabelShowsTheShiftedSymbol(t *testing.T) {
 	m := sideBySideModel(t, 150)
 	if help := ansi.Strip(m.renderHelp(200)); !strings.Contains(help, "ctrl+|") { // tall enough for every row
 		t.Fatal("help should show the side by side key as ctrl+|")
+	}
+}
+
+func TestSideBySidePaneFocusKeys(t *testing.T) {
+	m := sideBySideModel(t, 150)
+	press := func(code rune) {
+		t.Helper()
+		mm, _ := m.handleKey(tea.KeyPressMsg{Code: code, Mod: tea.ModAlt})
+		m = mm.(Model)
+	}
+
+	press('l')
+	if m.screen != screenEditor {
+		t.Fatalf("one at a time, the focus key goes to nvim and the view stays, got %v", m.screen)
+	}
+
+	m = pressSideBySide(t, m)
+	press('l')
+	if m.screen != screenAgent {
+		t.Fatalf("side by side, focus right from nvim should focus the agent, got %v", m.screen)
+	}
+	press('l')
+	if m.screen != screenAgent {
+		t.Fatalf("there is nothing right of the agent, so focus stays, got %v", m.screen)
+	}
+	press('h')
+	if m.screen != screenEditor {
+		t.Fatalf("focus left from the agent should focus nvim, got %v", m.screen)
 	}
 }

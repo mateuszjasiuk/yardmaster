@@ -30,7 +30,6 @@ var (
 	cFg3    = lipgloss.Color("#BDAE93") // fg3
 	cDim    = lipgloss.Color("#928374") // gray
 	cFaint  = lipgloss.Color("#665C54") // bg3
-	cBg2    = lipgloss.Color("#504945") // bg2
 	cSelBg  = lipgloss.Color("#665C54") // bg3 (strong selection)
 	// cStackBg sits behind a gh stack in the agent strip, so you can see where
 	// it ends.
@@ -81,12 +80,6 @@ var (
 	boldAccent = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	boldYellow = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
 	boldRed    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
-	// While nvim and the agent are side by side both icons are lit, and the
-	// focused one sits on a background. An underline doesn't show: Nerd Font
-	// icons are drawn over it.
-	markBg           = lipgloss.NewStyle().Background(cBg2)
-	boldGreenMarked  = boldGreen.Background(cBg2)
-	boldPurpleMarked = boldPurple.Background(cBg2)
 	// dimPaneStyle draws the side without focus in gray.
 	dimPaneStyle = lipgloss.NewStyle().Foreground(cDim)
 
@@ -273,27 +266,12 @@ func (m Model) renderBar() string {
 }
 
 func (m Model) renderBarLeft() string {
-	// The focused icon side by side gets a space of background on each side,
-	// taken from the gaps around it, so no icon moves (tabAt counts 3-space gaps).
-	mark := m.sideBySideShown()
-
 	left := "  "
-	prevMarked := false
 	for i, z := range m.barZones() {
-		isMarked := mark && z.s == m.screen
 		if i > 0 {
-			gap := "   " // equidistant gap between icons
-			if isMarked || prevMarked {
-				gap = "  "
-			}
-			left += gap
+			left += "   " // equidistant gap between icons
 		}
-		if isMarked {
-			left += markBg.Render(" ") + z.glyph + markBg.Render(" ")
-		} else {
-			left += z.glyph
-		}
-		prevMarked = isMarked
+		left += z.glyph
 	}
 	return left
 }
@@ -584,19 +562,14 @@ func (m Model) barZones() []barZone {
 	}
 	ct := ctStyle.Render(m.destinationGlyph(screenPicker))
 
+	// Side by side, nvim and the agent are both on screen, so both are lit; the
+	// gray pane shows which has focus.
 	joined := m.sideBySideShown()
-	editorLit, agentLit := boldGreen, boldPurple
-	switch {
-	case joined && m.screen == screenEditor:
-		editorLit = boldGreenMarked
-	case joined:
-		agentLit = boldPurpleMarked
-	}
-	agent := glyph(m.destinationGlyph(screenAgent), agentLit, m.screen == screenAgent || joined, has)
+	agent := glyph(m.destinationGlyph(screenAgent), boldPurple, m.screen == screenAgent || joined, has)
 
 	zones := []barZone{
 		{screenPicker, ct},
-		{screenEditor, glyph(m.destinationGlyph(screenEditor), editorLit, m.screen == screenEditor || joined, has)},
+		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
 		// The orchestrator icon is a shortcut to its agent, reachable like the
 		// deck; it lights up while that agent is on screen.

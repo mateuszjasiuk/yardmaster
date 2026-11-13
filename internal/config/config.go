@@ -93,6 +93,12 @@ const (
 	IconsASCII = "ascii"
 )
 
+// How the side without focus looks while nvim and the agent are side by side.
+const (
+	DimFaint = "faint"
+	DimGray  = "gray"
+)
+
 // Display configures terminal rendering choices.
 type Display struct {
 	// Icons selects persistent navigation and pane symbols: nerd, text, or ascii.
@@ -100,6 +106,9 @@ type Display struct {
 	// AgentStrip lists every open worktree on its own row under the bar,
 	// coloured by its agents' status. On by default.
 	AgentStrip bool `toml:"agent_strip"`
+	// SideBySideDim is how the side without focus looks side by side: faint
+	// keeps its colours darker, gray draws it in plain gray.
+	SideBySideDim string `toml:"side_by_side_dim"`
 }
 
 // Stack configures stacked-PR workflow behavior.
@@ -328,7 +337,7 @@ func Default() Config {
 			Usage: "alt+u", CommandPalette: "alt+p",
 		},
 		Usage:        Usage{Threshold: 50},
-		Display:      Display{Icons: IconsNerd, AgentStrip: true},
+		Display:      Display{Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint},
 		Orchestrator: Orchestrator{Model: "sonnet"},
 		Plasma: Plasma{
 			Pattern: "classic", Palette: "aurora", Charset: "dots",
@@ -503,6 +512,11 @@ func (c *Config) validate() error {
 	case IconsNerd, IconsText, IconsASCII:
 	default:
 		return fmt.Errorf("config `display.icons` must be %q, %q, or %q", IconsNerd, IconsText, IconsASCII)
+	}
+	switch c.Display.SideBySideDim {
+	case DimFaint, DimGray:
+	default:
+		return fmt.Errorf("config `display.side_by_side_dim` must be %q or %q", DimFaint, DimGray)
 	}
 	if !c.Agents.Default.Valid() {
 		return fmt.Errorf("config `agents.default` must be %q or %q", agent.Claude, agent.Codex)

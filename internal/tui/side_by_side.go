@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/KCaverly/caretaker/internal/config"
 	"github.com/KCaverly/caretaker/internal/session"
 )
 
@@ -100,16 +101,55 @@ func (m Model) renderSideBySide() string {
 	return joinVerticalSplit(m.sideBySidePane(left), m.sideBySidePane(right), cAccent, left.h, left.w)
 }
 
-// sideBySidePane is a pane's screen, dropped to plain gray text when it
-// doesn't have focus.
+// sideBySidePane is a pane's screen, dimmed when it doesn't have focus: faint
+// over its own colours, or plain gray text (display.side_by_side_dim).
 func (m Model) sideBySidePane(p sessionPane) string {
 	if p.s == m.activeSession() {
 		return p.s.Render()
 	}
 
-	lines := splitLines(ansi.Strip(p.s.Render()))
-	for i, l := range lines {
-		lines[i] = dimPaneStyle.Render(l)
+	if m.sideBySideDim == config.DimGray {
+		lines := splitLines(ansi.Strip(p.s.Render()))
+		for i, l := range lines {
+			lines[i] = dimPaneStyle.Render(l)
+		}
+		return strings.Join(lines, "\n")
 	}
-	return strings.Join(lines, "\n")
+	return faintLines(p.s.Render())
+}
+
+// faintLines turns on the terminal's faint style at the start of each line and
+// again after each SGR sequence, since the program's own resets turn it off.
+// Each line ends with a reset, so faint doesn't spill into the divider after it.
+func faintLines(s string) string {
+	const faint = "\x1b[2m"
+	lines := splitLines(s)
+	var b strings.Builder
+	for i, l := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(faint)
+		for {
+			j := strings.Index(l, "\x1b[")
+			if j < 0 {
+				break
+			}
+			end := j + 2
+			for end < len(l) && (l[end] < 0x40 || l[end] > 0x7e) {
+				end++
+			}
+			if end == len(l) {
+				break
+			}
+			b.WriteString(l[:end+1])
+			if l[end] == 'm' {
+				b.WriteString(faint)
+			}
+			l = l[end+1:]
+		}
+		b.WriteString(l)
+		b.WriteString("\x1b[m")
+	}
+	return b.String()
 }

@@ -321,6 +321,9 @@ type Model struct {
 	sidePanel bool
 	// sideBySide is true while nvim and the agent share the screen.
 	sideBySide bool
+	// sideBySideDim is how the side without focus looks: config.DimFaint or
+	// config.DimGray.
+	sideBySideDim string
 	// sideBySideFocus is the editor or agent screen last used in each side by
 	// side worktree, so cycling back from the terminal returns to it.
 	sideBySideFocus map[string]screen
@@ -617,6 +620,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		sideBySide:     saved.SideBySide,
 		keys:           ctrl.Keys(),
 		iconMode:       ctrl.DisplayIcons(),
+		sideBySideDim:  ctrl.SideBySideDim(),
 		agentStrip:     ctrl.AgentStrip(),
 		usageThreshold: ctrl.UsageThreshold(),
 		plasma:         plasmaField, plasmaWidthPct: pc.Width,
@@ -3869,6 +3873,16 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.rotateAgent(+1)
 	case m.keys.PrevAgent:
 		return m.rotateAgent(-1)
+	}
+	// Side by side, the pane focus keys also move between nvim and the agent.
+	// With no pane that way the key goes on to the program, which may use it.
+	if m.sideBySideShown() {
+		switch s := msg.String(); {
+		case s == m.keys.TermFocusLeft && m.screen == screenAgent:
+			return m.gotoScreen(screenEditor)
+		case s == m.keys.TermFocusRight && m.screen == screenEditor:
+			return m.gotoScreen(screenAgent)
+		}
 	}
 	if m.screen == screenTerminal && m.current != nil {
 		key := m.current.key

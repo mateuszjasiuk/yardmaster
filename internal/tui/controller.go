@@ -260,6 +260,14 @@ func (c *Controller) DisplayIcons() string {
 	return c.cfg.Display.Icons
 }
 
+// SideBySideDim is how the side without focus looks side by side.
+func (c *Controller) SideBySideDim() string {
+	if c.cfg.Display.SideBySideDim == "" {
+		return config.DimFaint
+	}
+	return c.cfg.Display.SideBySideDim
+}
+
 // GlobalConfigDir returns the home directory path for the global config workspace.
 func (c *Controller) GlobalConfigDir() (string, error) { return os.UserHomeDir() }
 
