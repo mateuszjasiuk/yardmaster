@@ -80,6 +80,10 @@ var (
 	boldAccent = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
 	boldYellow = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
 	boldRed    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
+	// While nvim and the agent are side by side both icons are lit, and the
+	// focused one is also underlined.
+	boldGreenUnder  = boldGreen.Underline(true)
+	boldPurpleUnder = boldPurple.Underline(true)
 
 	// Diff viewer line styles, hoisted like the deck's so they're never rebuilt
 	// per frame: added lines green, removed lines red, hunk headers in the
@@ -560,11 +564,19 @@ func (m Model) barZones() []barZone {
 	}
 	ct := ctStyle.Render(m.destinationGlyph(screenPicker))
 
-	agent := glyph(m.destinationGlyph(screenAgent), boldPurple, m.screen == screenAgent, has)
+	joined := m.sideBySideShown()
+	editorLit, agentLit := boldGreen, boldPurple
+	switch {
+	case joined && m.screen == screenEditor:
+		editorLit = boldGreenUnder
+	case joined:
+		agentLit = boldPurpleUnder
+	}
+	agent := glyph(m.destinationGlyph(screenAgent), agentLit, m.screen == screenAgent || joined, has)
 
 	zones := []barZone{
 		{screenPicker, ct},
-		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor, has)},
+		{screenEditor, glyph(m.destinationGlyph(screenEditor), editorLit, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
 		// The orchestrator icon is a shortcut to its agent, reachable like the
 		// deck; it lights up while that agent is on screen.
@@ -1843,6 +1855,7 @@ func (m Model) renderHelp(h int) string {
 		row(m.keys.PrevWorktree+" / "+m.keys.NextWorktree, "prev / next worktree"),
 		row(m.keys.ToggleStacks, "collapse or expand stacks in the bar"),
 		row(m.keys.SidePanel, "session list on the left (toggle)"),
+		row(m.keys.SideBySide, "nvim and the agent side by side (toggle)"),
 		row(m.keys.StackPopup, "the stack's PRs, reviews and checks"),
 	)
 	if m.usageEnabled() {

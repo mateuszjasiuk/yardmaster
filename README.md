@@ -131,6 +131,7 @@ next_worktree = "ctrl+l" # next worktree in the bar, like tabs (wraps)
 prev_worktree = "ctrl+h" # previous worktree in the bar (wraps)
 toggle_stacks = "ctrl+y" # collapse or expand gh stacks in the bar
 side_panel  = "ctrl+\\" # open or close the session list on the left
+side_by_side = "ctrl+shift+\\" # nvim and the agent next to each other (ctrl+|)
 stack_popup = "ctrl+s"  # the current gh stack's PRs, reviews and checks
 global_config = "alt+g" # open the home-directory workspace
 orchestrator = "alt+o" # open the orchestrator agent (see below)
@@ -409,6 +410,14 @@ worktree shows on the right.
   the right (28 columns) instead of covering it, and the bar hides its strip while it shows. It
   hides in terminals under 89 columns and on the deck. ct remembers whether it is open. When the
   bar's strip runs out of room, its `+N` opens the list too.
+- **`ctrl+|`** (`ctrl+shift+\`) shows **nvim and the agent side by side**: nvim on the left,
+  the focused agent on the right, half the width each. **`alt+1`** / **`alt+2`** or a click move
+  the keyboard between them, and the bar lights both icons and underlines the focused one. Cycling
+  treats the two as one stop (side by side → terminal → side by side) and comes back to the one
+  you used last; the terminal keeps the full width. Side by side needs 121 columns, and while it
+  is on, the session list hides first in windows under 150. Without an agent nvim fills the
+  width. ct remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
+  keyboard protocol); without it the key arrives as `ctrl+\`, so pick another `side_by_side` key.
 
 ### Agent providers and lifecycle
 

@@ -315,3 +315,34 @@ func TestSideBySideStaysOutOfOverlaysAndTheOrchestrator(t *testing.T) {
 		t.Fatalf("the orchestrator should keep the full width, got %d", got)
 	}
 }
+
+func TestSideBySideLightsBothBarIcons(t *testing.T) {
+	m := sideBySideModel(t, 150)
+	icons := func() (editor, agent string) {
+		t.Helper()
+		for _, z := range m.barZones() {
+			switch z.s {
+			case screenEditor:
+				editor = z.glyph
+			case screenAgent:
+				agent = z.glyph
+			}
+		}
+		return editor, agent
+	}
+	eg, ag := m.destinationGlyph(screenEditor), m.destinationGlyph(screenAgent)
+
+	if _, agent := icons(); agent != boldDim.Render(ag) {
+		t.Fatal("one at a time, the agent icon is dim while nvim is on screen")
+	}
+
+	m = pressSideBySide(t, m)
+	if editor, agent := icons(); editor != boldGreenUnder.Render(eg) || agent != boldPurple.Render(ag) {
+		t.Fatal("side by side with nvim focused: both lit, nvim underlined")
+	}
+	mm, _ := m.gotoScreen(screenAgent)
+	m = mm.(Model)
+	if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurpleUnder.Render(ag) {
+		t.Fatal("side by side with the agent focused: both lit, the agent underlined")
+	}
+}
