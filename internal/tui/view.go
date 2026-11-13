@@ -680,8 +680,7 @@ func (m Model) notifZoneAt(x, y int) bool {
 // workspace's agents grouped under worktree header rows (attention sorted to the
 // top) with a trailing "+ new agent" row. While the query has text, the matching
 // agents show with their worktree, then the matching worktrees without agents,
-// windowed to the height.
-// Delegates to renderBoardForm in form state.
+// windowed to the height. Delegates to renderBoardForm in form state.
 func (m Model) renderBoard(h int) string {
 	if m.formOpen {
 		return m.renderBoardForm(h, panelInnerWidth(m.width, 84))
@@ -706,7 +705,7 @@ func (m Model) renderBoard(h int) string {
 	separator := helpStyle.Render("  ·  ")
 	hints := []string{"",
 		"  " + strings.Join([]string{
-			keyhint("type", "find"), keyhint("↑↓", "move"), keyhint("enter", "focus"), keyhint("esc", "close"),
+			keyhint("type", "find"), keyhint("↑↓", "move"), keyhint("enter", "open"), keyhint("esc", "close"),
 		}, separator),
 		"  " + strings.Join(boardActionHints(m.keys), separator),
 	}

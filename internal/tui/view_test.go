@@ -378,7 +378,7 @@ func TestBoardRender(t *testing.T) {
 	mm, _ := m.openBoard()
 	m = mm.(Model)
 	out := m.renderBoard(m.height - m.barHeight())
-	for _, want := range []string{"AGENTS", "r/w", "claude", "new agent", "focus", "current"} {
+	for _, want := range []string{"AGENTS", "r/w", "claude", "new agent", "open", "current"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("board missing %q:\n%s", want, out)
 		}
