@@ -730,6 +730,59 @@ func TestBoardEscClosesWithQuery(t *testing.T) {
 	}
 }
 
+func TestBoardFinderListsIdleWorktreesAfterAgents(t *testing.T) {
+	m := modelWithAgents(1)
+	m.current.ws.Agents[0].Title = "w-helper"
+	m.active = []activeItem{
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "w", Path: "/r/w"}, Live: true}},
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "sch-885", Path: "/r/sch-885"}}},
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "sch-901", Path: "/r/sch-901"}, Live: true}},
+	}
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+
+	// An empty query keeps the grouped board: no worktree rows.
+	for _, r := range func() []boardRow { rows, _ := m.boardView(); return rows }() {
+		if r.isWorktree {
+			t.Fatalf("an empty query should not list idle worktrees, got %+v", r)
+		}
+	}
+
+	// "r/" matches every worktree: the agent first, then the idle worktrees,
+	// and the worktree that has an agent is not listed twice.
+	m.boardInput.SetValue("r/")
+	rows, nav := m.boardView()
+	if len(nav) != 3 || !rows[0].isAgent {
+		t.Fatalf("want the agent then two idle worktrees, got %+v", rows)
+	}
+	idle := map[string]bool{}
+	for _, r := range rows[1:] {
+		if !r.isWorktree {
+			t.Fatalf("rows after the agent should be idle worktrees, got %+v", r)
+		}
+		idle[r.key] = r.live
+	}
+	if live, ok := idle["r/sch-885"]; !ok || live {
+		t.Fatalf("r/sch-885 should be listed as closed, got %v", idle)
+	}
+	if live, ok := idle["r/sch-901"]; !ok || !live {
+		t.Fatalf("r/sch-901 should be listed as open without agents, got %v", idle)
+	}
+	m.width = 100
+	if out := m.renderBoard(30); !strings.Contains(out, "closed") || !strings.Contains(out, "no agent") {
+		t.Fatalf("idle worktrees should render with their tags:\n%s", out)
+	}
+
+	// The row actions ignore worktree rows.
+	m.boardInput.SetValue("885")
+	m.boardCursor = 0
+	mm, _ = m.handleBoard(ctrlKey('d'))
+	m = mm.(Model)
+	if m.mode != modeNormal {
+		t.Fatalf("ctrl+d on a worktree row should do nothing, got mode %v", m.mode)
+	}
+}
+
 func TestBoardPasteGoesToQuery(t *testing.T) {
 	m := modelWithAgents(1)
 	m.filter.Focus() // the deck filter stays focused across screens

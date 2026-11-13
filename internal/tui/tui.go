@@ -226,10 +226,13 @@ type attnEntry struct {
 }
 
 // boardRow is one row of the agent board: a non-navigable worktree group
-// header, a selectable agent row, or the trailing "+ new agent" row.
+// header, a selectable agent row, the trailing "+ new agent" row, or, while
+// searching, a worktree with no running agent.
 type boardRow struct {
-	isAgent bool // navigable agent row
-	isNew   bool // navigable "+ new agent" row
+	isAgent    bool // navigable agent row
+	isNew      bool // navigable "+ new agent" row
+	isWorktree bool // navigable worktree without agents; live when it is open
+	live       bool
 
 	key      string // workspace key ("repo/branch")
 	repo     string // for activate()
@@ -2303,12 +2306,49 @@ func (m Model) boardView() (rows []boardRow, nav []int) {
 			texts = append(texts, r.key+" · "+r.label)
 		}
 	}
-	rows, nav = nil, nil
-	for i, idx := range fuzzyRank(q, texts) {
-		rows = append(rows, agents[idx])
+	var found []boardRow
+	for _, idx := range fuzzyRank(q, texts) {
+		found = append(found, agents[idx])
+	}
+	found = append(found, m.idleWorktreeMatches(q, rows)...)
+
+	rows, nav = found, nil
+	for i := range rows {
 		nav = append(nav, i)
 	}
 	return rows, nav
+}
+
+// idleWorktreeMatches returns the deck's worktrees that have no row on the board
+// (closed, or open with every agent removed) and match q, best match first. The
+// finder lists them after all agents, so they never push a running agent down.
+func (m Model) idleWorktreeMatches(q string, board []boardRow) []boardRow {
+	onBoard := map[string]bool{}
+	for _, r := range board {
+		onBoard[r.key] = true
+	}
+
+	var (
+		idle  []boardRow
+		texts []string
+	)
+	for _, it := range m.active {
+		key := wsKey(it.repo.Name, it.view.WT.Name)
+		if onBoard[key] {
+			continue
+		}
+		idle = append(idle, boardRow{
+			isWorktree: true, live: it.view.Live,
+			key: key, repo: it.repo.Name, worktree: it.view.WT.Name, path: it.view.WT.Path,
+		})
+		texts = append(texts, key)
+	}
+
+	var out []boardRow
+	for _, idx := range fuzzyRank(q, texts) {
+		out = append(out, idle[idx])
+	}
+	return out
 }
 
 // openBoard toggles the agent board. The cursor starts on the first row needing
@@ -2422,8 +2462,11 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "enter":
 		if r, ok := rowAt(m.boardCursor); ok {
-			if r.isNew {
+			switch {
+			case r.isNew:
 				return m.openNewAgentForm(), nil
+			case r.isWorktree:
+				return m.closeBoard().activate(r.repo, r.worktree, r.path)
 			}
 			return m.focusBoardAgent(r)
 		}

@@ -386,7 +386,8 @@ worktree shows on the right.
 
 Press **`alt+a`** to open the agent board for every active worktree. It opens on a search: type part
 of a repo, worktree or agent name (`885` finds `sch-885-…`), and the best match moves to the top,
-selected. `enter` focuses it, and `esc` closes the board. `ctrl+e` creates an agent, `ctrl+r`
+selected. Worktrees without a running agent match too, listed after the agents: `enter` opens
+them like the deck does. `enter` on an agent focuses it, and `esc` closes the board. `ctrl+e` creates an agent, `ctrl+r`
 restarts the selected one in place, `ctrl+d` removes it, and `ctrl+x` dismisses its "your turn"
 marker.
 

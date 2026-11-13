@@ -771,13 +771,31 @@ func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) [
 	start, end := windowBounds(len(rows), selRow, rowsAvail)
 	var lines []string
 	for i := start; i < end; i++ {
-		content := m.boardAgentLine(rows[i], true, innerW)
+		var content string
+		if rows[i].isWorktree {
+			content = boardWorktreeLine(rows[i], innerW)
+		} else {
+			content = m.boardAgentLine(rows[i], true, innerW)
+		}
 		if i == selRow {
 			content = selBar(content, innerW)
 		}
 		lines = append(lines, content)
 	}
 	return lines
+}
+
+// boardWorktreeLine renders a worktree with no running agent, dimmed, lined up
+// with the agent rows' worktree column and tagged on the right.
+func boardWorktreeLine(r boardRow, innerW int) string {
+	tag := "closed"
+	if r.live {
+		tag = "no agent"
+	}
+	left := dimStyle.Render("     " + r.key)
+	right := dimStyle.Render(tag)
+	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
+	return left + strings.Repeat(" ", gap) + right
 }
 
 // boardAgentLine renders one agent row: attention glyph, the worktree when
