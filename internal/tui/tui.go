@@ -321,6 +321,9 @@ type Model struct {
 	sidePanel bool
 	// sideBySide is true while nvim and the agent share the screen.
 	sideBySide bool
+	// sideBySideFocus is the editor or agent screen last used in each side by
+	// side worktree, so cycling back from the terminal returns to it.
+	sideBySideFocus map[string]screen
 	// ghPopup is the open gh stack popup, nil when closed.
 	ghPopup *ghStackPopup
 	// ghPRs is what GitHub last said about each stack's PRs, by stack.
@@ -3687,6 +3690,7 @@ func (m Model) gotoScreen(s screen) (tea.Model, tea.Cmd) {
 	if m.current == nil {
 		return m, nil
 	}
+	m = m.rememberSideBySideFocus()
 	m.screen = s
 	if s == screenAgent {
 		m.clearWorkspaceAttention()
@@ -3849,15 +3853,7 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.current == nil {
 			return m, nil // on the orchestrator view with no workspace to cycle into
 		}
-		if msg.String() == m.keys.Cycle {
-			m.screen = m.screen.next()
-		} else {
-			m.screen = m.screen.prev()
-		}
-		if m.screen == screenAgent {
-			m.clearWorkspaceAttention()
-		}
-		return m, nil
+		return m.cycleScreen(msg.String() == m.keys.Cycle), nil
 	case m.keys.Picker:
 		return m.returnToDeck()
 	case m.keys.NextAgent:
@@ -4157,14 +4153,10 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 				return mm, cmd
 			}
 		}
-		// Focus the terminal pane under the click before the click reaches the
-		// program running in it. Panes aren't drawn while an overlay is up, so a
-		// click then must not steal pane focus.
-		if m.screen == screenTerminal && m.current != nil &&
-			!m.helpOpen && !m.boardOpen && !m.usageOpen && !m.paletteOpen && !m.diffOpen && mo.Y >= m.barHeight() &&
-			mo.X >= m.sidePanelW() {
-			w, h := m.sessionSize()
-			m.mgr.FocusTermPaneAt(m.current.key, mo.X-m.sidePanelW(), mo.Y-m.barHeight(), w, h)
+		// Focus the pane under the click before the click reaches the program
+		// running in it.
+		if p, ok := m.paneAt(mo.X, mo.Y); ok {
+			m = m.focusPane(p.s)
 		}
 	}
 	m.forwardMouse(msg)
@@ -4294,6 +4286,7 @@ func (m Model) selectTab(s screen) (tea.Model, tea.Cmd) {
 	}
 	if s == screenPicker || m.current != nil {
 		wasSession := m.screen != screenPicker
+		m = m.rememberSideBySideFocus()
 		m.screen = s
 		if s == screenAgent && m.current != nil {
 			m.clearWorkspaceAttention()

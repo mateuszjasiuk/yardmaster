@@ -75,6 +75,30 @@ func (m Model) focusedPane() (sessionPane, bool) {
 	return sessionPane{}, false
 }
 
+// focusPane gives the keyboard to s, one of the current worktree's sessions on
+// screen. Focusing the agent marks its news as seen, like opening its view.
+func (m Model) focusPane(s *session.Session) Model {
+	if m.screen == screenOrchestrator || m.current == nil || m.current.ws == nil {
+		return m
+	}
+
+	ws := m.current.ws
+	switch s {
+	case ws.Editor:
+		m.screen = screenEditor
+	case ws.ActiveAgentSession():
+		m.screen = screenAgent
+		m.clearWorkspaceAttention()
+	default:
+		for i, t := range ws.Terms {
+			if t == s {
+				ws.ActiveTerm = i
+			}
+		}
+	}
+	return m
+}
+
 // sessionCursor places the focused session's cursor on screen, or returns nil
 // when it hides its cursor.
 func (m Model) sessionCursor() *tea.Cursor {

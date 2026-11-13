@@ -41,6 +41,44 @@ func (m Model) sideBySideShown() bool {
 		m.current != nil && m.sideBySideIn(m.current.ws)
 }
 
+// cycleScreen moves to the next session view, or the previous one. While nvim
+// and the agent are side by side they are one stop, and coming back from the
+// terminal focuses the one used last.
+func (m Model) cycleScreen(forward bool) Model {
+	switch {
+	case m.sideBySideShown():
+		m = m.rememberSideBySideFocus()
+		m.screen = screenTerminal
+	case m.screen == screenTerminal && m.sideBySideIn(m.current.ws):
+		m.screen = screenEditor
+		if s, ok := m.sideBySideFocus[m.current.key]; ok {
+			m.screen = s
+		}
+	case forward:
+		m.screen = m.screen.next()
+	default:
+		m.screen = m.screen.prev()
+	}
+
+	if m.screen == screenAgent {
+		m.clearWorkspaceAttention()
+	}
+	return m
+}
+
+// rememberSideBySideFocus records which of nvim and the agent has focus, when
+// they are side by side, before the screen changes.
+func (m Model) rememberSideBySideFocus() Model {
+	if !m.sideBySideShown() {
+		return m
+	}
+	if m.sideBySideFocus == nil {
+		m.sideBySideFocus = map[string]screen{}
+	}
+	m.sideBySideFocus[m.current.key] = m.screen
+	return m
+}
+
 // sideBySideWidths splits w columns into nvim's and the agent's, with one
 // column for the divider between them.
 func sideBySideWidths(w int) (left, right int) {

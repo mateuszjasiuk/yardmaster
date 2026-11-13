@@ -141,3 +141,112 @@ func TestSideBySideWithoutAnAgent(t *testing.T) {
 		t.Fatalf("nvim alone should get the full width, got %d", got)
 	}
 }
+
+func pressCycle(t *testing.T, m Model, forward bool) Model {
+	t.Helper()
+	code := ']'
+	if !forward {
+		code = '['
+	}
+	mm, _ := m.handleKey(tea.KeyPressMsg{Code: code, Mod: tea.ModAlt})
+	return mm.(Model)
+}
+
+func TestSideBySideIsOneStopWhenCycling(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+
+	m = pressCycle(t, m, true)
+	if m.screen != screenTerminal {
+		t.Fatalf("from nvim side by side, cycle should go to the terminal, got %v", m.screen)
+	}
+	m = pressCycle(t, m, true)
+	if m.screen != screenEditor {
+		t.Fatalf("back from the terminal, nvim should have focus, got %v", m.screen)
+	}
+
+	mm, _ := m.gotoScreen(screenAgent)
+	m = pressCycle(t, mm.(Model), false)
+	if m.screen != screenTerminal {
+		t.Fatalf("from the agent side by side, cycle back should go to the terminal, got %v", m.screen)
+	}
+	m = pressCycle(t, m, false)
+	if m.screen != screenAgent {
+		t.Fatalf("back from the terminal, the agent used last should have focus, got %v", m.screen)
+	}
+
+	m = pressSideBySide(t, m)
+	if m = pressCycle(t, m, true); m.screen != screenTerminal {
+		t.Fatalf("one at a time, cycle goes agent → terminal as before, got %v", m.screen)
+	}
+	if m = pressCycle(t, m, true); m.screen != screenEditor {
+		t.Fatalf("one at a time, cycle goes terminal → nvim as before, got %v", m.screen)
+	}
+	if m = pressCycle(t, m, true); m.screen != screenAgent {
+		t.Fatalf("one at a time, cycle goes nvim → agent as before, got %v", m.screen)
+	}
+}
+
+func TestSideBySideClickMovesFocus(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	agent := m.current.ws.ActiveAgentSession()
+	m.attention[agent.Pid()] = attnEntry{level: attnDone, key: m.current.key}
+	panes := m.sessionPanes()
+	left, right := panes[0], panes[1]
+
+	click := func(x int) {
+		t.Helper()
+		mm, _ := m.handleMouseClick(tea.MouseClickMsg{X: x, Y: left.y + 1, Button: tea.MouseLeft})
+		m = mm.(Model)
+	}
+	click(left.x + left.w) // the divider
+	if m.screen != screenEditor {
+		t.Fatalf("a click on the divider should not move focus, got %v", m.screen)
+	}
+	if m.attention[agent.Pid()].level != attnDone {
+		t.Fatal("the agent's news is unread while only nvim has had focus")
+	}
+
+	click(right.x + 2)
+	if m.screen != screenAgent || !m.sideBySideShown() {
+		t.Fatalf("a click in the agent should focus it, both still shown; screen %v", m.screen)
+	}
+	if m.attention[agent.Pid()].level != attnSeen {
+		t.Fatal("focusing the agent should mark its news as seen")
+	}
+
+	click(left.x + 2)
+	if m.screen != screenEditor {
+		t.Fatalf("a click in nvim should focus it, got %v", m.screen)
+	}
+}
+
+func TestClickFocusesTerminalPanes(t *testing.T) {
+	m, ctrl, mgr := sidePanelModel(t, 120)
+	w, h := m.sessionSize()
+	if _, err := mgr.SplitTermPane("repo/wt", t.TempDir(), ctrl.TermSpec(), session.SplitV, w, h); err != nil {
+		t.Fatal(err)
+	}
+	mgr.ResizeTermPanes("repo/wt", w, h)
+	ws := m.current.ws
+	left := m.sessionPanes()[0]
+	click := func(x int) {
+		t.Helper()
+		mm, _ := m.handleMouseClick(tea.MouseClickMsg{X: x, Y: left.y + 1, Button: tea.MouseLeft})
+		m = mm.(Model)
+	}
+
+	click(left.x + left.w) // the divider
+	if ws.ActiveTerm != 1 {
+		t.Fatalf("a click on the divider should not move focus, active=%d", ws.ActiveTerm)
+	}
+	click(left.x + 2)
+	if ws.ActiveTerm != 0 {
+		t.Fatalf("a click in the left pane should focus it, active=%d", ws.ActiveTerm)
+	}
+
+	mgr.ZoomTermPane("repo/wt")
+	click(w - 2)
+	if ws.ActiveTerm != 0 {
+		t.Fatalf("a zoomed pane fills the screen, so a click keeps its focus, active=%d", ws.ActiveTerm)
+	}
+}
