@@ -893,7 +893,7 @@ func (m Model) paletteLine(c paletteCmd, selected bool, innerW int) string {
 	left := "  " + nameStyle.Render(c.title)
 	content := left
 	if c.hint != "" {
-		right := helpStyle.Render(c.hint)
+		right := helpStyle.Render(keyLabel(c.hint))
 		gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 		content = left + strings.Repeat(" ", gap) + right
 	}
@@ -1817,6 +1817,7 @@ func (m Model) renderHelp(h int) string {
 	innerW := panelInnerWidth(m.width, 72)
 
 	row := func(key, desc string) string {
+		key = keyLabel(key)
 		k := padLine(key, 12)
 		if lipgloss.Width(key) > 12 {
 			k = key + " " // guarantee a gap when the key column overflows
@@ -2284,8 +2285,19 @@ func header(label string, count int) string {
 }
 
 func keyhint(key, desc string) string {
-	return helpKeyStyle.Render(key) + helpStyle.Render(" "+desc)
+	return helpKeyStyle.Render(keyLabel(key)) + helpStyle.Render(" "+desc)
 }
+
+// shiftedKeys names a shifted symbol key by the symbol it types on a US
+// layout. Terminals report ctrl+| as ctrl+shift+\, and the config has to hold
+// that name, but people press ctrl+|.
+var shiftedKeys = strings.NewReplacer(
+	"shift+\\", "|", "shift+/", "?", "shift+[", "{", "shift+]", "}", "shift+;", ":",
+	"shift+'", "\"", "shift+,", "<", "shift+.", ">", "shift+-", "_", "shift+=", "+", "shift+`", "~",
+)
+
+// keyLabel is how a configured key is shown in hints.
+func keyLabel(key string) string { return shiftedKeys.Replace(key) }
 
 // selBar renders text as a solid full-width selection bar. Nested styles in a
 // row (provider, label, status) emit full ANSI resets, so reapply the selection

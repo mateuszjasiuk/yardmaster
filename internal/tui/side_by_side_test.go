@@ -346,3 +346,22 @@ func TestSideBySideLightsBothBarIcons(t *testing.T) {
 		t.Fatal("side by side with the agent focused: both lit, the agent underlined")
 	}
 }
+
+func TestKeyLabelShowsTheShiftedSymbol(t *testing.T) {
+	for key, want := range map[string]string{
+		"ctrl+shift+\\": "ctrl+|",
+		"ctrl+\\":       "ctrl+\\",
+		"alt+shift+/":   "alt+?",
+		"f3 / f4":       "f3 / f4",
+		"shift+pgup":    "shift+pgup",
+	} {
+		if got := keyLabel(key); got != want {
+			t.Errorf("keyLabel(%q) = %q, want %q", key, got, want)
+		}
+	}
+
+	m := sideBySideModel(t, 150)
+	if help := ansi.Strip(m.renderHelp(200)); !strings.Contains(help, "ctrl+|") { // tall enough for every row
+		t.Fatal("help should show the side by side key as ctrl+|")
+	}
+}
