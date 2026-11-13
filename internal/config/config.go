@@ -228,8 +228,8 @@ type Keys struct {
 	GotoTerm   string `toml:"goto_term"`
 	// Picker returns to the CT picker.
 	Picker string `toml:"picker"`
-	// Palette opens the agent board: every agent across all open worktrees,
-	// attention first, plus the new-agent launcher. Legacy-named: the
+	// Palette opens the agent board: a search over every agent across all open
+	// worktrees, attention first, plus the new-agent launcher. Legacy-named: the
 	// fuzzy-searchable command palette is CommandPalette (below), not this.
 	Palette string `toml:"palette"`
 	// NextAgent / PrevAgent cycle the focused agent within the worktree.

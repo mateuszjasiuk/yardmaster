@@ -13,7 +13,7 @@ Built with [Bubble Tea](https://charm.land/bubbletea) v2 and [charmbracelet/x/vt
 ### One agent board
 
 Run Claude and Codex side by side, see what needs attention, and jump between agents across every
-active worktree.
+active worktree: type part of a name and press `enter`.
 
 ![The agent board showing Claude and Codex agents across multiple worktrees](docs/screenshots/agent-board.png)
 
@@ -124,7 +124,7 @@ goto_editor = "alt+1"  # jump to the editor view
 goto_agent  = "alt+2"  # jump to the agent view
 goto_term   = "alt+3"  # jump to the terminal view
 picker      = "ctrl+g" # return to the CT picker
-palette     = "alt+a"  # agent board: focus, create, restart, or remove agents
+palette     = "alt+a"  # agent board: find, focus, create, restart, or remove agents
 next_agent  = "f4"     # next agent in the active worktree
 prev_agent  = "f3"     # previous agent in the active worktree
 next_worktree = "ctrl+l" # next worktree in the bar, like tabs (wraps)
@@ -384,16 +384,18 @@ worktree shows on the right.
 
 ### Agent providers and lifecycle
 
-Press **`alt+a`** to open the agent board for every active worktree. From there, `n` creates an
-agent, `enter` focuses one, `r` restarts it in place, `d` removes it, and `x` dismisses its
-"your turn" marker.
+Press **`alt+a`** to open the agent board for every active worktree. It opens on a search: type part
+of a repo, worktree or agent name (`885` finds `sch-885-…`), and the best match moves to the top,
+selected. `enter` focuses it, and `esc` closes the board. `ctrl+e` creates an agent, `ctrl+r`
+restarts the selected one in place, `ctrl+d` removes it, and `ctrl+x` dismisses its "your turn"
+marker.
 
 The bar lists every open worktree after its icons, in a fixed order, coloured by what its agents
 are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you, and
 dim when idle. White means "look at this". A finished agent you have looked at turns white
 ("your turn" in the board) until it works again. **`ctrl+q`** toggles the current worktree between
 white and dim: use it to dismiss a "your turn", or to flag any worktree you want to come back to.
-A worktree you flag stays white until you press `ctrl+q` again. `x` in the board dismisses one
+A worktree you flag stays white until you press `ctrl+q` again. `ctrl+x` in the board dismisses one
 agent's "your turn". The current worktree is underlined. Click a name to jump there, or press
 **`ctrl+h`** / **`ctrl+l`** to move left / right through the worktrees like tabs (wrapping). ct takes
 these two keys from the programs inside it, such as nvim and the shell. With more than one

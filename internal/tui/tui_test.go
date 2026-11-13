@@ -610,7 +610,7 @@ func TestBoardCloseRequiresConfirmation(t *testing.T) {
 	m := modelWithAgents(1)
 	m.boardOpen = true
 
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	mm, _ := m.handleBoard(ctrlKey('d'))
 	m = mm.(Model)
 	if m.mode != modeConfirmAgentClose || m.confirm.agent == nil {
 		t.Fatalf("close should capture its agent in a confirmation: mode=%v target=%v", m.mode, m.confirm.agent)
@@ -643,7 +643,7 @@ func TestBusyBoardRestartRequiresConfirmation(t *testing.T) {
 	pid := m.current.ws.Agents[0].Pid()
 	m.agentStatus = map[int]AgentStatus{pid: {Status: "busy"}}
 
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	mm, _ := m.handleBoard(ctrlKey('r'))
 	m = mm.(Model)
 	if m.mode != modeConfirmAgentRestart || m.confirm.agent == nil {
 		t.Fatalf("busy restart should require confirmation: mode=%v target=%v", m.mode, m.confirm.agent)
@@ -658,26 +658,88 @@ func TestBusyBoardRestartRequiresConfirmation(t *testing.T) {
 	}
 }
 
-func TestBoardDigitJump(t *testing.T) {
+func TestBoardFinderFiltersAndFocuses(t *testing.T) {
 	m := modelWithAgents(3)
 	m.current.ws.ActiveAgent = 0
+	m.current.ws.Agents[2].Title = "jade-otter"
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	if !m.boardInput.Focused() {
+		t.Fatal("the board should open with its query focused")
+	}
+
+	// Letters and digits type into the query; the match is selected on top.
+	for _, r := range "jade" {
+		mm, _ = m.handleBoard(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = mm.(Model)
+	}
+	if got := m.boardInput.Value(); got != "jade" {
+		t.Fatalf("query = %q, want %q", got, "jade")
+	}
+	rows, nav := m.boardView()
+	if len(nav) != 1 || rows[nav[0]].agentIdx != 2 || m.boardCursor != 0 {
+		t.Fatalf("query should leave only the matching agent selected, got rows=%+v cursor=%d", rows, m.boardCursor)
+	}
+
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = mm.(Model)
+	if m.boardOpen || m.current.ws.ActiveAgent != 2 || m.screen != screenAgent {
+		t.Fatalf("enter should focus the match: open=%v active=%d screen=%v", m.boardOpen, m.current.ws.ActiveAgent, m.screen)
+	}
+
+	// Reopening starts on an empty query with the grouped board.
+	mm, _ = m.openBoard()
+	m = mm.(Model)
+	if m.boardInput.Value() != "" {
+		t.Fatalf("reopened board should clear the query, got %q", m.boardInput.Value())
+	}
+	if rows, _ := m.boardView(); !rows[len(rows)-1].isNew {
+		t.Fatal("an empty query should show the grouped board with the new agent row")
+	}
+}
+
+func TestBoardFinderMatchesWorktree(t *testing.T) {
+	m := modelWithAgents(1)
 	mm, _ := m.openBoard()
 	m = mm.(Model)
 
-	// "3" jumps straight to the third agent, focuses it, and closes the board.
-	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: '3', Text: "3"})
+	m.boardInput.SetValue("nothing-like-it")
+	if _, nav := m.boardView(); len(nav) != 0 {
+		t.Fatalf("no agent should match, got %d rows", len(nav))
+	}
+	m.boardInput.SetValue(m.current.worktree)
+	if rows, nav := m.boardView(); len(nav) != 1 || !rows[0].isAgent {
+		t.Fatalf("the worktree name should match its agent, got %+v", rows)
+	}
+}
+
+func TestBoardEscClosesWithQuery(t *testing.T) {
+	m := modelWithAgents(1)
+	mm, _ := m.openBoard()
 	m = mm.(Model)
-	if m.current.ws.ActiveAgent != 2 || m.screen != screenAgent || m.boardOpen {
-		t.Fatalf("digit jump: active=%d screen=%v open=%v", m.current.ws.ActiveAgent, m.screen, m.boardOpen)
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	m = mm.(Model)
+	if !m.boardOpen || m.boardInput.Value() != "q" {
+		t.Fatalf("q should type, not close: open=%v query=%q", m.boardOpen, m.boardInput.Value())
 	}
 
-	// A digit past the pool size is ignored (board stays open).
-	mm, _ = m.openBoard()
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = mm.(Model)
-	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: '9', Text: "9"})
+	if m.boardOpen || m.boardInput.Value() != "" || m.boardInput.Focused() {
+		t.Fatalf("esc should close and reset the query: open=%v query=%q", m.boardOpen, m.boardInput.Value())
+	}
+}
+
+func TestBoardPasteGoesToQuery(t *testing.T) {
+	m := modelWithAgents(1)
+	m.filter.Focus() // the deck filter stays focused across screens
+	mm, _ := m.openBoard()
 	m = mm.(Model)
-	if !m.boardOpen {
-		t.Error("out-of-range digit should be a no-op (board stays open)")
+
+	mm, _ = m.handlePaste(tea.PasteMsg{Content: "885"})
+	m = mm.(Model)
+	if m.boardInput.Value() != "885" || m.filter.Value() != "" {
+		t.Fatalf("paste should land only in the board query: query=%q filter=%q", m.boardInput.Value(), m.filter.Value())
 	}
 }
 
@@ -989,7 +1051,7 @@ func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w", path: dir, ws: ws}
 	m.boardOpen = true
 	m.boardCursor = 1
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	mm, _ := m.handleBoard(ctrlKey('r'))
 	m = mm.(Model)
 	if ws.Agents[1] == old {
 		t.Fatal("restart did not replace the selected session")

@@ -435,7 +435,7 @@ func TestBoardUsesFullPanelWidth(t *testing.T) {
 	if len(nav) == 0 || !rows[nav[0]].isAgent {
 		t.Fatal("test board has no selectable agent row")
 	}
-	if got, want := lipgloss.Width(m.boardAgentLine(rows[nav[0]], 72)), 72; got != want {
+	if got, want := lipgloss.Width(m.boardAgentLine(rows[nav[0]], false, 72)), 72; got != want {
 		t.Fatalf("agent row width = %d, want full panel width %d", got, want)
 	}
 }

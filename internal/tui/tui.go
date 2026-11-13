@@ -242,7 +242,6 @@ type boardRow struct {
 	provider agent.Provider
 	status   string    // right-hand status column
 	attn     attnLevel // includes derived waiting
-	num      int       // 1-based quick-jump number (first 9 agent rows)
 }
 
 // Focus order of the new-agent form's fields.
@@ -373,7 +372,8 @@ type Model struct {
 
 	// agent board overlay (unified agent switcher + notifications)
 	boardOpen   bool
-	boardCursor int // index into the board's navigable rows
+	boardCursor int             // index into the board's navigable rows
+	boardInput  textinput.Model // the finder query; empty shows the grouped board
 	rootInput   textinput.Model
 
 	// command palette overlay: a fuzzy-searchable list of every ct action, each
@@ -586,6 +586,10 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 	paletteInput.Placeholder = "run a command…"
 	paletteInput.Prompt = "› "
 
+	boardInput := textinput.New()
+	boardInput.Placeholder = "find a session…"
+	boardInput.Prompt = "› "
+
 	// A nil field simply hides the panel. Construction only fails on variant
 	// names config validation didn't check, i.e. when width is 0 — which
 	// disables the panel anyway.
@@ -619,6 +623,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		filter: filter, nameInput: name, rootInput: rootInput,
 		promptInput:    promptInput,
 		paletteInput:   paletteInput,
+		boardInput:     boardInput,
 		agentProviders: providers, defaultAgentProvider: defaultProvider,
 		formProvider:    defaultProvider,
 		focus:           focusNew,
@@ -1369,6 +1374,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.promptInput.MaxHeight = clamp(m.height-m.barHeight()-10, 3, 8)
 		m.promptInput.SetWidth(clamp(m.width-16, 20, 80))
 		m.paletteInput.SetWidth(clamp(m.width-16, 20, 52))
+		m.boardInput.SetWidth(clamp(m.width-16, 20, 52))
 		m.resizeSessions()
 		return m, nil
 
@@ -1877,7 +1883,7 @@ func (m Model) routeToFocusedInputs(msg tea.Msg) (Model, tea.Cmd) {
 		m.promptInput, cmd = m.promptInput.Update(msg)
 		cmds = append(cmds, cmd)
 	}
-	for _, in := range []*textinput.Model{&m.filter, &m.nameInput, &m.rootInput, &m.paletteInput} {
+	for _, in := range []*textinput.Model{&m.filter, &m.nameInput, &m.rootInput, &m.paletteInput, &m.boardInput} {
 		if !in.Focused() {
 			continue
 		}
@@ -1928,6 +1934,11 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.confirmActive() {
 		return m, nil
+	}
+	// Like the palette, the board list owns its query; the form's prompt takes
+	// pastes through the focus routing below.
+	if m.boardOpen && !m.formOpen {
+		return m.typeBoardQuery(msg)
 	}
 	mm, cmd := m.routeToFocusedInputs(msg)
 	// Mirror handleNewKey: keep the repo matches in sync when the paste lands
@@ -2228,14 +2239,9 @@ func (m Model) buildBoard() (rows []boardRow, nav []int) {
 		return groups[i].key < groups[j].key
 	})
 
-	num := 0
 	for _, g := range groups {
 		rows = append(rows, boardRow{key: g.key, repo: g.repo, worktree: g.worktree, path: g.path, attn: g.attn})
 		for _, r := range g.agents {
-			num++
-			if num <= 9 {
-				r.num = num
-			}
 			nav = append(nav, len(rows))
 			rows = append(rows, r)
 		}
@@ -2277,22 +2283,49 @@ func (m Model) boardStatus(pid int, attn attnLevel) string {
 	}
 }
 
+// boardView is the board as the user sees it: the grouped board while the query
+// is empty, otherwise only the matching agent rows, best match first. Rows with
+// the same score keep the board's order.
+func (m Model) boardView() (rows []boardRow, nav []int) {
+	rows, nav = m.buildBoard()
+	q := m.boardQuery()
+	if q == "" {
+		return rows, nav
+	}
+
+	var (
+		agents []boardRow
+		texts  []string
+	)
+	for _, r := range rows {
+		if r.isAgent {
+			agents = append(agents, r)
+			texts = append(texts, r.key+" · "+r.label)
+		}
+	}
+	rows, nav = nil, nil
+	for i, idx := range fuzzyRank(q, texts) {
+		rows = append(rows, agents[idx])
+		nav = append(nav, i)
+	}
+	return rows, nav
+}
+
 // openBoard toggles the agent board. The cursor starts on the first row needing
 // attention, falling back to the current workspace's focused agent.
 func (m Model) openBoard() (tea.Model, tea.Cmd) {
 	if m.boardOpen {
-		m.boardOpen = false
-		m.formOpen = false
-		return m, nil
+		return m.closeBoard(), nil
 	}
-	m.boardOpen = true
+
+	m, focus := m.showBoard()
 	m.formOpen = false
 	m.boardCursor = 0
-	rows, nav := m.buildBoard()
+	rows, nav := m.boardView()
 	for i, ri := range nav {
 		if rows[ri].isAgent && rows[ri].attn >= attnDone {
 			m.boardCursor = i
-			return m, nil
+			return m, focus
 		}
 	}
 	for i, ri := range nav {
@@ -2303,10 +2336,36 @@ func (m Model) openBoard() (tea.Model, tea.Cmd) {
 			break
 		}
 	}
-	return m, nil
+	return m, focus
 }
 
-// handleBoard routes key events while the agent board is open.
+// showBoard opens the board with its query focused. closeBoard leaves the query
+// empty, and a board that is already open keeps it.
+func (m Model) showBoard() (Model, tea.Cmd) {
+	if m.boardOpen {
+		return m, nil
+	}
+
+	m.boardOpen = true
+	return m, m.boardInput.Focus()
+}
+
+// boardQuery is the finder query; empty means the grouped board.
+func (m Model) boardQuery() string {
+	return strings.TrimSpace(m.boardInput.Value())
+}
+
+// closeBoard closes the board and the new agent form, and clears the query.
+func (m Model) closeBoard() Model {
+	m.boardOpen = false
+	m.formOpen = false
+	m.boardInput.Blur()
+	m.boardInput.SetValue("")
+	return m
+}
+
+// handleBoard routes key events while the agent board is open. Letters and
+// digits go to the query, so the row actions sit on ctrl chords.
 func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeConfirmAgentClose:
@@ -2317,7 +2376,8 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.formOpen {
 		return m.handleBoardForm(msg)
 	}
-	rows, nav := m.buildBoard()
+
+	rows, nav := m.boardView()
 	rowAt := func(i int) (boardRow, bool) {
 		if i < 0 || i >= len(nav) {
 			return boardRow{}, false
@@ -2325,25 +2385,24 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return rows[nav[i]], true
 	}
 	switch msg.String() {
-	case "esc", "q", m.keys.Palette:
-		m.boardOpen = false
-		return m, nil
+	case "esc", m.keys.Palette:
+		return m.closeBoard(), nil
 	case m.keys.Attention:
 		// The jump works from within the board too: focusBoardAgent closes it.
 		return m.jumpAttention()
-	case "up", "k":
+	case "up":
 		if m.boardCursor > 0 {
 			m.boardCursor--
 		}
 		return m, nil
-	case "down", "j":
+	case "down":
 		if m.boardCursor < len(nav)-1 {
 			m.boardCursor++
 		}
 		return m, nil
-	case "n":
+	case "ctrl+e":
 		return m.openNewAgentForm(), nil
-	case "r":
+	case "ctrl+r":
 		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
 			if m.boardAgentActive(r) {
 				return m.beginAgentRestartConfirm(r), nil
@@ -2351,12 +2410,12 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.restartBoardAgent(r)
 		}
 		return m, nil
-	case "d":
+	case "ctrl+d":
 		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
 			return m.beginAgentCloseConfirm(r), nil
 		}
 		return m, nil
-	case "x":
+	case "ctrl+x":
 		if r, ok := rowAt(m.boardCursor); ok && r.isAgent {
 			m.dropSeen(r.pid)
 		}
@@ -2370,16 +2429,20 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	// A digit jumps straight to that agent (matching the numbers shown).
-	if s := msg.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-		want := int(s[0] - '0')
-		for _, ri := range nav {
-			if rows[ri].isAgent && rows[ri].num == want {
-				return m.focusBoardAgent(rows[ri])
-			}
-		}
+
+	return m.typeBoardQuery(msg)
+}
+
+// typeBoardQuery types a key or a paste into the finder query. The cursor goes
+// back to the top whenever the query changes, so the best match is selected.
+func (m Model) typeBoardQuery(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := m.boardInput.Value()
+	var cmd tea.Cmd
+	m.boardInput, cmd = m.boardInput.Update(msg)
+	if m.boardInput.Value() != before {
+		m.boardCursor = 0
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) boardAgentActive(r boardRow) bool {
@@ -2396,7 +2459,7 @@ func (m Model) closeBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 	m.resizeSessions() // nvim takes the whole width when its last agent closes
 	m.clearAgentTracking(r.pid)
 	save := m.saveAgents(r.key)
-	_, nav := m.buildBoard()
+	_, nav := m.boardView()
 	m.boardCursor = clamp(m.boardCursor, 0, max(0, len(nav)-1))
 	return m, tea.Batch(save, m.flashCmd("removed agent "+r.label))
 }
@@ -2451,7 +2514,7 @@ func (m Model) restartBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 // screen, focuses the agent, and clears the workspace's unread markers.
 func (m Model) focusBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 	if m.current != nil && m.current.key == r.key {
-		m.boardOpen = false
+		m = m.closeBoard()
 		m.screen = screenAgent
 		if m.current.ws != nil && r.agentIdx >= 0 && r.agentIdx < len(m.current.ws.Agents) {
 			m.current.ws.ActiveAgent = r.agentIdx
@@ -2460,8 +2523,7 @@ func (m Model) focusBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 		return m, m.saveAgents(r.key)
 	}
 	mm, cmd := m.activate(r.repo, r.worktree, r.path)
-	model := mm.(Model)
-	model.boardOpen = false
+	model := mm.(Model).closeBoard()
 	if model.current != nil && model.current.key == r.key {
 		model.screen = screenAgent
 		if model.current.ws != nil && r.agentIdx >= 0 && r.agentIdx < len(model.current.ws.Agents) {
@@ -2734,7 +2796,7 @@ func (m Model) paletteCommands() []paletteCmd {
 		cmds = append(cmds, paletteCmd{title: "jump to waiting agent", hint: m.keys.Attention, run: func(m Model) (tea.Model, tea.Cmd) { return m.jumpAttention() }})
 	}
 	cmds = append(cmds,
-		paletteCmd{title: "open agent board", hint: m.keys.Palette, run: func(m Model) (tea.Model, tea.Cmd) { return m.openBoard() }},
+		paletteCmd{title: "open agent board (find a session)", hint: m.keys.Palette, run: func(m Model) (tea.Model, tea.Cmd) { return m.openBoard() }},
 		paletteCmd{title: "new agent…", run: func(m Model) (tea.Model, tea.Cmd) { return m.openNewAgentForm(), nil }},
 	)
 	rows, _ := m.buildBoard()
@@ -2746,15 +2808,16 @@ func (m Model) paletteCommands() []paletteCmd {
 		target := r
 		cmds = append(cmds,
 			paletteCmd{title: "restart agent: " + identity, run: func(m Model) (tea.Model, tea.Cmd) {
-				m.boardOpen = true
+				m, focus := m.showBoard()
 				if m.boardAgentActive(target) {
-					return m.beginAgentRestartConfirm(target), nil
+					return m.beginAgentRestartConfirm(target), focus
 				}
-				return m.restartBoardAgent(target)
+				mm, cmd := m.restartBoardAgent(target)
+				return mm, tea.Batch(focus, cmd)
 			}},
 			paletteCmd{title: "remove agent: " + identity, run: func(m Model) (tea.Model, tea.Cmd) {
-				m.boardOpen = true
-				return m.beginAgentCloseConfirm(target), nil
+				m, focus := m.showBoard()
+				return m.beginAgentCloseConfirm(target), focus
 			}},
 		)
 	}
@@ -2920,21 +2983,30 @@ func (m Model) filteredPaletteCommands() []paletteCmd {
 	for i, c := range all {
 		titles[i] = c.title
 	}
-	res := fuzzy.Find(q, titles)
-	out := make([]paletteCmd, 0, len(res))
-	for _, mt := range res {
-		out = append(out, all[mt.Index])
+	var out []paletteCmd
+	for _, idx := range fuzzyRank(q, titles) {
+		out = append(out, all[idx])
 	}
 	return out
+}
+
+// fuzzyRank returns the indices of the texts that match query, best match first.
+// Matches with the same score keep their order in texts.
+func fuzzyRank(query string, texts []string) []int {
+	res := fuzzy.Find(query, texts)
+	idx := make([]int, len(res))
+	for i, mt := range res {
+		idx[i] = mt.Index
+	}
+	return idx
 }
 
 // openPalette shows the command palette with a fresh empty query and the cursor
 // at the top. It closes the board/form/usage overlays first so overlays never
 // stack, and focuses the query input.
 func (m Model) openPalette() (tea.Model, tea.Cmd) {
+	m = m.closeBoard()
 	m.paletteOpen = true
-	m.boardOpen = false
-	m.formOpen = false
 	m.usageOpen = false
 	m.paletteCursor = 0
 	m.paletteInput.SetValue("")
@@ -3004,7 +3076,8 @@ func (m Model) activateGlobalConfig() (tea.Model, tea.Cmd) {
 // field. Agents are no longer manually named — claude names the session
 // after its topic — so the form opens straight on the prompt.
 func (m Model) openNewAgentForm() tea.Model {
-	m.boardOpen = true
+	m, _ = m.showBoard()
+	m.boardInput.Blur() // the prompt takes the keys; esc gives them back
 	m.formOpen = true
 	m.formFocus = formFieldPrompt
 	m.formProvider = m.defaultAgentProvider
@@ -3074,7 +3147,7 @@ func (m Model) handleBoardForm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.formOpen = false
 		m.promptInput.Blur()
-		return m, nil
+		return m, m.boardInput.Focus()
 	case "ctrl+enter":
 		return m.launchAgent()
 	case "tab":
@@ -3628,7 +3701,8 @@ func (m Model) returnToPrevious() (tea.Model, tea.Cmd) {
 	}
 	target := *m.returnLocation
 	from := m.currentReturnLocation()
-	m.helpOpen, m.boardOpen, m.usageOpen, m.paletteOpen = false, false, false, false
+	m = m.closeBoard()
+	m.helpOpen, m.usageOpen, m.paletteOpen = false, false, false
 	m.diffOpen, m.stackOpen, m.ghPopup = false, false, nil
 
 	if target.screen == screenPicker {
@@ -3930,8 +4004,7 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 	// The form no longer takes a label; every agent gets an auto-generated
 	// placeholder title until a future change summarises it.
 	label := randomAgentTitle()
-	m.formOpen = false
-	m.boardOpen = false
+	m = m.closeBoard()
 	m.promptInput.Blur()
 	var restoredWatches tea.Cmd
 
@@ -5377,10 +5450,9 @@ func (m *Model) recomputeMatches() {
 	if q == "" {
 		m.repoMatches = repos
 	} else {
-		res := fuzzy.Find(q, names)
-		m.repoMatches = make([]repo.Repo, 0, len(res))
-		for _, mt := range res {
-			m.repoMatches = append(m.repoMatches, repos[mt.Index])
+		m.repoMatches = nil
+		for _, i := range fuzzyRank(q, names) {
+			m.repoMatches = append(m.repoMatches, repos[i])
 		}
 	}
 	m.newCursor = clamp(m.newCursor, 0, max(0, len(m.repoMatches)-1))

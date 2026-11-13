@@ -676,9 +676,11 @@ func (m Model) notifZoneAt(x, y int) bool {
 	return x >= z.notifStart && x < z.notifStart+lipgloss.Width(z.notif)
 }
 
-// renderBoard draws the agent board overlay: every open workspace's agents
-// grouped under worktree header rows, attention sorted to the top, plus the
-// trailing "+ new agent" row. Delegates to renderBoardForm in form state.
+// renderBoard draws the agent board overlay: the finder query, then every open
+// workspace's agents grouped under worktree header rows (attention sorted to the
+// top) with a trailing "+ new agent" row. While the query has text, only the
+// matching agents show, each with its worktree, windowed to the height.
+// Delegates to renderBoardForm in form state.
 func (m Model) renderBoard(h int) string {
 	if m.formOpen {
 		return m.renderBoardForm(h, panelInnerWidth(m.width, 84))
@@ -687,7 +689,7 @@ func (m Model) renderBoard(h int) string {
 	// and its selection bar to use the full width inside the panel.
 	innerW := panelInnerWidth(m.width, 72)
 
-	rows, nav := m.buildBoard()
+	rows, nav := m.boardView()
 	selRow := -1
 	if m.boardCursor >= 0 && m.boardCursor < len(nav) {
 		selRow = nav[m.boardCursor]
@@ -699,7 +701,32 @@ func (m Model) renderBoard(h int) string {
 		}
 	}
 
-	lines := []string{header("agents", agentCount), ""}
+	top := []string{header("agents", agentCount), "", "  " + m.boardInput.View(), ""}
+	separator := helpStyle.Render("  ·  ")
+	hints := []string{"",
+		"  " + strings.Join([]string{
+			keyhint("type", "find"), keyhint("↑↓", "move"), keyhint("enter", "focus"), keyhint("esc", "close"),
+		}, separator),
+		"  " + strings.Join([]string{
+			keyhint("ctrl+e", "new"), keyhint("ctrl+r", "restart agent"), keyhint("ctrl+d", "remove agent"), keyhint("ctrl+x", "dismiss"),
+		}, separator),
+	}
+
+	var body []string
+	if m.boardQuery() != "" {
+		rowsAvail := max(1, h-2-len(top)-len(hints)) // 2 for the panel border
+		body = m.boardMatchLines(rows, selRow, innerW, rowsAvail)
+	} else {
+		body = m.boardGroupLines(rows, selRow, agentCount, innerW)
+	}
+	lines := append(append(top, body...), hints...)
+	return renderPanel(lines, innerW, m.width, h)
+}
+
+// boardGroupLines draws the board with an empty query: agents under their
+// worktree headers, then the "+ new agent" row.
+func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) []string {
+	var lines []string
 	for i, r := range rows {
 		switch {
 		case r.isNew:
@@ -712,7 +739,7 @@ func (m Model) renderBoard(h int) string {
 				lines = append(lines, dimStyle.Render("  + new agent…"))
 			}
 		case r.isAgent:
-			content := m.boardAgentLine(r, innerW)
+			content := m.boardAgentLine(r, false, innerW)
 			if i == selRow {
 				lines = append(lines, selBar(content, innerW))
 			} else {
@@ -731,27 +758,32 @@ func (m Model) renderBoard(h int) string {
 			lines = append(lines, left)
 		}
 	}
-
-	separator := helpStyle.Render("  ·  ")
-	lines = append(lines, "",
-		"  "+strings.Join([]string{
-			keyhint("↑↓", "move"), keyhint("1-9", "jump"), keyhint("enter", "focus"),
-		}, separator),
-		"  "+strings.Join([]string{
-			keyhint("n", "new"), keyhint("r", "restart agent"), keyhint("d", "remove agent"), keyhint("x", "dismiss"), keyhint("esc", "close"),
-		}, separator),
-	)
-
-	return renderPanel(lines, innerW, m.width, h)
+	return lines
 }
 
-// boardAgentLine renders one agent row: quick-jump number, attention glyph,
-// label, and the right-aligned (truncated) status column.
-func (m Model) boardAgentLine(r boardRow, innerW int) string {
-	numCol := " "
-	if r.num > 0 {
-		numCol = strconv.Itoa(r.num)
+// boardMatchLines draws the agents matching the query, best first, each with its
+// worktree, windowed to rowsAvail lines around the selection like the palette.
+func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) []string {
+	if len(rows) == 0 {
+		return []string{dimStyle.Render("  no matching agents")}
 	}
+
+	start, end := windowBounds(len(rows), selRow, rowsAvail)
+	var lines []string
+	for i := start; i < end; i++ {
+		content := m.boardAgentLine(rows[i], true, innerW)
+		if i == selRow {
+			content = selBar(content, innerW)
+		}
+		lines = append(lines, content)
+	}
+	return lines
+}
+
+// boardAgentLine renders one agent row: attention glyph, the worktree when
+// withWorktree is set, provider chip, label, and the right-aligned (truncated)
+// status column.
+func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string {
 	glyph, glyphSt := " ", dimStyle
 	switch r.attn {
 	case attnWaiting:
@@ -759,8 +791,11 @@ func (m Model) boardAgentLine(r boardRow, innerW int) string {
 	case attnDone:
 		glyph, glyphSt = "✓", boldGreen
 	}
-	chip := helpKeyStyle.Render(normalizedProvider(r.provider).String())
-	left := "   " + dimStyle.Render(numCol) + " " + glyphSt.Render(glyph) + " " + chip +
+	left := "   " + glyphSt.Render(glyph) + " "
+	if withWorktree {
+		left += dimStyle.Render(r.key + " · ")
+	}
+	left += helpKeyStyle.Render(normalizedProvider(r.provider).String()) +
 		dimStyle.Render(" · ") + nameStyle.Render(r.label)
 	status := truncateTo(r.status, max(0, innerW-lipgloss.Width(left)-2))
 	statusSt := dimStyle
@@ -1828,7 +1863,7 @@ func (m Model) renderHelp(h int) string {
 		row(m.keys.Picker, "back to the deck"),
 		row(m.keys.Back, "return to previous location"),
 		row(m.keys.GlobalConfig, "open home workspace (~)"),
-		row(m.keys.Palette, "agent board"),
+		row(m.keys.Palette, "agent board: find a session"),
 		row(m.keys.CommandPalette, "command palette (every action)"),
 	)
 	rows = append(rows,
