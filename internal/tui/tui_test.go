@@ -500,7 +500,7 @@ func TestStatusTickInterval(t *testing.T) {
 	// Idle agents with a live workspace: the medium cadence.
 	m.agentStatus = map[int]AgentStatus{7: {Status: "idle"}}
 	if _, err := m.mgr.Activate("r/w", t.TempDir(),
-		[]session.Spec{{Kind: session.Terminal, Argv: []string{"sleep", "5"}}}, 80, 24); err != nil {
+		[]session.Spec{{Kind: session.Terminal, Argv: []string{"sleep", "5"}}}, session.SameSize(80, 24)); err != nil {
 		t.Fatal(err)
 	}
 	defer m.mgr.CloseAll()
@@ -958,7 +958,7 @@ func TestPersistAgentsRecordsProvider(t *testing.T) {
 		Kind: session.Agent, Title: "jade-otter", Argv: []string{"/usr/bin/true"},
 		Provider: agent.Codex, SessionID: "thread-123",
 	}
-	ws, err := m.mgr.Activate("r/w", dir, []session.Spec{spec}, 80, 24)
+	ws, err := m.mgr.Activate("r/w", dir, []session.Spec{spec}, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -979,7 +979,7 @@ func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 		{Kind: session.Agent, Title: "one", Argv: []string{"/usr/bin/true"}, Provider: agent.Claude, SessionID: "claude-id"},
 		{Kind: session.Agent, Title: "two", Argv: []string{"/usr/bin/true"}, Provider: agent.Codex, SessionID: "codex-id"},
 	}
-	ws, err := m.mgr.Activate("r/w", dir, specs, 80, 24)
+	ws, err := m.mgr.Activate("r/w", dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1031,7 +1031,7 @@ func TestCodexAgentEventsPersistThreadAndSurviveClaudeSnapshot(t *testing.T) {
 	ws, err := m.mgr.Activate("r/w", dir, []session.Spec{{
 		Kind: session.Agent, Title: "jade-otter", Argv: []string{"sleep", "5"},
 		Provider: agent.Codex, Events: events,
-	}}, 80, 24)
+	}}, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1660,7 +1660,7 @@ func activateAgents(t *testing.T, m Model, key, dir string, n int) *session.Work
 	for i := range specs {
 		specs[i] = session.Spec{Kind: session.Agent, Argv: []string{"/usr/bin/true"}, Provider: agent.Claude}
 	}
-	ws, err := m.mgr.Activate(key, dir, specs, 80, 24)
+	ws, err := m.mgr.Activate(key, dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}

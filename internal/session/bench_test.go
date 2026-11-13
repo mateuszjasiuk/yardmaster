@@ -12,7 +12,7 @@ import (
 // here (not inline in the benchmark) so the pre/post comparison changes only
 // this one function when the resize strategy changes.
 func resizeForWindowMsg(m *Manager, currentKey string, w, h int) {
-	m.ResizeWorkspace(currentKey, w, h)
+	m.ResizeWorkspace(currentKey, SameSize(w, h))
 }
 
 // BenchmarkWindowResize measures the synchronous work one tea.WindowSizeMsg
@@ -34,7 +34,7 @@ func BenchmarkWindowResize(b *testing.B) {
 	keys := make([]string, 6)
 	for i := range keys {
 		keys[i] = fmt.Sprintf("repo/wt-%d", i)
-		if _, err := m.Activate(keys[i], b.TempDir(), specs, 120, 40); err != nil {
+		if _, err := m.Activate(keys[i], b.TempDir(), specs, SameSize(120, 40)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -60,7 +60,7 @@ func BenchmarkSetVisible(b *testing.B) {
 	ws, err := m.Activate("r/w", b.TempDir(), []Spec{
 		{Kind: Editor, Argv: sleep},
 		{Kind: Agent, Argv: sleep},
-	}, 120, 40)
+	}, SameSize(120, 40))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func BenchmarkWorkspaceActivate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m := NewManager()
 		key := fmt.Sprintf("repo/wt-%d", i)
-		if _, err := m.Activate(key, dir, specs, 120, 40); err != nil {
+		if _, err := m.Activate(key, dir, specs, SameSize(120, 40)); err != nil {
 			b.Fatal(err)
 		}
 		b.StopTimer()

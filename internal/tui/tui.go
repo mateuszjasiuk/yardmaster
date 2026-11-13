@@ -1110,8 +1110,24 @@ func (m Model) repaintCmd() tea.Cmd {
 	}
 }
 
+// sessionSize is the room for sessions: under the bar, right of the side
+// panel, above the footer. Terminal panes and the orchestrator fill it.
 func (m Model) sessionSize() (int, int) {
 	return m.width - m.sidePanelW(), max(1, m.height-m.barHeight()-m.sessionFooterH())
+}
+
+// sessionSizes is the size each kind of session in a worktree gets.
+func (m Model) sessionSizes() session.Sizes {
+	return session.SameSize(m.sessionSize())
+}
+
+// sizesFor is the sizes for workspace key: the orchestrator always fills the
+// room for sessions, a worktree follows sessionSizes.
+func (m Model) sizesFor(key string) session.Sizes {
+	if _, ok := orchestratorAccountOf(key); ok {
+		return session.SameSize(m.sessionSize())
+	}
+	return m.sessionSizes()
 }
 
 // resizeSessions sizes the current workspace and the orchestrator to the room
@@ -1119,12 +1135,11 @@ func (m Model) sessionSize() (int, int) {
 func (m Model) resizeSessions() {
 	// Only the current workspace is resized; background ones are brought up
 	// to date by Activate when they next become current.
-	w, h := m.sessionSize()
 	if m.current != nil {
-		m.mgr.ResizeWorkspace(m.current.key, w, h)
+		m.mgr.ResizeWorkspace(m.current.key, m.sizesFor(m.current.key))
 	}
 	if m.screen == screenOrchestrator && m.mgr.Has(m.orchKey) {
-		m.mgr.ResizeWorkspace(m.orchKey, w, h)
+		m.mgr.ResizeWorkspace(m.orchKey, m.sizesFor(m.orchKey))
 	}
 }
 
@@ -1137,8 +1152,7 @@ func (m Model) dismissHint() Model {
 	}
 	m.hintSeen = true
 	if m.current != nil {
-		w, h := m.sessionSize()
-		m.mgr.ResizeWorkspace(m.current.key, w, h)
+		m.mgr.ResizeWorkspace(m.current.key, m.sizesFor(m.current.key))
 	}
 	return m
 }
@@ -2451,8 +2465,8 @@ func (m Model) restartBoardAgent(r boardRow) (tea.Model, tea.Cmd) {
 		m.setError("restart error: " + err.Error())
 		return m, nil
 	}
-	w, h := m.sessionSize()
-	replacement, err := m.mgr.ReplaceAgent(r.key, r.path, r.agentIdx, spec, w, h)
+	sz := m.sizesFor(r.key).Agent
+	replacement, err := m.mgr.ReplaceAgent(r.key, r.path, r.agentIdx, spec, sz.W, sz.H)
 	if err != nil {
 		m.setError("restart error: " + err.Error())
 		return m, nil
@@ -3166,7 +3180,6 @@ func (m Model) activate(repoName, wtName, dir string) (tea.Model, tea.Cmd) {
 
 func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, tea.Cmd) {
 	key := repoName + "/" + wtName
-	w, h := m.sessionSize()
 	wasActive := m.mgr.Has(key)
 	var specs []session.Spec
 	if !wasActive {
@@ -3180,7 +3193,7 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 			return m, m.loadCmd()
 		}
 	}
-	ws, err := m.mgr.Activate(key, dir, specs, w, h)
+	ws, err := m.mgr.Activate(key, dir, specs, m.sizesFor(key))
 	if err != nil {
 		m.setError("open error: " + err.Error())
 		return m, m.loadCmd()
@@ -4026,7 +4039,6 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 	m.formOpen = false
 	m.boardOpen = false
 	m.promptInput.Blur()
-	w, h := m.sessionSize()
 	var restoredWatches tea.Cmd
 
 	isHome := m.formLocation == 1
@@ -4076,7 +4088,7 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		homeWS, err := m.mgr.Activate(homeKey, home, specs, w, h)
+		homeWS, err := m.mgr.Activate(homeKey, home, specs, m.sizesFor(homeKey))
 		if err != nil {
 			m.setError("open error: " + err.Error())
 			return m, nil
@@ -4092,7 +4104,8 @@ func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 		m.setError("spawn error: " + err.Error())
 		return m, nil
 	}
-	spawned, err := m.mgr.SpawnAgent(key, path, spec, w, h)
+	sz := m.sizesFor(key).Agent
+	spawned, err := m.mgr.SpawnAgent(key, path, spec, sz.W, sz.H)
 	if err != nil {
 		m.setError("spawn error: " + err.Error())
 		return m, nil
@@ -4297,13 +4310,10 @@ func (m Model) selectTab(s screen) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// forwardMouse relays a mouse event to the session under the pointer. In an
-// unzoomed split terminal layout it hit-tests the pane rectangles and delivers
-// pane-local coordinates to that pane's program, so a click or wheel scroll acts
-// on the pane it lands on rather than only the focused one; events over a
-// divider or the footer are dropped. Everywhere else it relays to the active
-// session translated below the bar. The emulator only encodes the event if the
-// program has enabled mouse reporting.
+// forwardMouse relays a mouse event to the session under the pointer, in that
+// session's own coordinates, so a click or wheel scroll acts on the pane it
+// lands on rather than only the focused one. The emulator only encodes the
+// event if the program has enabled mouse reporting.
 func (m Model) forwardMouse(msg tea.MouseMsg) {
 	if m.screen == screenPicker {
 		return
@@ -4316,14 +4326,13 @@ func (m Model) forwardMouse(msg tea.MouseMsg) {
 		return
 	}
 	mo := msg.Mouse()
-	pw := m.sidePanelW()
-	if mo.Y < m.barHeight() {
-		return
-	}
-	// Clicks and the wheel over the side panel stay out of the session. A drag
-	// that leaves the session over the panel still gets its motion and release,
-	// at the panel's edge, or the program would think the button is still down.
-	if mo.X < pw {
+	p, ok := m.paneAt(mo.X, mo.Y)
+	if !ok {
+		// Clicks and the wheel outside every pane (bar, side panel, divider,
+		// footer) stay out of the sessions. A drag that leaves its pane still
+		// gets its motion and release, at the pane's nearest edge, or the
+		// program would think the button is still down. The drag started in
+		// the focused pane, as a click focuses the pane it lands on.
 		switch msg.(type) {
 		case tea.MouseClickMsg, tea.MouseWheelMsg:
 			return
@@ -4332,37 +4341,15 @@ func (m Model) forwardMouse(msg tea.MouseMsg) {
 				return
 			}
 		}
-		mo.X = pw
-	}
-	// Target session and the pane origin to subtract from the pointer. Default:
-	// the active session, offset only by the bar and the side panel (bx, by
-	// stay 0).
-	s := m.activeSession()
-	px := mo.X - pw
-	bx, by := 0, 0
-	if m.screen == screenTerminal && m.current != nil && m.current.ws != nil {
-		ws := m.current.ws
-		if !ws.TermZoomed && len(ws.Terms) > 1 && ws.TermLayout != nil {
-			w, h := m.sessionSize()
-			bounds := session.ComputePaneBounds(ws.TermLayout, 0, 0, w, h)
-			idx := session.PaneAt(bounds, px, mo.Y-m.barHeight())
-			if idx < 0 || idx >= len(ws.Terms) || ws.Terms[idx] == nil {
-				return // divider, footer, or outside every pane
-			}
-			for _, b := range bounds {
-				if b.Idx == idx {
-					bx, by = b.X, b.Y
-					break
-				}
-			}
-			s = ws.Terms[idx]
+		if p, ok = m.focusedPane(); !ok {
+			return
 		}
+		mo.X = clamp(mo.X, p.x, p.x+p.w-1)
+		mo.Y = clamp(mo.Y, p.y, p.y+p.h-1)
 	}
-	if s == nil {
-		return
-	}
-	shift := func(p tea.Mouse) uv.Mouse {
-		return uv.Mouse{X: p.X - pw - bx, Y: p.Y - m.barHeight() - by, Button: p.Button, Mod: uv.KeyMod(p.Mod)}
+	s := p.s
+	shift := func(pt tea.Mouse) uv.Mouse {
+		return uv.Mouse{X: pt.X - p.x, Y: pt.Y - p.y, Button: pt.Button, Mod: uv.KeyMod(pt.Mod)}
 	}
 	switch e := msg.(type) {
 	case tea.MouseClickMsg:

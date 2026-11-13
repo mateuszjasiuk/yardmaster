@@ -296,7 +296,7 @@ func TestPaneZoomToggleClick(t *testing.T) {
 	dir := t.TempDir()
 	sleep := []string{"sleep", "5"}
 	ws, err := m.mgr.Activate("r/w", dir,
-		[]session.Spec{{Kind: session.Terminal, Argv: sleep}}, 80, 24)
+		[]session.Spec{{Kind: session.Terminal, Argv: sleep}}, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}

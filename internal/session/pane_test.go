@@ -321,7 +321,7 @@ func TestManagerFocusTermPaneDir(t *testing.T) {
 	defer m.CloseAll()
 
 	sleep := []string{"sh", "-c", "sleep 5"}
-	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestManagerFocusTermPaneAt(t *testing.T) {
 	defer m.CloseAll()
 
 	sleep := []string{"sh", "-c", "sleep 5"}
-	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, 81, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, SameSize(81, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestManagerSplitAndCloseTermPane(t *testing.T) {
 
 	sleep := []string{"sh", "-c", "sleep 5"}
 	specs := []Spec{{Kind: Terminal, Argv: sleep}}
-	ws, err := m.Activate("r/w", t.TempDir(), specs, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), specs, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,7 +475,7 @@ func TestZoomedPaneTakesTheWholeBody(t *testing.T) {
 	defer m.CloseAll()
 
 	sleep := []string{"sh", "-c", "sleep 5"}
-	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, 80, 24)
+	ws, err := m.Activate("r/w", t.TempDir(), []Spec{{Kind: Terminal, Argv: sleep}}, SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,7 +497,7 @@ func TestZoomedPaneTakesTheWholeBody(t *testing.T) {
 
 	// A window resize while still zoomed must keep the whole body, not fall back
 	// to the split rectangle.
-	m.ResizeWorkspace("r/w", 100, 30)
+	m.ResizeWorkspace("r/w", SameSize(100, 30))
 	if w, h := ws.Terms[ws.ActiveTerm].Size(); w != 100 || h != 30 {
 		t.Fatalf("zoomed pane after window resize = %dx%d, want 100x30", w, h)
 	}

@@ -136,19 +136,16 @@ func (m Model) View() tea.View {
 		body = m.renderDeck(h - m.barHeight())
 	case m.screen == screenTerminal && m.current != nil && m.current.ws != nil:
 		sw, sh := m.sessionSize()
-		body, cursor = m.renderTermPanes(sw, sh)
-		body = m.appendSessionFooter(body)
+		body = m.appendSessionFooter(m.renderTermPanes(sw, sh))
+		cursor = m.sessionCursor()
 	default:
 		if s := m.activeSession(); s != nil {
-			body = s.Render()
-			if x, y, visible := s.Cursor(); visible {
-				cursor = tea.NewCursor(x, y+m.barHeight())
-			}
-			body = m.appendSessionFooter(body)
+			body = m.appendSessionFooter(s.Render())
+			cursor = m.sessionCursor()
 		}
 	}
 	if m.sidePanelShown() {
-		body, cursor = m.withSidePanel(body, cursor)
+		body = m.withSidePanel(body)
 	}
 
 	v := tea.NewView(chrome + "\n" + body)
@@ -2133,80 +2130,56 @@ func (m Model) centerFooter(content string) string {
 
 // renderTermPanes renders the terminal screen: either a single full-size pane,
 // a zoomed pane, or a split layout assembled from the pane tree.
-func (m Model) renderTermPanes(w, h int) (string, *tea.Cursor) {
+func (m Model) renderTermPanes(w, h int) string {
 	ws := m.current.ws
 	if len(ws.Terms) == 0 {
-		return "", nil
+		return ""
 	}
 	if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-		s := ws.Terms[ws.ActiveTerm]
-		body := s.Render()
-		var cursor *tea.Cursor
-		if x, y, visible := s.Cursor(); visible {
-			cursor = tea.NewCursor(x, y+m.barHeight())
-		}
-		return body, cursor
+		return ws.Terms[ws.ActiveTerm].Render()
 	}
-	return m.renderPaneNode(ws.TermLayout, 0, 0, w, h, ws)
+	return m.renderPaneNode(ws.TermLayout, w, h, ws)
 }
 
-// renderPaneNode recursively renders a split subtree into (x, y, w, h) of the
-// body, inserting styled dividers between panes.
-func (m Model) renderPaneNode(node *session.PaneNode, x, y, w, h int, ws *session.Workspace) (string, *tea.Cursor) {
+// renderPaneNode recursively renders a split subtree into a w×h block,
+// inserting styled dividers between panes.
+func (m Model) renderPaneNode(node *session.PaneNode, w, h int, ws *session.Workspace) string {
 	if node == nil || w < 1 || h < 1 {
-		return strings.Repeat(" ", w) + strings.Repeat("\n"+strings.Repeat(" ", w), h-1), nil
+		return strings.Repeat(" ", w) + strings.Repeat("\n"+strings.Repeat(" ", w), h-1)
 	}
 	if node.Dir == session.SplitNone {
 		if node.Idx >= len(ws.Terms) {
-			return "", nil
+			return ""
 		}
-		s := ws.Terms[node.Idx]
-		body := s.Render()
-		var cursor *tea.Cursor
-		if node.Idx == ws.ActiveTerm {
-			if cx, cy, visible := s.Cursor(); visible {
-				cursor = tea.NewCursor(x+cx, y+m.barHeight()+cy)
-			}
-		}
-		return body, cursor
+		return ws.Terms[node.Idx].Render()
 	}
 
 	if node.Dir == session.SplitV {
 		if w < 3 {
-			return m.renderPaneNode(node.A, x, y, w, h, ws)
+			return m.renderPaneNode(node.A, w, h, ws)
 		}
 		aW := max(1, int(node.Ratio*float64(w-1)))
 		bW := w - aW - 1
 		if bW < 1 {
 			bW, aW = 1, w-2
 		}
-		aBody, aCur := m.renderPaneNode(node.A, x, y, aW, h, ws)
-		bBody, bCur := m.renderPaneNode(node.B, x+aW+1, y, bW, h, ws)
-		divColor := m.paneAdjacentColor(node, ws.ActiveTerm)
-		body := joinVerticalSplit(aBody, bBody, divColor, h, aW)
-		if aCur != nil {
-			return body, aCur
-		}
-		return body, bCur
+		aBody := m.renderPaneNode(node.A, aW, h, ws)
+		bBody := m.renderPaneNode(node.B, bW, h, ws)
+		return joinVerticalSplit(aBody, bBody, m.paneAdjacentColor(node, ws.ActiveTerm), h, aW)
 	}
 
 	// SplitH
 	if h < 3 {
-		return m.renderPaneNode(node.A, x, y, w, h, ws)
+		return m.renderPaneNode(node.A, w, h, ws)
 	}
 	aH := max(1, int(node.Ratio*float64(h-1)))
 	bH := h - aH - 1
 	if bH < 1 {
 		bH, aH = 1, h-2
 	}
-	aBody, aCur := m.renderPaneNode(node.A, x, y, w, aH, ws)
-	bBody, bCur := m.renderPaneNode(node.B, x, y+aH+1, w, bH, ws)
-	divColor := m.paneAdjacentColor(node, ws.ActiveTerm)
-	body := joinHorizontalSplit(aBody, bBody, divColor, w, aH)
-	if aCur != nil {
-		return body, aCur
-	}
-	return body, bCur
+	aBody := m.renderPaneNode(node.A, w, aH, ws)
+	bBody := m.renderPaneNode(node.B, w, bH, ws)
+	return joinHorizontalSplit(aBody, bBody, m.paneAdjacentColor(node, ws.ActiveTerm), w, aH)
 }
 
 // paneAdjacentColor returns cAccent if the active pane is a direct child of
