@@ -63,8 +63,6 @@ type Config struct {
 	// Diff configures the diff viewer's git invocations and optional external
 	// formatter.
 	Diff Diff `toml:"diff"`
-	// Orchestrator configures the agent that manages work across worktrees.
-	Orchestrator Orchestrator `toml:"orchestrator"`
 	// ClaudeAccounts are extra Claude accounts, keyed by a short name shown in
 	// the UI. Repos inside an account's folders run Claude with that account;
 	// every other repo uses the default one.
@@ -76,15 +74,6 @@ type Config struct {
 type ClaudeAccount struct {
 	ConfigDir string   `toml:"config_dir"`
 	Folders   []string `toml:"folders"`
-}
-
-// Orchestrator configures the orchestrator agent: one Claude session per ct,
-// in its own folder, that sees every repo's worktrees through `ct ctl` and
-// can start, message, and stop the agents working in them.
-type Orchestrator struct {
-	// Model is the claude model the orchestrator runs on, passed as --model.
-	// It coordinates rather than codes, so a cheaper model is the default.
-	Model string `toml:"model"`
 }
 
 const (
@@ -263,9 +252,6 @@ type Keys struct {
 	Help string `toml:"help"`
 	// GlobalConfig opens the home-directory workspace for editing global config.
 	GlobalConfig string `toml:"global_config"`
-	// Orchestrator opens the orchestrator agent: the agent that manages
-	// work across every open worktree.
-	Orchestrator string `toml:"orchestrator"`
 	// Attention jumps straight into the session of the agent that most needs the
 	// user — live-waiting agents first, then unread completions — and cycles to
 	// the next such agent on each press, collapsing the open-board/scan/select
@@ -326,7 +312,7 @@ func Default() Config {
 			Picker:  "ctrl+g",
 			Palette: "alt+a", NextAgent: "f4", PrevAgent: "f3",
 			NextWorktree: "ctrl+l", PrevWorktree: "ctrl+h", ToggleStacks: "ctrl+y", StackPopup: "ctrl+s", SidePanel: "ctrl+\\", SideBySide: "ctrl+shift+\\",
-			Help: "f1", GlobalConfig: "alt+g", Orchestrator: "alt+o", Attention: "alt+n", Highlight: "ctrl+q", Back: "alt+b",
+			Help: "f1", GlobalConfig: "alt+g", Attention: "alt+n", Highlight: "ctrl+q", Back: "alt+b",
 			TermSplitV: "alt+v", TermSplitH: "alt+s",
 			TermZoom: "alt+z", TermClose: "alt+x",
 			TermFocusLeft: "alt+h", TermFocusDown: "alt+j",
@@ -336,9 +322,8 @@ func Default() Config {
 			TermScrollUp: "shift+pgup", TermScrollDown: "shift+pgdown",
 			Usage: "alt+u", CommandPalette: "alt+p",
 		},
-		Usage:        Usage{Threshold: 50},
-		Display:      Display{Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint},
-		Orchestrator: Orchestrator{Model: "sonnet"},
+		Usage:   Usage{Threshold: 50},
+		Display: Display{Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint},
 		Plasma: Plasma{
 			Pattern: "classic", Palette: "aurora", Charset: "dots",
 			Speed: 0.3, Width: 40,

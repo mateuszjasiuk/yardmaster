@@ -134,7 +134,6 @@ side_panel  = "ctrl+\\" # open or close the session list on the left
 side_by_side = "ctrl+shift+\\" # nvim and the agent next to each other (ctrl+|)
 stack_popup = "ctrl+s"  # the current gh stack's PRs, reviews and checks
 global_config = "alt+g" # open the home-directory workspace
-orchestrator = "alt+o" # open the orchestrator agent (see below)
 attention   = "alt+n"  # jump to the agent needing attention (cycles on repeat)
 highlight   = "ctrl+q" # toggle the current worktree white/dim in the bar
 back        = "alt+b"  # return to the previous work location (toggles on repeat)
@@ -168,13 +167,6 @@ palette = "aurora"  # aurora (blue/purple) | ember (yellow/red) | mono (grayscal
 charset = "dots"    # dots (braille) | shade | blocks
 speed   = 0.3       # animation rate; 0 freezes the pattern
 width   = 40        # percent of the terminal width; 0 disables the panel
-
-# The orchestrator: one Claude agent per ct that manages work across every
-# repo's worktrees through `ct ctl` (see "Orchestrator" below).
-[orchestrator]
-# Claude model for the orchestrator, passed as --model. It coordinates rather
-# than codes, so the default is the cheaper one.
-model = "sonnet"
 
 # Stack merges require a confirmation by default. This setting bypasses ct's
 # confirmation; it is not GitHub's "auto-merge when checks pass" feature.
@@ -245,57 +237,17 @@ default account (`~/.claude`, or whatever `CLAUDE_CONFIG_DIR` was when ct
 started). When folders nest, the longer one wins. ct checks at startup that
 `config_dir` and every folder exist, and that no two accounts share one.
 
-Each account gets its own orchestrator (see below), status polling covers
-every account with an open agent, and the bar's agent strip shows an extra
-account's worktrees as one block on a darker background, after the default
-account's. The usage gauge only reads the default account, so it is hidden
-next to agents on another one.
+Status polling covers every account with an open agent, and the bar's agent
+strip shows an extra account's worktrees as one block on a darker background,
+after the default account's. The usage gauge only reads the default account,
+so it is hidden next to agents on another one.
 
-## Orchestrator
+## ct ctl
 
-The orchestrator is a Claude agent that sees every worktree of every repo and
-can start, message, and stop the agents working in them. There is one per
-Claude account (one in total unless you set up `[claude_accounts]`), and it
-manages that account's repos. It runs in its own folder,
-`~/.caretaker/orchestrator/` (`orchestrator-<name>/` for an extra account),
-outside every repo, and each of its repos' main checkout is added with
-`--add-dir`, so it can read the code when it plans a task. Its system prompt describes `ct ctl`, lists the
-repos, and sets the rules below; it runs on the model from `[orchestrator]`
-(`sonnet` by default). It is not listed in the agent board or the bar's agent
-strip; the orchestrator icon stands for it. It resumes its conversation across
-runs.
-
-The repo list is fixed when the session starts. After you add a repo, pick
-"new orchestrator session" (or restart ct) so the orchestrator knows about it.
-
-A repo's main checkout, the `(main)` row of the deck, is an ordinary worktree:
-open it to get a plain agent on the main branch. The row is first in its repo.
-A repo with no other worktree shows it only once it has been opened: type `main`
-as the name of a new session, use "open main of <repo>" in the command palette,
-or run `ct ctl open <repo>/main`. `ct ctl` calls it `<repo>/main`, and refuses to
-spawn or remove it.
-
-Press `alt+o`, click the orchestrator icon in the bar's tab row (between the
-agent and terminal icons), or pick "open orchestrator" in the command palette
-to show it. With several accounts, the worktree you are on (or the repo
-selected on the deck) decides which orchestrator opens. The icon is always
-there and lights up while the orchestrator view is showing. The view lays over your current worktree, which stays current: the
-jump and cycle keys lead back to its editor, agent, and terminal, and `alt+o`
-again returns to the view you came from. Behind the scenes ct opens the
-orchestrator's workspace in the background and starts the orchestrator agent
-there the first time. Nothing
-pushes events into it: you talk to it when you want coordination, such as
-spawning worktrees for a batch of tasks, briefing an agent, or getting an
-overview of what is running.
-
-Its plan lives outside the repos, one file per repo:
-`~/.caretaker/orchestrator/<repo>/tasks.md` (in `orchestrator-<name>/` for an
-extra account), one line per task with the worktree and its state. Those files, not the conversation, are its memory. When the conversation gets long, pick "new
-orchestrator session" in the palette: it replaces the session with a fresh one
-that reads the `tasks.md` files and carries on.
-
-The orchestrator acts on ct through `ct ctl`, a command that talks to the
-running ct over a Unix socket. You can use it too, from any terminal:
+`ct ctl` is a command that talks to the running ct over a Unix socket. Every
+agent ct starts can run it, because it inherits `CT_SOCKET`, so sessions start,
+brief and stop each other through it (see [Feature managers](#feature-managers)
+for work split over several sessions). You can use it too, from any terminal:
 
 ```sh
 ct ctl list                                # every worktree, its agents and their status
@@ -316,9 +268,15 @@ message as the first prompt. `spawn` creates the worktree and starts an agent
 on the prompt without switching your view. `remove` never deletes on its own:
 it raises ct's usual remove-confirm panel the next time you are on the deck.
 
-The orchestrator cannot answer another agent's permission prompt or question.
-It tells you which worktree is waiting; you answer there. ct's own `!` badge
-and the attention key show the same thing without asking the orchestrator.
+`ct ctl` cannot answer an agent's permission prompt or question. ct's `!` badge
+and the attention key show which worktree is waiting; you answer there.
+
+A repo's main checkout, the `(main)` row of the deck, is an ordinary worktree:
+open it to get a plain agent on the main branch. The row is first in its repo.
+A repo with no other worktree shows it only once it has been opened: type `main`
+as the name of a new session, use "open main of <repo>" in the command palette,
+or run `ct ctl open <repo>/main`. `ct ctl` calls it `<repo>/main`, and refuses to
+spawn or remove it.
 
 Each ct instance has its own socket under `~/.local/state/ct/` (or a short
 per-user directory under `/tmp` when that path is too long for a socket). Programs

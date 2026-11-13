@@ -300,7 +300,7 @@ func TestSideBySideShowsTheAgentPickedWithF4(t *testing.T) {
 	}
 }
 
-func TestSideBySideStaysOutOfOverlaysAndTheOrchestrator(t *testing.T) {
+func TestSideBySideStaysOutOfOverlays(t *testing.T) {
 	m := pressSideBySide(t, sideBySideModel(t, 150))
 
 	m.helpOpen = true
@@ -309,11 +309,6 @@ func TestSideBySideStaysOutOfOverlaysAndTheOrchestrator(t *testing.T) {
 	}
 	if got, want := m.View().Content, m.renderBar()+"\n"+m.renderHelp(m.height-m.barHeight()); got != want {
 		t.Fatal("help should be drawn instead of the two panes")
-	}
-	m.helpOpen = false
-
-	if got := m.sizesFor(orchestratorKey).Agent.W; got != 150 {
-		t.Fatalf("the orchestrator should keep the full width, got %d", got)
 	}
 }
 

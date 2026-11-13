@@ -77,7 +77,7 @@ func (m Model) paneOf(s *session.Session) (sessionPane, bool) {
 // focusPane gives the keyboard to s, one of the current worktree's sessions on
 // screen. Focusing the agent marks its news as seen, like opening its view.
 func (m Model) focusPane(s *session.Session) Model {
-	if m.screen == screenOrchestrator || m.current == nil || m.current.ws == nil {
+	if m.current == nil || m.current.ws == nil {
 		return m
 	}
 

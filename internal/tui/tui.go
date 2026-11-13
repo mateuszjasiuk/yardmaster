@@ -55,10 +55,6 @@ const (
 	screenAgent
 	screenTerminal
 	screenSetup
-	// screenOrchestrator shows the orchestrator agent over the current
-	// workspace, which stays current underneath: the jump and cycle keys lead
-	// back to it. The agent itself lives in the repo's main checkout.
-	screenOrchestrator
 )
 
 // next cycles among the session views (editor → agent → terminal → editor).
@@ -469,10 +465,6 @@ type Model struct {
 	// home workspace path/key, cached on first open for pathToKey lookups
 	homeWSPath string
 	homeWSKey  string
-	// orchKey is the orchestrator workspace (one per Claude account) the
-	// orchestrator view shows; orchFrom is the view it was opened from.
-	orchKey  string
-	orchFrom screen
 
 	// ctlSrv is the control socket `ct ctl` talks to; nil in tests. queueSent
 	// records when each workspace last had a queued message delivered, so the
@@ -1124,20 +1116,20 @@ func (m Model) repaintCmd() tea.Cmd {
 }
 
 // sessionSize is the room for sessions: under the bar, right of the side
-// panel, above the footer. Terminal panes and the orchestrator fill it.
+// panel, above the footer. Terminal panes fill it.
 func (m Model) sessionSize() (int, int) {
 	return m.width - m.sidePanelW(), max(1, m.height-m.barHeight()-m.sessionFooterH())
 }
 
 // sizesFor is the size each kind of session in workspace key gets. Terminal
-// panes and the orchestrator fill the room for sessions; nvim and the agent
-// split it while the worktree is side by side. Agents get their half also
-// before the first one starts, so it starts at the width it is shown at. A
-// worktree that isn't open yet is assumed to start with nvim and an agent.
+// panes fill the room for sessions; nvim and the agent split it while the
+// worktree is side by side. Agents get their half also before the first one
+// starts, so it starts at the width it is shown at. A worktree that isn't open
+// yet is assumed to start with nvim and an agent.
 func (m Model) sizesFor(key string) session.Sizes {
 	w, h := m.sessionSize()
 	sizes := session.SameSize(w, h)
-	if _, ok := orchestratorAccountOf(key); ok || !m.sideBySideFits() {
+	if !m.sideBySideFits() {
 		return sizes
 	}
 
@@ -1152,16 +1144,12 @@ func (m Model) sizesFor(key string) session.Sizes {
 	return sizes
 }
 
-// resizeSessions sizes the current workspace and the orchestrator to the room
-// left for sessions.
+// resizeSessions sizes the current workspace to the room left for sessions.
 func (m Model) resizeSessions() {
 	// Only the current workspace is resized; background ones are brought up
 	// to date by Activate when they next become current.
 	if m.current != nil {
 		m.mgr.ResizeWorkspace(m.current.key, m.sizesFor(m.current.key))
-	}
-	if m.screen == screenOrchestrator && m.mgr.Has(m.orchKey) {
-		m.mgr.ResizeWorkspace(m.orchKey, m.sizesFor(m.orchKey))
 	}
 }
 
@@ -1236,9 +1224,6 @@ func (m Model) scrollTermPaneWheel(s *session.Session, up bool) bool {
 }
 
 func (m Model) activeSession() *session.Session {
-	if m.screen == screenOrchestrator {
-		return m.orchestratorSession()
-	}
 	if m.current == nil || m.current.ws == nil {
 		return nil
 	}
@@ -1288,7 +1273,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) syncFocus() {
 	var target *session.Session
 	switch m.screen {
-	case screenEditor, screenAgent, screenTerminal, screenOrchestrator:
+	case screenEditor, screenAgent, screenTerminal:
 		if !m.termBlurred {
 			target = m.activeSession()
 		}
@@ -1305,7 +1290,7 @@ func (m *Model) syncFocus() {
 	m.focused = target
 	dir := ""
 	if target != nil {
-		dir = m.screenDir()
+		dir = m.current.path
 	}
 	if dir != m.focusDir {
 		m.focusDir = dir
@@ -1313,18 +1298,6 @@ func (m *Model) syncFocus() {
 			runFocusCommand(m.ctrl.FocusCommand(), dir)
 		}
 	}
-}
-
-// screenDir is the folder of the session on screen: the current worktree's,
-// or the orchestrator's own folder.
-func (m Model) screenDir() string {
-	if m.screen == screenOrchestrator {
-		return m.orchDir(m.orchKey)
-	}
-	if m.current == nil {
-		return ""
-	}
-	return m.current.path
 }
 
 // runFocusCommand starts focus_command for dir in the background and does not
@@ -1968,10 +1941,6 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 // watchingAgent reports whether the user is on the agent screen with the agent
 // running as pid focused.
 func (m Model) watchingAgent(pid int) bool {
-	if m.screen == screenOrchestrator {
-		s := m.orchestratorSession()
-		return s != nil && s.Pid() == pid
-	}
 	return m.screen == screenAgent && m.current != nil && m.current.ws != nil &&
 		m.current.ws.ActiveAgentSession() != nil &&
 		m.current.ws.ActiveAgentSession().Pid() == pid
@@ -2147,9 +2116,6 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	}
 	g.highlighted = m.highlighted[key]
 	for i, a := range ws.Agents {
-		if a.Role == orchestratorRole {
-			continue // reached through its bar icon, not listed with the workers
-		}
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
 		provider := normalizedProvider(a.Provider)
@@ -2196,7 +2162,6 @@ func (m Model) stripGroups() []agentGroup {
 			return
 		}
 		seen[key] = true
-		// A workspace whose only agent is the orchestrator has nothing to show.
 		if g, ok := m.agentGroup(key, repoName, wtName, path); ok && len(g.agents) > 0 {
 			g.account, _ = m.claudeAccountFor(path)
 			g.stack, _ = m.ghStackPosition(repoName, branch)
@@ -2244,8 +2209,7 @@ func (m Model) buildBoard() (rows []boardRow, nav []int) {
 		addGroup(wsKey(it.repo.Name, it.view.WT.Name), it.repo.Name, it.view.WT.Name, it.view.WT.Path)
 	}
 
-	// The home and orchestrator workspaces aren't git worktrees, so they never
-	// appear in m.active.
+	// The home workspace isn't a git worktree, so it never appears in m.active.
 	if m.homeWSKey != "" {
 		addGroup(m.homeWSKey, "~", "config", m.homeWSPath)
 	}
@@ -2811,8 +2775,6 @@ func (m Model) paletteCommands() []paletteCmd {
 	cmds = append(cmds, paletteCmd{title: "open or close the session list", hint: m.keys.SidePanel, run: func(m Model) (tea.Model, tea.Cmd) { return m.toggleSidePanel() }})
 	cmds = append(cmds, paletteCmd{title: "show nvim and the agent side by side, or one at a time", hint: m.keys.SideBySide, run: func(m Model) (tea.Model, tea.Cmd) { return m.toggleSideBySide() }})
 	cmds = append(cmds, paletteCmd{title: "open home workspace", hint: m.keys.GlobalConfig, run: func(m Model) (tea.Model, tea.Cmd) { return m.activateGlobalConfig() }})
-	cmds = append(cmds, paletteCmd{title: "open orchestrator", hint: m.keys.Orchestrator, run: func(m Model) (tea.Model, tea.Cmd) { return m.openOrchestrator() }})
-	cmds = append(cmds, paletteCmd{title: "new orchestrator session", run: func(m Model) (tea.Model, tea.Cmd) { return m.resetOrchestrator() }})
 
 	// 5. Terminal panes — each switches to the terminal screen first, so the
 	// palette can split/zoom/close from any screen (strictly more capable than
@@ -3209,7 +3171,7 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 	if saved := m.savedActiveAgent(key); saved < len(ws.Agents) {
 		ws.ActiveAgent = saved
 	}
-	if m.current != nil && m.screen != screenPicker && m.screen != screenOrchestrator {
+	if m.current != nil && m.screen != screenPicker {
 		if m.lastScreens == nil {
 			m.lastScreens = map[string]screen{}
 		}
@@ -3255,7 +3217,7 @@ func (m Model) workspaceSpecs(key string, addDefault bool) ([]session.Spec, erro
 		specs = append(specs, spec)
 	} else {
 		for _, a := range saved {
-			spec, err := m.restoreAgentSpec(key, a, "")
+			spec, err := m.restoreAgentSpec(a, "")
 			if err != nil {
 				return nil, err
 			}
@@ -3265,14 +3227,9 @@ func (m Model) workspaceSpecs(key string, addDefault bool) ([]session.Spec, erro
 	return append(specs, m.ctrl.TermSpec()), nil
 }
 
-// restoreAgentSpec rebuilds one saved agent of workspace key, handing it
-// prompt. An orchestrator comes back with its instructions and model.
-func (m Model) restoreAgentSpec(key string, a state.AgentState, prompt string) (session.Spec, error) {
-	provider := normalizedProvider(a.Provider)
-	if account, ok := orchestratorAccountOf(key); ok && a.Role == orchestratorRole && provider == agent.Claude {
-		return m.ctrl.OrchestratorAgentSpec(account, m.orchestratorRepos(account), a.SessionID, a.Label)
-	}
-	return m.ctrl.RestoreProviderAgentSpec(provider, a.SessionID, a.Label, prompt)
+// restoreAgentSpec rebuilds one saved agent, handing it prompt.
+func (m Model) restoreAgentSpec(a state.AgentState, prompt string) (session.Spec, error) {
+	return m.ctrl.RestoreProviderAgentSpec(normalizedProvider(a.Provider), a.SessionID, a.Label, prompt)
 }
 
 // prepareWorkspaceSpecs starts provider companions before their interactive
@@ -3336,31 +3293,15 @@ func (m Model) openClaudeAccounts() []string {
 		}) {
 			continue
 		}
-		account, isOrch := orchestratorAccountOf(key)
-		if !isOrch {
-			if dir, ok := m.worktreePath(key); ok {
-				account, _ = m.claudeAccountFor(dir)
-			}
+		var account string
+		if dir, ok := m.worktreePath(key); ok {
+			account, _ = m.claudeAccountFor(dir)
 		}
 		if account != "" {
 			open[account] = true
 		}
 	}
 	return slices.Sorted(maps.Keys(open))
-}
-
-// orchDir is the folder of an orchestrator workspace, or "" when key is not
-// one.
-func (m Model) orchDir(key string) string {
-	account, ok := orchestratorAccountOf(key)
-	if !ok {
-		return ""
-	}
-	dir, err := m.ctrl.OrchestratorDir(account)
-	if err != nil {
-		return ""
-	}
-	return dir
 }
 
 func closeSpecCompanions(specs []session.Spec) {
@@ -3377,41 +3318,12 @@ func (m Model) savedActiveAgent(key string) int {
 	return active
 }
 
-// onlyOldOrchestrators reports whether key's saved pool held agents and every
-// one was an orchestrator that savedAgents leaves out.
-func (m Model) onlyOldOrchestrators(key string) bool {
-	if _, orch := orchestratorAccountOf(key); m.state == nil || orch {
-		return false
-	}
-	all, _ := m.state.Agents(key)
-	kept, _ := m.savedAgents(key)
-	return len(all) > 0 && len(kept) == 0
-}
-
-// savedAgents is key's saved agent pool and its focused index. Orchestrators
-// saved outside the orchestrator workspace are left out: they come from when
-// each repo's main checkout ran its own, and that checkout now opens like any
-// other worktree.
+// savedAgents is key's saved agent pool and its focused index.
 func (m Model) savedAgents(key string) ([]state.AgentState, int) {
 	if m.state == nil {
 		return nil, 0
 	}
-	saved, active := m.state.Agents(key)
-	if _, orch := orchestratorAccountOf(key); orch {
-		return saved, active
-	}
-	kept := saved[:0:0]
-	keptActive := 0
-	for i, a := range saved {
-		if a.Role == orchestratorRole {
-			continue
-		}
-		if i <= active {
-			keptActive = len(kept)
-		}
-		kept = append(kept, a)
-	}
-	return kept, keptActive
+	return m.state.Agents(key)
 }
 
 // persistAgents snapshots a live workspace's agent pool (resume ids, labels, and
@@ -3431,7 +3343,7 @@ func (m *Model) persistAgents(key string) {
 			continue // not a ct-managed claude session; nothing to resume
 		}
 		agents = append(agents, state.AgentState{
-			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title, Role: s.Role,
+			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title,
 		})
 	}
 	m.state.SetAgents(key, agents, ws.ActiveAgent)
@@ -3521,31 +3433,14 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 			}
 			m.homeWSPath, m.homeWSKey, path, ok = home, key, home, true
 		}
-		account, isOrch := orchestratorAccountOf(key)
-		if isOrch {
-			if _, known := m.ctrl.cfg.ClaudeAccounts[account]; account != "" && !known {
-				continue // its account was removed from the config
-			}
-			dir, err := m.ctrl.EnsureOrchestratorDir(account)
-			if err != nil {
-				m.setError("restore error: " + err.Error())
-				continue
-			}
-			path, ok = dir, true
-		}
 		if !ok {
 			continue // the worktree is gone
-		}
-		if m.onlyOldOrchestrators(key) {
-			continue // it was open only for the orchestrator that used to live there
 		}
 		var (
 			cmd tea.Cmd
 			err error
 		)
-		// The orchestrator workspace holds only the orchestrator, never a
-		// default agent.
-		if m, cmd, err = m.openWorkspaceBackground(key, path, !isOrch); err != nil {
+		if m, cmd, err = m.openWorkspaceBackground(key, path); err != nil {
 			m.setError("restore error (" + key + "): " + err.Error())
 			continue
 		}
@@ -3658,9 +3553,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.String() == m.keys.GlobalConfig {
 		return m.activateGlobalConfig()
-	}
-	if msg.String() == m.keys.Orchestrator {
-		return m.openOrchestrator()
 	}
 	// A picker text input or a confirm prompt keeps these keys: ctrl+h deletes a
 	// character there.
@@ -3801,7 +3693,7 @@ func restoredSessionIndex(sessions []*session.Session, target *session.Session, 
 func (m Model) isReservedActionKey(s string) bool {
 	switch s {
 	case m.keys.Cycle, m.keys.CycleBack, m.keys.Picker, m.keys.Palette,
-		m.keys.Attention, m.keys.Highlight, m.keys.GlobalConfig, m.keys.Orchestrator, m.keys.NextAgent, m.keys.PrevAgent,
+		m.keys.Attention, m.keys.Highlight, m.keys.GlobalConfig, m.keys.NextAgent, m.keys.PrevAgent,
 		m.keys.NextWorktree, m.keys.PrevWorktree, m.keys.ToggleStacks, m.keys.SidePanel, m.keys.SideBySide, m.keys.StackPopup,
 		m.keys.CommandPalette, m.keys.GotoEditor, m.keys.GotoAgent, m.keys.GotoTerm:
 		return true
@@ -3863,9 +3755,6 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.String() {
 	case m.keys.Cycle, m.keys.CycleBack:
-		if m.current == nil {
-			return m, nil // on the orchestrator view with no workspace to cycle into
-		}
 		return m.cycleScreen(msg.String() == m.keys.Cycle), nil
 	case m.keys.Picker:
 		return m.returnToDeck()
@@ -3937,7 +3826,7 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // this is the moment they're re-read. Shared by handleSessionKey's picker branch
 // and the command palette's "back to deck" row.
 func (m Model) returnToDeck() (tea.Model, tea.Cmd) {
-	if m.current != nil && m.screen != screenOrchestrator {
+	if m.current != nil {
 		if m.lastScreens == nil {
 			m.lastScreens = map[string]screen{}
 		}
@@ -4005,16 +3894,7 @@ func (m Model) rotateAgent(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	ws := m.current.ws
-	next := ws.ActiveAgent
-	for range n {
-		next = ((next+delta)%n + n) % n
-		// The orchestrator has its own view; rotation skips it unless it is
-		// the only agent.
-		if ws.Agents[next].Role != orchestratorRole || n == 1 {
-			break
-		}
-	}
-	ws.ActiveAgent = next
+	ws.ActiveAgent = ((ws.ActiveAgent+delta)%n + n) % n
 	m.screen = screenAgent
 	m.clearWorkspaceAttention()
 	return m, m.saveAgents(m.current.key)
@@ -4309,9 +4189,6 @@ func (m Model) deckClick(x, y int) (tea.Model, tea.Cmd, bool) {
 // session tabs only switch when a workspace is active. Switching to the
 // picker refreshes the deck, matching the picker key.
 func (m Model) selectTab(s screen) (tea.Model, tea.Cmd) {
-	if s == screenOrchestrator {
-		return m.openOrchestrator()
-	}
 	if s == screenPicker || m.current != nil {
 		wasSession := m.screen != screenPicker
 		m = m.rememberSideBySideFocus()
@@ -5663,11 +5540,6 @@ func (m Model) pathToKey(path string) (string, bool) {
 	if m.homeWSPath != "" && filepath.Clean(m.homeWSPath) == path {
 		return m.homeWSKey, true
 	}
-	for _, key := range m.mgr.Keys() {
-		if dir := m.orchDir(key); dir != "" && filepath.Clean(dir) == path {
-			return key, true
-		}
-	}
 	return "", false
 }
 
@@ -5699,13 +5571,6 @@ func (m Model) agentLocation(target *session.Session) (key, path string, ok bool
 	if m.homeWSKey != "" {
 		if key, path, ok := match(m.homeWSKey, m.homeWSPath); ok {
 			return key, path, true
-		}
-	}
-	for _, key := range m.mgr.Keys() {
-		if dir := m.orchDir(key); dir != "" {
-			if key, path, ok := match(key, dir); ok {
-				return key, path, true
-			}
 		}
 	}
 	return "", "", false
