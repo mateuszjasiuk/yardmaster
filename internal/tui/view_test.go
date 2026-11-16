@@ -378,7 +378,7 @@ func TestBoardRender(t *testing.T) {
 	mm, _ := m.openBoard()
 	m = mm.(Model)
 	out := m.renderBoard(m.height - m.barHeight())
-	for _, want := range []string{"AGENTS", "r/w", "claude", "new agent", "focus", "current"} {
+	for _, want := range []string{"AGENTS", "r/w", "claude", "new agent", "open", "current"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("board missing %q:\n%s", want, out)
 		}
@@ -432,10 +432,10 @@ func TestBoardUsesFullPanelWidth(t *testing.T) {
 	}
 
 	rows, nav := m.buildBoard()
-	if len(nav) == 0 || !rows[nav[0]].isAgent {
+	if len(nav) == 0 || rows[nav[0]].kind != rowAgent {
 		t.Fatal("test board has no selectable agent row")
 	}
-	if got, want := lipgloss.Width(m.boardAgentLine(rows[nav[0]], 72)), 72; got != want {
+	if got, want := lipgloss.Width(m.boardAgentLine(rows[nav[0]], false, 72)), 72; got != want {
 		t.Fatalf("agent row width = %d, want full panel width %d", got, want)
 	}
 }

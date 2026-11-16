@@ -260,7 +260,7 @@ func TestSideBySideFollowsTheFirstAndLastAgent(t *testing.T) {
 
 	for len(ws.Agents) > 0 {
 		agent := ws.Agents[0]
-		mm, _ := m.closeBoardAgent(boardRow{isAgent: true, key: m.current.key, agentIdx: 0, pid: agent.Pid()})
+		mm, _ := m.closeBoardAgent(boardRow{kind: rowAgent, key: m.current.key, agentIdx: 0, pid: agent.Pid()})
 		m = mm.(Model)
 	}
 	if got := sizeOf(ws.Editor).W; got != w {

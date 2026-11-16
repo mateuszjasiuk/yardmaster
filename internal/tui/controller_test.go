@@ -15,7 +15,7 @@ import (
 func TestParseAgentStatuses(t *testing.T) {
 	data := []byte(`[
 		{"pid":1480,"cwd":"/r/a","kind":"interactive","status":"busy","startedAt":1781790525707},
-		{"pid":43053,"cwd":"/r/b","kind":"interactive","status":"idle"},
+		{"pid":43053,"cwd":"/r/b","kind":"interactive","status":"idle","name":"Mewtwo"},
 		{"pid":900,"cwd":"/r/c","kind":"interactive","status":"waiting","waitingFor":"permission prompt"},
 		{"cwd":"/r/d","kind":"interactive","state":"done"}
 	]`)
@@ -31,7 +31,7 @@ func TestParseAgentStatuses(t *testing.T) {
 	if got[1480].Status != "busy" || got[1480].Cwd != "/r/a" || got[1480].StartedAt != 1781790525707 {
 		t.Errorf("busy entry parsed wrong: %+v", got[1480])
 	}
-	if got[43053].Status != "idle" {
+	if got[43053].Status != "idle" || got[43053].Name != "Mewtwo" {
 		t.Errorf("idle entry parsed wrong: %+v", got[43053])
 	}
 	if got[900].Status != "waiting" || got[900].WaitingFor != "permission prompt" {

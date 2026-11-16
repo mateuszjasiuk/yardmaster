@@ -157,6 +157,10 @@ func TestDefaultKeymap(t *testing.T) {
 		"goto_agent":   d.Keys.GotoAgent,
 		"goto_term":    d.Keys.GotoTerm,
 		"palette":      d.Keys.Palette,
+		"board_new":    d.Keys.BoardNew,
+		"board_rst":    d.Keys.BoardRestart,
+		"board_rm":     d.Keys.BoardRemove,
+		"board_dis":    d.Keys.BoardDismiss,
 		"global":       d.Keys.GlobalConfig,
 		"back":         d.Keys.Back,
 		"next_wt":      d.Keys.NextWorktree,
@@ -177,7 +181,8 @@ func TestDefaultKeymap(t *testing.T) {
 	want := map[string]string{
 		"cycle": "alt+]", "cycle_back": "alt+[",
 		"goto_editor": "alt+1", "goto_agent": "alt+2", "goto_term": "alt+3",
-		"palette": "alt+a", "global": "alt+g", "prompt": "alt+y", "back": "alt+b",
+		"palette": "alt+a", "global": "alt+g",
+		"board_new": "ctrl+e", "board_rst": "ctrl+r", "board_rm": "ctrl+d", "board_dis": "ctrl+x", "prompt": "alt+y", "back": "alt+b",
 		"next_wt": "ctrl+l", "prev_wt": "ctrl+h", "stacks": "ctrl+y", "popup": "ctrl+s", "side_panel": "ctrl+\\", "side_by_side": "ctrl+shift+\\",
 		"split_v": "alt+v", "split_h": "alt+s", "zoom": "alt+z", "close": "alt+x",
 		"focus_left": "alt+h", "focus_down": "alt+j", "focus_up": "alt+k", "focus_right": "alt+l",
@@ -215,6 +220,7 @@ goto_agent = "alt+c"
 goto_term = "alt+t"
 term_focus_left = "ctrl+h"
 term_focus_right = "ctrl+l"
+board_remove = "ctrl+w"
 `)
 	if cfg.Keys.CycleBack != "alt+p" {
 		t.Errorf("cycle_back = %q", cfg.Keys.CycleBack)
@@ -227,6 +233,9 @@ term_focus_right = "ctrl+l"
 	}
 	if cfg.Keys.TermFocusLeft != "ctrl+h" || cfg.Keys.TermFocusRight != "ctrl+l" {
 		t.Errorf("focus keys = %q/%q", cfg.Keys.TermFocusLeft, cfg.Keys.TermFocusRight)
+	}
+	if cfg.Keys.BoardRemove != "ctrl+w" || cfg.Keys.BoardRestart != "ctrl+r" {
+		t.Errorf("board keys = %q/%q", cfg.Keys.BoardRemove, cfg.Keys.BoardRestart)
 	}
 	// Fields left unset keep their defaults.
 	if cfg.Keys.Cycle != "alt+]" || cfg.Keys.TermFocusDown != "alt+j" {

@@ -610,7 +610,7 @@ func TestBoardCloseRequiresConfirmation(t *testing.T) {
 	m := modelWithAgents(1)
 	m.boardOpen = true
 
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	mm, _ := m.handleBoard(ctrlKey('d'))
 	m = mm.(Model)
 	if m.mode != modeConfirmAgentClose || m.confirm.agent == nil {
 		t.Fatalf("close should capture its agent in a confirmation: mode=%v target=%v", m.mode, m.confirm.agent)
@@ -643,7 +643,7 @@ func TestBusyBoardRestartRequiresConfirmation(t *testing.T) {
 	pid := m.current.ws.Agents[0].Pid()
 	m.agentStatus = map[int]AgentStatus{pid: {Status: "busy"}}
 
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	mm, _ := m.handleBoard(ctrlKey('r'))
 	m = mm.(Model)
 	if m.mode != modeConfirmAgentRestart || m.confirm.agent == nil {
 		t.Fatalf("busy restart should require confirmation: mode=%v target=%v", m.mode, m.confirm.agent)
@@ -658,26 +658,157 @@ func TestBusyBoardRestartRequiresConfirmation(t *testing.T) {
 	}
 }
 
-func TestBoardDigitJump(t *testing.T) {
+func TestBoardFinderFiltersAndFocuses(t *testing.T) {
 	m := modelWithAgents(3)
 	m.current.ws.ActiveAgent = 0
+	m.current.ws.Agents[2].Title = "jade-otter"
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	if !m.boardInput.Focused() {
+		t.Fatal("the board should open with its query focused")
+	}
+
+	// Letters and digits type into the query; the match is selected on top.
+	for _, r := range "jade" {
+		mm, _ = m.handleBoard(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = mm.(Model)
+	}
+	if got := m.boardInput.Value(); got != "jade" {
+		t.Fatalf("query = %q, want %q", got, "jade")
+	}
+	rows, nav := m.boardView()
+	if len(nav) != 1 || rows[nav[0]].agentIdx != 2 || m.boardCursor != 0 {
+		t.Fatalf("query should leave only the matching agent selected, got rows=%+v cursor=%d", rows, m.boardCursor)
+	}
+
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = mm.(Model)
+	if m.boardOpen || m.current.ws.ActiveAgent != 2 || m.screen != screenAgent {
+		t.Fatalf("enter should focus the match: open=%v active=%d screen=%v", m.boardOpen, m.current.ws.ActiveAgent, m.screen)
+	}
+
+	// Reopening starts on an empty query with the grouped board.
+	mm, _ = m.openBoard()
+	m = mm.(Model)
+	if m.boardInput.Value() != "" {
+		t.Fatalf("reopened board should clear the query, got %q", m.boardInput.Value())
+	}
+	if rows, _ := m.boardView(); rows[len(rows)-1].kind != rowNew {
+		t.Fatal("an empty query should show the grouped board with the new agent row")
+	}
+}
+
+func TestBoardFinderMatchesWorktree(t *testing.T) {
+	m := modelWithAgents(1)
 	mm, _ := m.openBoard()
 	m = mm.(Model)
 
-	// "3" jumps straight to the third agent, focuses it, and closes the board.
-	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: '3', Text: "3"})
+	m.boardInput.SetValue("nothing-like-it")
+	if _, nav := m.boardView(); len(nav) != 0 {
+		t.Fatalf("no agent should match, got %d rows", len(nav))
+	}
+	m.boardInput.SetValue(m.current.worktree)
+	if rows, nav := m.boardView(); len(nav) != 1 || rows[0].kind != rowAgent {
+		t.Fatalf("the worktree name should match its agent, got %+v", rows)
+	}
+}
+
+func TestBoardEscClosesWithQuery(t *testing.T) {
+	m := modelWithAgents(1)
+	mm, _ := m.openBoard()
 	m = mm.(Model)
-	if m.current.ws.ActiveAgent != 2 || m.screen != screenAgent || m.boardOpen {
-		t.Fatalf("digit jump: active=%d screen=%v open=%v", m.current.ws.ActiveAgent, m.screen, m.boardOpen)
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	m = mm.(Model)
+	if !m.boardOpen || m.boardInput.Value() != "q" {
+		t.Fatalf("q should type, not close: open=%v query=%q", m.boardOpen, m.boardInput.Value())
 	}
 
-	// A digit past the pool size is ignored (board stays open).
-	mm, _ = m.openBoard()
+	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = mm.(Model)
-	mm, _ = m.handleBoard(tea.KeyPressMsg{Code: '9', Text: "9"})
+	if m.boardOpen || m.boardInput.Value() != "" || m.boardInput.Focused() {
+		t.Fatalf("esc should close and reset the query: open=%v query=%q", m.boardOpen, m.boardInput.Value())
+	}
+}
+
+func TestBoardFinderListsIdleWorktreesAfterAgents(t *testing.T) {
+	m := modelWithAgents(1)
+	m.current.ws.Agents[0].Title = "w-helper"
+	m.active = []activeItem{
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "w", Path: "/r/w"}, Live: true}},
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "sch-885", Path: "/r/sch-885"}}},
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "sch-901", Path: "/r/sch-901"}, Live: true}},
+	}
+	mm, _ := m.openBoard()
 	m = mm.(Model)
-	if !m.boardOpen {
-		t.Error("out-of-range digit should be a no-op (board stays open)")
+
+	// An empty query keeps the grouped board: no worktree rows.
+	empty, _ := m.boardView()
+	for _, r := range empty {
+		if r.kind == rowWorktree {
+			t.Fatalf("an empty query should not list idle worktrees, got %+v", r)
+		}
+	}
+
+	// "r/" matches every worktree: the agent first, then the idle worktrees,
+	// and the worktree that has an agent is not listed twice.
+	m.boardInput.SetValue("r/")
+	rows, nav := m.boardView()
+	if len(nav) != 3 || rows[0].kind != rowAgent {
+		t.Fatalf("want the agent then two idle worktrees, got %+v", rows)
+	}
+	idle := map[string]string{}
+	for _, r := range rows[1:] {
+		if r.kind != rowWorktree {
+			t.Fatalf("rows after the agent should be idle worktrees, got %+v", r)
+		}
+		idle[r.key] = r.status
+	}
+	if idle["r/sch-885"] != "closed" || idle["r/sch-901"] != "no agent" {
+		t.Fatalf("want r/sch-885 closed and r/sch-901 open without agents, got %v", idle)
+	}
+	m.width = 100
+	if out := m.renderBoard(30); !strings.Contains(out, "closed") || !strings.Contains(out, "no agent") {
+		t.Fatalf("idle worktrees should render with their tags:\n%s", out)
+	}
+
+	// The row actions ignore worktree rows.
+	m.boardInput.SetValue("885")
+	m.boardCursor = 0
+	mm, _ = m.handleBoard(ctrlKey('d'))
+	m = mm.(Model)
+	if m.mode != modeNormal {
+		t.Fatalf("ctrl+d on a worktree row should do nothing, got mode %v", m.mode)
+	}
+}
+
+func TestBoardActionKeysFollowConfig(t *testing.T) {
+	m := modelWithAgents(1)
+	m.keys.BoardRemove = "ctrl+w"
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+
+	mm, _ = m.handleBoard(ctrlKey('d'))
+	m = mm.(Model)
+	if m.mode == modeConfirmAgentClose {
+		t.Fatal("ctrl+d should no longer remove once board_remove is changed")
+	}
+	mm, _ = m.handleBoard(ctrlKey('w'))
+	m = mm.(Model)
+	if m.mode != modeConfirmAgentClose {
+		t.Fatalf("the configured board_remove key should ask to remove, got mode %v", m.mode)
+	}
+}
+
+func TestBoardPasteGoesToQuery(t *testing.T) {
+	m := modelWithAgents(1)
+	m.filter.Focus() // the deck filter stays focused across screens
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+
+	mm, _ = m.handlePaste(tea.PasteMsg{Content: "885"})
+	m = mm.(Model)
+	if m.boardInput.Value() != "885" || m.filter.Value() != "" {
+		t.Fatalf("paste should land only in the board query: query=%q filter=%q", m.boardInput.Value(), m.filter.Value())
 	}
 }
 
@@ -691,7 +822,7 @@ func TestBoardOpensFromPicker(t *testing.T) {
 	}
 	// With no open workspaces the board still offers the "+ new agent" row.
 	rows, nav := m.buildBoard()
-	if len(nav) != 1 || !rows[nav[0]].isNew {
+	if len(nav) != 1 || rows[nav[0]].kind != rowNew {
 		t.Fatalf("empty board should hold only the new-agent row, got rows=%d nav=%d", len(rows), len(nav))
 	}
 	// An unrelated control key is swallowed while the board is open. The
@@ -989,7 +1120,7 @@ func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w", path: dir, ws: ws}
 	m.boardOpen = true
 	m.boardCursor = 1
-	mm, _ := m.handleBoard(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	mm, _ := m.handleBoard(ctrlKey('r'))
 	m = mm.(Model)
 	if ws.Agents[1] == old {
 		t.Fatal("restart did not replace the selected session")
@@ -2246,7 +2377,7 @@ func TestBoardSortsAttentionFirst(t *testing.T) {
 	m.attention[pid] = attnEntry{level: attnDone, key: "repo/a"}
 
 	rows, nav := m.buildBoard()
-	if len(rows) == 0 || rows[0].isAgent || rows[0].key != "repo/a" {
+	if len(rows) == 0 || rows[0].kind == rowAgent || rows[0].key != "repo/a" {
 		t.Fatalf("worktree with attention should sort first, got %+v", rows[0])
 	}
 	// nav: repo/a's agent, repo/b's agent, new row.
@@ -3783,5 +3914,39 @@ func TestCreatedWithFileWarningStillOpens(t *testing.T) {
 	}
 	if m.status != "worktree files: .env: permission denied" || m.statusLevel != statusError {
 		t.Errorf("warning not shown as an error, status = %q", m.status)
+	}
+}
+
+func TestClaudeRenameShowsAndIsSavedOnce(t *testing.T) {
+	m, _, _ := sidePanelModel(t, 120)
+	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
+	a := m.current.ws.Agents[0]
+	pid := a.Pid()
+
+	if cmd := m.syncAgentNames(map[int]AgentStatus{pid: {Status: "idle"}}); cmd != nil || a.Title == "" {
+		t.Fatalf("an empty name should keep ct's label %q and save nothing", a.Title)
+	}
+
+	mm, _ := m.update(statusMsg{byPid: map[int]AgentStatus{pid: {Status: "idle", Name: "Mewtwo"}}})
+	m = mm.(Model)
+	if a.Title != "Mewtwo" {
+		t.Fatalf("the agent should take Claude's name, got %q", a.Title)
+	}
+	saved, _ := m.state.Agents(m.current.key)
+	if len(saved) != 1 || saved[0].Label != "Mewtwo" {
+		t.Fatalf("the new name should be saved as the label, got %+v", saved)
+	}
+	if cmd := m.syncAgentNames(map[int]AgentStatus{pid: {Status: "idle", Name: "Mewtwo"}}); cmd != nil {
+		t.Fatal("an unchanged name should not write state again")
+	}
+
+	mm, _ = m.openBoard()
+	m = mm.(Model)
+	for _, r := range "mew" {
+		mm, _ = m.handleBoard(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = mm.(Model)
+	}
+	if rows, nav := m.boardView(); len(nav) != 1 || rows[nav[0]].label != "Mewtwo" {
+		t.Fatalf("the finder should match the new name, got %+v", rows)
 	}
 }
