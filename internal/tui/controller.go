@@ -779,13 +779,15 @@ type AgentStatus struct {
 	Status     string // "busy", "idle", or "waiting"
 	WaitingFor string // when waiting: "permission prompt" / "input needed"
 	Cwd        string
-	StartedAt  int64 // unix milliseconds
+	StartedAt  int64  // unix milliseconds
+	Name       string // the session's name in Claude: the -n label, or a later /rename
 }
 
 // rawAgent mirrors one entry of `claude agents --json`.
 type rawAgent struct {
 	Pid        int    `json:"pid"`
 	Cwd        string `json:"cwd"`
+	Name       string `json:"name"`
 	Status     string `json:"status"`
 	WaitingFor string `json:"waitingFor"`
 	StartedAt  int64  `json:"startedAt"`
@@ -803,7 +805,7 @@ func parseAgentStatuses(data []byte) (map[int]AgentStatus, error) {
 		if r.Pid == 0 {
 			continue
 		}
-		out[r.Pid] = AgentStatus{Provider: agent.Claude, Status: r.Status, WaitingFor: r.WaitingFor, Cwd: r.Cwd, StartedAt: r.StartedAt}
+		out[r.Pid] = AgentStatus{Provider: agent.Claude, Status: r.Status, WaitingFor: r.WaitingFor, Cwd: r.Cwd, StartedAt: r.StartedAt, Name: r.Name}
 	}
 	return out, nil
 }

@@ -432,6 +432,8 @@ requirements matters.
 Agent state records the provider, conversation ID, display label, pool order, and focused agent in
 `$XDG_STATE_HOME/ct/state.json` (default `~/.local/state/ct/state.json`). Older state without a
 provider is migrated to Claude. On the next activation, ct resumes conversations with stored IDs.
+A Claude agent shows its session name from Claude, so a `/rename` there shows on the board and in
+search within one status poll and is saved as the label.
 Restart is transactional: ct starts the replacement before swapping it into the same pool position,
 so a bad command leaves the current process running.
 

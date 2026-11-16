@@ -1804,10 +1804,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.agentStatus = nextStatus
 		}
+		rename := m.syncAgentNames(msg.byPid)
 		// Fresh statuses may have freed an agent for its next queued message.
 		// deliverQueued pops the queue, so it runs before m is returned.
 		deliver := m.deliverQueued()
-		return m, tea.Batch(m.scheduleStatusTick(), flashTick, deliver)
+		return m, tea.Batch(m.scheduleStatusTick(), flashTick, deliver, rename)
 
 	case usageTickMsg:
 		if !m.usageEnabled() {
@@ -3472,6 +3473,42 @@ func (m *Model) persistAgents(key string) {
 		})
 	}
 	m.state.SetAgents(key, agents, ws.ActiveAgent)
+}
+
+// syncAgentNames gives each hosted Claude agent the name Claude polls for it,
+// so a /rename in the agent shows in ct and is saved as its label. It returns
+// the state write when a name changed, else nil.
+func (m *Model) syncAgentNames(byPid map[int]AgentStatus) tea.Cmd {
+	var changed []string
+	for _, key := range m.mgr.Keys() {
+		ws, ok := m.mgr.Workspace(key)
+		if !ok {
+			continue
+		}
+		renamed := false
+		for _, s := range ws.Agents {
+			if normalizedProvider(s.Provider) != agent.Claude {
+				continue
+			}
+			st, ok := byPid[s.Pid()]
+			if !ok || st.Name == "" || st.Name == s.Title {
+				continue
+			}
+			s.Title = st.Name
+			renamed = true
+		}
+		if renamed {
+			changed = append(changed, key)
+		}
+	}
+	if len(changed) == 0 || m.state == nil {
+		return nil
+	}
+
+	for _, key := range changed {
+		m.persistAgents(key)
+	}
+	return m.writeStateCmd()
 }
 
 // saveAgents snapshots the agent pool for key and returns a command that

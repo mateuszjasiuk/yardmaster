@@ -3916,3 +3916,37 @@ func TestCreatedWithFileWarningStillOpens(t *testing.T) {
 		t.Errorf("warning not shown as an error, status = %q", m.status)
 	}
 }
+
+func TestClaudeRenameShowsAndIsSavedOnce(t *testing.T) {
+	m, _, _ := sidePanelModel(t, 120)
+	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
+	a := m.current.ws.Agents[0]
+	pid := a.Pid()
+
+	if cmd := m.syncAgentNames(map[int]AgentStatus{pid: {Status: "idle"}}); cmd != nil || a.Title == "" {
+		t.Fatalf("an empty name should keep ct's label %q and save nothing", a.Title)
+	}
+
+	mm, _ := m.update(statusMsg{byPid: map[int]AgentStatus{pid: {Status: "idle", Name: "Mewtwo"}}})
+	m = mm.(Model)
+	if a.Title != "Mewtwo" {
+		t.Fatalf("the agent should take Claude's name, got %q", a.Title)
+	}
+	saved, _ := m.state.Agents(m.current.key)
+	if len(saved) != 1 || saved[0].Label != "Mewtwo" {
+		t.Fatalf("the new name should be saved as the label, got %+v", saved)
+	}
+	if cmd := m.syncAgentNames(map[int]AgentStatus{pid: {Status: "idle", Name: "Mewtwo"}}); cmd != nil {
+		t.Fatal("an unchanged name should not write state again")
+	}
+
+	mm, _ = m.openBoard()
+	m = mm.(Model)
+	for _, r := range "mew" {
+		mm, _ = m.handleBoard(tea.KeyPressMsg{Code: r, Text: string(r)})
+		m = mm.(Model)
+	}
+	if rows, nav := m.boardView(); len(nav) != 1 || rows[nav[0]].label != "Mewtwo" {
+		t.Fatalf("the finder should match the new name, got %+v", rows)
+	}
+}
