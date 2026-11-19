@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/ghstack"
+	"github.com/mateuszjasiuk/yardmaster/internal/ghstack"
 )
 
 // ghStackIcon marks a gh stack in the bar's agent strip and on the deck.

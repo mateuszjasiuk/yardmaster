@@ -1,4 +1,4 @@
-module github.com/KCaverly/caretaker
+module github.com/mateuszjasiuk/yardmaster
 
 go 1.25.0
 

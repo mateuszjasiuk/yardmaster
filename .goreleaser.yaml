@@ -1,11 +1,11 @@
 version: 2
 
-project_name: ct
+project_name: ym
 
 builds:
-  - id: ct
-    main: ./cmd/ct
-    binary: ct
+  - id: ym
+    main: ./cmd/ym
+    binary: ym
     env:
       - CGO_ENABLED=0
     goos:
@@ -20,10 +20,10 @@ builds:
       - -X main.date={{ .Date }}
 
 archives:
-  - id: ct
-    ids: [ct]
+  - id: ym
+    ids: [ym]
     formats: [tar.gz]
-    name_template: "ct_{{ title .Os }}_{{ if eq .Arch \"amd64\" }}x86_64{{ else }}{{ .Arch }}{{ end }}"
+    name_template: "ym_{{ title .Os }}_{{ if eq .Arch \"amd64\" }}x86_64{{ else }}{{ .Arch }}{{ end }}"
     files:
       - LICENSE
       - README.md
@@ -33,18 +33,18 @@ checksum:
   algorithm: sha256
 
 homebrew_casks:
-  - name: ct
-    ids: [ct]
-    binaries: [ct]
-    homepage: https://github.com/KCaverly/caretaker
+  - name: ym
+    ids: [ym]
+    binaries: [ym]
+    homepage: https://github.com/mateuszjasiuk/yardmaster
     description: Terminal deck for managing git worktrees and coding agents
     skip_upload: '{{ if eq .Env.HOMEBREW_TAP_TOKEN "" }}true{{ else }}false{{ end }}'
     repository:
-      owner: KCaverly
+      owner: mateuszjasiuk
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     commit_author:
-      name: caretaker-release
+      name: yardmaster-release
       email: 41898282+github-actions[bot]@users.noreply.github.com
 
 changelog:
@@ -54,4 +54,4 @@ changelog:
 release:
   draft: true
   prerelease: auto
-  name_template: "ct {{ .Tag }}"
+  name_template: "ym {{ .Tag }}"

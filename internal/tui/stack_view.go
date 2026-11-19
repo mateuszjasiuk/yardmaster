@@ -11,16 +11,16 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/diffpager"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/diffpager"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
 )
 
 // stackFreshFor bounds how long a cached stack status steers the deck before a
 // passive refresh re-fetches it. The deck's `r` ignores this window.
 const stackFreshFor = 5 * time.Minute
 
-// stackEntry is one worktree's cached `ct stack status`, keyed by wsKey. loading
+// stackEntry is one worktree's cached `ym stack status`, keyed by wsKey. loading
 // marks a fetch in flight (so the render path never draws a half-state and the
 // kick logic never double-issues); err records a failed fetch so the deck simply
 // shows nothing rather than a wrong glyph.
@@ -240,7 +240,7 @@ type stackCommitDiffMsg struct {
 	untrackedExtra int
 
 	// chunks is the external formatter's rendering of body, when one is
-	// configured and succeeded; nil means render body with ct's built-in
+	// configured and succeeded; nil means render body with ym's built-in
 	// styling. There is one field because there is one body: the uncommitted
 	// row concatenates the tracked patch and the untracked files' contents
 	// before formatting, so the formatter sees — and chunks describe — exactly

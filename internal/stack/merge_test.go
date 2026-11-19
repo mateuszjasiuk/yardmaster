@@ -95,7 +95,7 @@ func TestMergeabilityPending(t *testing.T) {
 		{"failing checks are a real refusal", base("UNKNOWN", Checks{Summary: "failing"}, "", "main"), false},
 		{"pending checks are a real refusal", base("UNKNOWN", Checks{Summary: "pending"}, "", "main"), false},
 		{"review outstanding is a real refusal", base("UNKNOWN", passing, "REVIEW_REQUIRED", "main"), false},
-		{"wrong base is a real refusal", base("UNKNOWN", passing, "", "ct/wt/aaaaaaaa"), false},
+		{"wrong base is a real refusal", base("UNKNOWN", passing, "", "ym/wt/aaaaaaaa"), false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

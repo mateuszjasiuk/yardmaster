@@ -1,10 +1,10 @@
 # Binaries
-/ct
+/ym
 /dist/
 *.exe
 
 # Test & coverage output
 *.out
 
-# Worktrees created by ct (default worktree_path)
+# Worktrees created by ym (default worktree_path)
 /.worktrees/

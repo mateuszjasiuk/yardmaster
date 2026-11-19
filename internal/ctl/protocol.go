@@ -1,10 +1,10 @@
-// Package ctl is the control channel between a running ct and programs that
-// want to act on it: the `ct ctl` command, and through it the agents ct
-// started. The TUI serves one Unix socket per ct process; a client sends one
+// Package ctl is the control channel between a running ym and programs that
+// want to act on it: the `ym ctl` command, and through it the agents ym
+// started. The TUI serves one Unix socket per ym process; a client sends one
 // JSON request per connection and reads one JSON response.
 package ctl
 
-// Op names a request. Each maps to one `ct ctl` subcommand.
+// Op names a request. Each maps to one `ym ctl` subcommand.
 type Op string
 
 const (
@@ -24,8 +24,8 @@ const (
 	OpFeatureDrop Op = "feature-drop"
 )
 
-// Request is one command for the running ct. Worktree is the "repo/name" key
-// ct uses everywhere; Repo and Name are only for spawn, which creates the
+// Request is one command for the running ym. Worktree is the "repo/name" key
+// ym uses everywhere; Repo and Name are only for spawn, which creates the
 // worktree the key would point at.
 type Request struct {
 	Op Op `json:"op"`
@@ -78,7 +78,7 @@ type WorktreeInfo struct {
 	Feature string `json:"feature,omitempty"`
 	Manager bool   `json:"manager,omitempty"`
 
-	// Open reports that ct hosts sessions for this worktree right now.
+	// Open reports that ym hosts sessions for this worktree right now.
 	Open   bool        `json:"open"`
 	Agents []AgentInfo `json:"agents,omitempty"`
 	// Queued counts messages waiting for the active agent to go idle.
@@ -121,7 +121,7 @@ type AgentInfo struct {
 	Label     string `json:"label"`
 	SessionID string `json:"session_id,omitempty"`
 	Pid       int    `json:"pid,omitempty"`
-	// Status is "busy", "idle", "waiting", or "" when ct has no reading yet.
+	// Status is "busy", "idle", "waiting", or "" when ym has no reading yet.
 	Status     string `json:"status,omitempty"`
 	WaitingFor string `json:"waiting_for,omitempty"`
 	Active     bool   `json:"active"`

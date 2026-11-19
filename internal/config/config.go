@@ -1,4 +1,4 @@
-// Package config loads ct's configuration.
+// Package config loads ym's configuration.
 package config
 
 import (
@@ -10,11 +10,11 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/plasma"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/plasma"
 )
 
-// Config holds ct's runtime configuration.
+// Config holds ym's runtime configuration.
 type Config struct {
 	// Root is the parent directory that contains the user's repos. Required
 	// unless Roots is set; first-run setup writes this one.
@@ -39,16 +39,16 @@ type Config struct {
 	// BranchName is the branch-name template for new worktrees. Supports {name}.
 	BranchName string `toml:"branch_name"`
 	// RestoreSessions reopens, at startup, the workspaces that were open when
-	// ct last quit. They start in the background; the deck is shown as usual.
+	// ym last quit. They start in the background; the deck is shown as usual.
 	RestoreSessions bool `toml:"restore_sessions"`
 	// FocusCommand runs, in the background, whenever a session's folder gains
-	// focus: on switching to it, or when ct's window gets focus back. The
+	// focus: on switching to it, or when ym's window gets focus back. The
 	// folder is added as the last argument. Empty means off.
 	FocusCommand string `toml:"focus_command"`
 	// WorktreeFiles are the files copied or linked from a repo's main checkout
 	// into every new worktree. Repos can replace these lists under Repos.
 	WorktreeFiles WorktreeFiles `toml:"worktree_files"`
-	// Repos holds per-repo settings, keyed by the repo name ct shows ("api",
+	// Repos holds per-repo settings, keyed by the repo name ym shows ("api",
 	// or "work/api" when two roots hold a repo with the same name).
 	Repos map[string]RepoConfig `toml:"repos"`
 	// Keys configures the reserved navigation keystrokes.
@@ -114,7 +114,7 @@ var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // Stack configures stacked-PR workflow behavior.
 type Stack struct {
-	// AutoMerge bypasses ct's merge confirmation panel. This is distinct from
+	// AutoMerge bypasses ym's merge confirmation panel. This is distinct from
 	// GitHub auto-merge: an eligible merge runs immediately when requested.
 	AutoMerge bool `toml:"auto_merge"`
 }
@@ -142,7 +142,7 @@ type RepoConfig struct {
 // Diff configures the diff viewer's git invocations and optional external
 // formatter.
 type Diff struct {
-	// Args are extra flags inserted directly after ct's own pinned
+	// Args are extra flags inserted directly after ym's own pinned
 	// `--no-ext-diff --no-color` on every patch- and numstat-producing git
 	// call the diff viewers make, so a later flag wins: `--color=always` here
 	// is how a user feeds a formatter that expects coloured input. Other
@@ -160,12 +160,12 @@ type Diff struct {
 }
 
 // DiffPager names an external program the diff viewer pipes a file's patch
-// through in place of ct's built-in prefix styling.
+// through in place of ym's built-in prefix styling.
 type DiffPager struct {
-	// Command is the program to run. Empty (the default) keeps ct's own
+	// Command is the program to run. Empty (the default) keeps ym's own
 	// built-in styling. When set, each file's patch is piped through Command
-	// and its output rendered verbatim, ANSI preserved, inside ct's viewer —
-	// ct still owns scrolling and keys, so the program must not page itself:
+	// and its output rendered verbatim, ANSI preserved, inside ym's viewer —
+	// ym still owns scrolling and keys, so the program must not page itself:
 	// `delta --paging=never`, `diff-so-fancy`, `bat --color=always
 	// --language=diff`.
 	Command string `toml:"command"`
@@ -227,7 +227,7 @@ type Usage struct {
 	Threshold int `toml:"threshold"`
 }
 
-// Keys are the reserved keystrokes ct handles instead of forwarding to an
+// Keys are the reserved keystrokes ym handles instead of forwarding to an
 // embedded session.
 type Keys struct {
 	// Cycle moves one session view to the right (nvim → claude → term → nvim).
@@ -238,7 +238,7 @@ type Keys struct {
 	GotoEditor string `toml:"goto_editor"`
 	GotoAgent  string `toml:"goto_agent"`
 	GotoTerm   string `toml:"goto_term"`
-	// Picker returns to the CT picker.
+	// Picker returns to the YM picker.
 	Picker string `toml:"picker"`
 	// Palette opens the agent board: a search over every agent across all open
 	// worktrees, attention first, plus the new-agent launcher. Legacy-named: the
@@ -302,7 +302,7 @@ type Keys struct {
 	// Usage opens the usage overlay on the agent screen.
 	Usage string `toml:"usage"`
 	// CommandPalette opens the command palette: a fuzzy-searchable list of every
-	// ct action, each row showing its live keybinding. It teaches the chords the
+	// ym action, each row showing its live keybinding. It teaches the chords the
 	// help overlay documents by letting the user run any action without them.
 	// Distinct from Palette, which is the (legacy-named) agent board.
 	CommandPalette string `toml:"command_palette"`
@@ -355,17 +355,17 @@ func Default() Config {
 	}
 }
 
-// Path returns the config file path. Checks CT_CONFIG env var first, then
-// defaults to ~/.caretaker/config.toml.
+// Path returns the config file path. Checks YM_CONFIG env var first, then
+// defaults to ~/.yardmaster/config.toml.
 func Path() (string, error) {
-	if p := os.Getenv("CT_CONFIG"); p != "" {
+	if p := os.Getenv("YM_CONFIG"); p != "" {
 		return p, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".caretaker", "config.toml"), nil
+	return filepath.Join(home, ".yardmaster", "config.toml"), nil
 }
 
 // ErrNoConfig is returned by Load when the config file does not exist.
@@ -583,7 +583,7 @@ func (c *Config) validate() error {
 		if arg == "" {
 			return fmt.Errorf("config `diff.args` entries must not be empty")
 		}
-		// ct appends the revision range (e.g. main...HEAD) after these flags.
+		// ym appends the revision range (e.g. main...HEAD) after these flags.
 		// A bare -- terminates option parsing, so git would read the range as
 		// a path and report a nonexistent file rather than diffing anything.
 		if arg == "--" {

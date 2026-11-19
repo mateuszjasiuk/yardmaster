@@ -9,18 +9,18 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 func sampleModel() Model {
 	groups := []Group{
-		{Repo: repo.Repo{Name: "caretaker"}, Worktrees: []WorktreeView{
-			{WT: repo.Worktree{Repo: "caretaker", Name: "(main)", Branch: "main", IsMain: true}},
-			{WT: repo.Worktree{Repo: "caretaker", Name: "feat-login", Branch: "feat-login"}, Live: true, Dirty: true},
-			{WT: repo.Worktree{Repo: "caretaker", Name: "bugfix", Branch: "bugfix"}, Live: false},
+		{Repo: repo.Repo{Name: "yardmaster"}, Worktrees: []WorktreeView{
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "(main)", Branch: "main", IsMain: true}},
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "feat-login", Branch: "feat-login"}, Live: true, Dirty: true},
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "bugfix", Branch: "bugfix"}, Live: false},
 		}},
 		{Repo: repo.Repo{Name: "api"}, Worktrees: []WorktreeView{
 			{WT: repo.Worktree{Repo: "api", Name: "(main)", Branch: "main", IsMain: true}},
@@ -54,7 +54,7 @@ func renderAllHelp(m Model) string {
 func TestRenderLayout(t *testing.T) {
 	m := sampleModel()
 	out := m.renderDeck(m.height - m.barHeight())
-	for _, want := range []string{"NEW", "ACTIVE", "caretaker", "feat-login", "bugfix", "spike"} {
+	for _, want := range []string{"NEW", "ACTIVE", "yardmaster", "feat-login", "bugfix", "spike"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("render missing %q", want)
 		}
@@ -281,7 +281,7 @@ func TestActiveDisplayDetailLine(t *testing.T) {
 	m.focus = focusNew
 	_, rowItem := m.activeDisplay(innerW)
 	base := len(rowItem)
-	// rowItem = [-1 caretaker, 0 (main), 1 feat-login, 2 bugfix, -1 api, 3 (main), 4 spike].
+	// rowItem = [-1 yardmaster, 0 (main), 1 feat-login, 2 bugfix, -1 api, 3 (main), 4 spike].
 	if base != 7 {
 		t.Fatalf("unfocused display should have 7 lines, got %d", base)
 	}

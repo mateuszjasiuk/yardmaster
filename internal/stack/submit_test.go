@@ -28,7 +28,7 @@ func prFull(num int, state, head, base, title, body string) prRecord {
 
 func TestPlanSubmitGuards(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 
 	cases := []struct {
 		name    string
@@ -113,7 +113,7 @@ func TestPlanSubmitFreshStack(t *testing.T) {
 	if plan.Creates[0].Base != main {
 		t.Errorf("bottom PR base = %q, want %q", plan.Creates[0].Base, main)
 	}
-	if plan.Creates[1].Base != "ct/wt/(new)" {
+	if plan.Creates[1].Base != "ym/wt/(new)" {
 		t.Errorf("second PR base = %q, want the previous (new) branch", plan.Creates[1].Base)
 	}
 	if len(plan.Retargets)+len(plan.Retitles)+len(plan.Bodies) != 0 {
@@ -130,7 +130,7 @@ func TestPlanSubmitRewriteForcesUpperPush(t *testing.T) {
 		commit("bbbbbbb2222", "bbbbbbbb", "top"),
 	}
 	remotes := map[string]string{"bbbbbbbb": "bbbbbbb2222"}
-	prs := []prRecord{prFull(9, "OPEN", "ct/wt/bbbbbbbb", main, "top", "")}
+	prs := []prRecord{prFull(9, "OPEN", "ym/wt/bbbbbbbb", main, "top", "")}
 	st := statusFrom(wt, main, commits, remotes, prs)
 
 	plan, err := planSubmit(st, prs)
@@ -139,12 +139,12 @@ func TestPlanSubmitRewriteForcesUpperPush(t *testing.T) {
 	}
 	var forced *PushAction
 	for i := range plan.Pushes {
-		if plan.Pushes[i].Branch == "ct/wt/bbbbbbbb" {
+		if plan.Pushes[i].Branch == "ym/wt/bbbbbbbb" {
 			forced = &plan.Pushes[i]
 		}
 	}
 	if forced == nil {
-		t.Fatalf("expected a push for ct/wt/bbbbbbbb, pushes=%+v", plan.Pushes)
+		t.Fatalf("expected a push for ym/wt/bbbbbbbb, pushes=%+v", plan.Pushes)
 	}
 	if forced.Create {
 		t.Errorf("rewritten open branch should force-update, not create: %+v", forced)
@@ -156,13 +156,13 @@ func TestPlanSubmitRewriteForcesUpperPush(t *testing.T) {
 
 func TestPlanSubmitRetargetRetitleBody(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
 		commit("bbbbbbb2222", "bbbbbbbb", "new subject"),
 	}
 	remotes := map[string]string{"aaaaaaaa": "aaaaaaa1111", "bbbbbbbb": "bbbbbbb2222"}
-	// PR1 correct. PR2 bases on main (wrong: should be ct/wt/aaaaaaaa), has a
+	// PR1 correct. PR2 bases on main (wrong: should be ym/wt/aaaaaaaa), has a
 	// stale title, and an empty body (missing nav).
 	region1 := renderNavRegion(navNums(1, 2), 0)
 	prs := []prRecord{
@@ -198,7 +198,7 @@ func TestPlanSubmitRetargetRetitleBody(t *testing.T) {
 // spliced) produces an empty plan.
 func TestPlanSubmitIdempotentNoop(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
 		commit("bbbbbbb2222", "bbbbbbbb", "two"),
@@ -260,8 +260,8 @@ func TestComputePushes(t *testing.T) {
 	remotes := map[string]string{"bbbbbbbb": "sha_b_old", "cccccccc": "sha_c_new"}
 	got := computePushes(commits, remotes, "wt")
 	want := []pushCmd{
-		{Branch: "ct/wt/aaaaaaaa", SHA: "sha_a_new", Create: true},
-		{Branch: "ct/wt/bbbbbbbb", SHA: "sha_b_new", Expected: "sha_b_old"},
+		{Branch: "ym/wt/aaaaaaaa", SHA: "sha_a_new", Create: true},
+		{Branch: "ym/wt/bbbbbbbb", SHA: "sha_b_new", Expected: "sha_b_old"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("computePushes = %+v, want %+v", got, want)
@@ -269,18 +269,18 @@ func TestComputePushes(t *testing.T) {
 }
 
 func TestPushArgs(t *testing.T) {
-	create := pushArgs("ct/wt/aaaaaaaa", "deadbeef", "", true)
+	create := pushArgs("ym/wt/aaaaaaaa", "deadbeef", "", true)
 	wantCreate := []string{
-		"push", "--force-with-lease=refs/heads/ct/wt/aaaaaaaa:",
-		"origin", "deadbeef:refs/heads/ct/wt/aaaaaaaa",
+		"push", "--force-with-lease=refs/heads/ym/wt/aaaaaaaa:",
+		"origin", "deadbeef:refs/heads/ym/wt/aaaaaaaa",
 	}
 	if !reflect.DeepEqual(create, wantCreate) {
 		t.Errorf("create pushArgs = %v, want %v", create, wantCreate)
 	}
-	force := pushArgs("ct/wt/aaaaaaaa", "newsha", "oldsha", false)
+	force := pushArgs("ym/wt/aaaaaaaa", "newsha", "oldsha", false)
 	wantForce := []string{
-		"push", "--force-with-lease=refs/heads/ct/wt/aaaaaaaa:oldsha",
-		"origin", "newsha:refs/heads/ct/wt/aaaaaaaa",
+		"push", "--force-with-lease=refs/heads/ym/wt/aaaaaaaa:oldsha",
+		"origin", "newsha:refs/heads/ym/wt/aaaaaaaa",
 	}
 	if !reflect.DeepEqual(force, wantForce) {
 		t.Errorf("force pushArgs = %v, want %v", force, wantForce)
@@ -290,15 +290,15 @@ func TestPushArgs(t *testing.T) {
 // TestGHMutatingArgs asserts the exact argv the mutating gh wrappers would run —
 // the contract's stand-in for actually invoking gh (which tests never do).
 func TestGHMutatingArgs(t *testing.T) {
-	if got := ghCreateArgs("ct/wt/aaaaaaaa", "main", "My Title", "the body", false); !reflect.DeepEqual(got,
-		[]string{"pr", "create", "--head", "ct/wt/aaaaaaaa", "--base", "main", "--title", "My Title", "--body", "the body"}) {
+	if got := ghCreateArgs("ym/wt/aaaaaaaa", "main", "My Title", "the body", false); !reflect.DeepEqual(got,
+		[]string{"pr", "create", "--head", "ym/wt/aaaaaaaa", "--base", "main", "--title", "My Title", "--body", "the body"}) {
 		t.Errorf("ghCreateArgs = %v", got)
 	}
 	if got := ghCreateArgs("h", "b", "t", "body", true); got[len(got)-1] != "--draft" {
 		t.Errorf("draft create should end with --draft, got %v", got)
 	}
-	if got := ghEditBaseArgs(42, "ct/wt/aaaaaaaa"); !reflect.DeepEqual(got,
-		[]string{"pr", "edit", "42", "--base", "ct/wt/aaaaaaaa"}) {
+	if got := ghEditBaseArgs(42, "ym/wt/aaaaaaaa"); !reflect.DeepEqual(got,
+		[]string{"pr", "edit", "42", "--base", "ym/wt/aaaaaaaa"}) {
 		t.Errorf("ghEditBaseArgs = %v", got)
 	}
 	if got := ghEditTitleArgs(42, "New Title"); !reflect.DeepEqual(got,

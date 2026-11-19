@@ -8,10 +8,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/ghstack"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ghstack"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 // stripModel returns a model w columns wide with the agent strip on and one

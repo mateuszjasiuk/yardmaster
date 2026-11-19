@@ -10,16 +10,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 func TestClaudeProjectName(t *testing.T) {
-	got := claudeProjectName("/Users/me/Projects/caretaker/.worktrees/orchestrator")
-	want := "-Users-me-Projects-caretaker--worktrees-orchestrator"
+	got := claudeProjectName("/Users/me/Projects/yardmaster/.worktrees/orchestrator")
+	want := "-Users-me-Projects-yardmaster--worktrees-orchestrator"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -158,7 +158,7 @@ func TestCtlRemoveParksUntilDeckIdle(t *testing.T) {
 	if it, ok := m.selectedActive(); !ok || it.view.WT.Name != "b" {
 		t.Fatalf("confirm targets %+v", it)
 	}
-	if !strings.Contains(strings.Join(m.confirm.context, "\n"), "requested through ct ctl") {
+	if !strings.Contains(strings.Join(m.confirm.context, "\n"), "requested through ym ctl") {
 		t.Fatalf("context %v", m.confirm.context)
 	}
 }

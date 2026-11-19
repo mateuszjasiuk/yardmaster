@@ -1,4 +1,4 @@
-// Package tui contains the Bubble Tea deck that powers the ct command.
+// Package tui contains the Bubble Tea deck that powers the ym command.
 package tui
 
 import (
@@ -24,17 +24,17 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/sahilm/fuzzy"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/diffpager"
-	"github.com/KCaverly/caretaker/internal/ghstack"
-	"github.com/KCaverly/caretaker/internal/plasma"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/stack"
-	"github.com/KCaverly/caretaker/internal/state"
-	"github.com/KCaverly/caretaker/internal/usage"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/diffpager"
+	"github.com/mateuszjasiuk/yardmaster/internal/ghstack"
+	"github.com/mateuszjasiuk/yardmaster/internal/plasma"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/state"
+	"github.com/mateuszjasiuk/yardmaster/internal/usage"
 )
 
 // barHeight is the number of rows the top chrome occupies: the status bar, a
@@ -136,7 +136,7 @@ type confirmOption struct {
 // keys; this only holds the panel's content, so it replaces the old
 // status-line sentence entirely. cursor starts on the SAFE option.
 type confirmState struct {
-	title       string            // "REMOVE WORKTREE", "QUIT CT", "STOP WORKSPACE"
+	title       string            // "REMOVE WORKTREE", "QUIT YM", "STOP WORKSPACE"
 	context     []string          // pre-styled context lines drawn above the options
 	options     []confirmOption   // vertical, arrow-selectable
 	cursor      int               // index into options; starts on the safe row
@@ -308,7 +308,7 @@ func (d diffState) active() scopeContent {
 	return d.full
 }
 
-// Model is the ct UI: a pinned status bar plus the active screen (picker or an
+// Model is the ym UI: a pinned status bar plus the active screen (picker or an
 // embedded nvim/claude/terminal session).
 type Model struct {
 	ctrl  *Controller
@@ -386,7 +386,7 @@ type Model struct {
 	boardInput  textinput.Model // the finder query; empty shows the grouped board
 	rootInput   textinput.Model
 
-	// command palette overlay: a fuzzy-searchable list of every ct action, each
+	// command palette overlay: a fuzzy-searchable list of every ym action, each
 	// row showing its live keybinding, built fresh on each keystroke. The cursor
 	// indexes the filtered list; the input holds the fuzzy query.
 	paletteOpen   bool
@@ -400,7 +400,7 @@ type Model struct {
 	diffOpen bool
 	diffView diffState
 
-	// Stacked-PR surfacing. stackInfo caches each active worktree's `ct stack
+	// Stacked-PR surfacing. stackInfo caches each active worktree's `ym stack
 	// status` (keyed by wsKey) so the deck can draw a passive glyph/detail without
 	// ever running a subprocess on the render path; the stackFetch/Submit/Restack
 	// funcs are the pipeline entry points (= stack.Status/Submit/Restack), injected
@@ -419,7 +419,7 @@ type Model struct {
 	termPaneBusy   func(*session.Session) bool
 
 	// Codex exposes its stable conversation history in a transcript overlay.
-	// Caretaker tracks its default Ctrl+T toggle per hosted session so the wheel
+	// Yardmaster tracks its default Ctrl+T toggle per hosted session so the wheel
 	// can drive that overlay without switching Codex into jittery raw mode.
 	codexTranscript map[*session.Session]bool
 
@@ -442,7 +442,7 @@ type Model struct {
 	// attention jump or cross-worktree activation.
 	returnLocation *returnLocation
 
-	// removed tombstones pids of agents ct has deleted, mapping each to the
+	// removed tombstones pids of agents ym has deleted, mapping each to the
 	// StartedAt it carried at removal (0 if never polled). The Claude status
 	// poll is a replace-all snapshot, and `claude agents --json` keeps listing a
 	// killed agent for one or more polls when it was blocked on a permission
@@ -478,7 +478,7 @@ type Model struct {
 	homeWSPath string
 	homeWSKey  string
 
-	// ctlSrv is the control socket `ct ctl` talks to; nil in tests. queueSent
+	// ctlSrv is the control socket `ym ctl` talks to; nil in tests. queueSent
 	// records when each workspace last had a queued message delivered, so the
 	// queue waits for that turn to start before sending the next (see
 	// deliverQueued). ctlRemoveKey parks a remove request from the socket
@@ -524,7 +524,7 @@ type Model struct {
 	// creating holds the worktrees whose `git worktree add` is still running, so
 	// the deck can show a row for work that has been asked for but does not exist
 	// on disk yet. On a large repository the fetch and checkout take long enough
-	// that a deck with no sign of them reads as ct having ignored the request
+	// that a deck with no sign of them reads as ym having ignored the request
 	// (issue #54). creatingTicking mirrors plasmaTicking: the spinner tick
 	// disarms itself when the last creation lands, so no timer runs at rest.
 	creating        []creatingItem
@@ -706,7 +706,7 @@ func (m Model) usageEnabled() bool {
 }
 
 // EnterSetup switches the model into first-run setup mode, prompting the user
-// to choose a repos root before caretaker starts normally.
+// to choose a repos root before yardmaster starts normally.
 func (m Model) EnterSetup(configPath string) Model {
 	m.screen = screenSetup
 	m.configPath = configPath
@@ -777,7 +777,7 @@ type diffMsg struct {
 	err             error
 
 	// The external formatter's rendering of each body, when one is configured
-	// and succeeded. Nil means "render the body with ct's built-in styling",
+	// and succeeded. Nil means "render the body with ym's built-in styling",
 	// which is both the unconfigured case and the fallback after a failure.
 	committedChunks   []diffpager.Chunk
 	uncommittedChunks []diffpager.Chunk
@@ -1099,10 +1099,10 @@ func sessionUsageWindow(snap usage.Snapshot) *usage.Window {
 }
 
 // statusTickInterval picks the agent-poll cadence: 2s while any agent is
-// active (busy/waiting), 5s while ct hosts idle sessions, and 30s when ct hosts
+// active (busy/waiting), 5s while ym hosts idle sessions, and 30s when ym hosts
 // nothing at all — the slow tick only keeps a lazy watch for claude sessions
-// started outside ct in known worktrees, so their deck badges still appear
-// (just up to 30s late) without ct spawning a subprocess every 5s for an empty
+// started outside ym in known worktrees, so their deck badges still appear
+// (just up to 30s late) without ym spawning a subprocess every 5s for an empty
 // deck.
 func (m Model) statusTickInterval() time.Duration {
 	interval := 5 * time.Second
@@ -1415,7 +1415,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recomputeMatches()
 		m.recomputeActive()
 		m.computeRecentRanks()
-		m = m.showCtlRemove() // a parked `ct ctl remove`, once the deck is idle
+		m = m.showCtlRemove() // a parked `ym ctl remove`, once the deck is idle
 		var restore tea.Cmd
 		if firstLoad && m.ctrl.RestoreSessions() {
 			m, restore = m.restoreSessions()
@@ -1556,7 +1556,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case stackCommitDiffMsg:
 		m.applyStackCommitDiff(msg)
-		// Not msg.err: the diff rendered, just with ct's own styling instead of
+		// Not msg.err: the diff rendered, just with ym's own styling instead of
 		// the configured formatter's. One flash per fetch, not per file.
 		if msg.pagerErr != nil {
 			return m, m.flashCmd("diff pager failed: " + msg.pagerErr.Error() + " — using built-in styling")
@@ -1720,7 +1720,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			for pid, st := range msg.byPid {
-				// A tombstoned pid is an agent ct deleted that the daemon still
+				// A tombstoned pid is an agent ym deleted that the daemon still
 				// lists. Drop it from the snapshot entirely so it can neither
 				// re-raise the "waiting" badge nor trigger the bell / done-marker
 				// loops below, which also read msg.byPid.
@@ -3043,7 +3043,7 @@ func (m Model) paletteCommands() []paletteCmd {
 			m.helpOpen = true
 			return m, nil
 		}},
-		paletteCmd{title: "quit ct", hint: "ctrl+c", run: func(m Model) (tea.Model, tea.Cmd) {
+		paletteCmd{title: "quit ym", hint: "ctrl+c", run: func(m Model) (tea.Model, tea.Cmd) {
 			if n := m.busyHostedAgents(""); n > 0 {
 				m.screen = screenPicker
 				m = m.beginQuitConfirm(n)
@@ -3486,7 +3486,7 @@ func (m Model) savedAgents(key string) ([]state.AgentState, int) {
 }
 
 // persistAgents snapshots a live workspace's agent pool (resume ids, labels, and
-// focused index) into ct's state so the next open can rebuild it. The caller is
+// focused index) into ym's state so the next open can rebuild it. The caller is
 // responsible for Save(); this only updates the in-memory state.
 func (m *Model) persistAgents(key string) {
 	if m.state == nil {
@@ -3499,7 +3499,7 @@ func (m *Model) persistAgents(key string) {
 	agents := make([]state.AgentState, 0, len(ws.Agents))
 	for _, s := range ws.Agents {
 		if s.SessionID == "" {
-			continue // not a ct-managed claude session; nothing to resume
+			continue // not a ym-managed claude session; nothing to resume
 		}
 		agents = append(agents, state.AgentState{
 			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title,
@@ -3509,7 +3509,7 @@ func (m *Model) persistAgents(key string) {
 }
 
 // syncAgentNames gives each hosted Claude agent the name Claude polls for it,
-// so a /rename in the agent shows in ct and is saved as its label. It returns
+// so a /rename in the agent shows in ym and is saved as its label. It returns
 // the state write when a name changed, else nil.
 func (m *Model) syncAgentNames(byPid map[int]AgentStatus) tea.Cmd {
 	var changed []string
@@ -3574,7 +3574,7 @@ func (m Model) writeStateCmd() tea.Cmd {
 	}
 }
 
-// FlushState synchronously writes ct's state to disk. main calls it once after
+// FlushState synchronously writes ym's state to disk. main calls it once after
 // the program exits so a pending background write can't be lost.
 func (m Model) FlushState() {
 	if m.state != nil {
@@ -3656,7 +3656,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSetupKey(msg)
 	}
 	// Help is modal and reachable from anywhere (including inside a session). Any
-	// key dismisses it. A key that is one of ct's own reserved action keys does
+	// key dismisses it. A key that is one of ym's own reserved action keys does
 	// double duty: it closes help AND performs its action, so opening help and
 	// pressing e.g. the cycle key both dismisses the overlay and cycles — the
 	// user shouldn't have to press it twice. We achieve that by closing help then
@@ -3878,7 +3878,7 @@ func restoredSessionIndex(sessions []*session.Session, target *session.Session, 
 	return clamp(fallback, 0, max(0, len(sessions)-1))
 }
 
-// isReservedActionKey reports whether s is one of ct's own reserved keys that
+// isReservedActionKey reports whether s is one of ym's own reserved keys that
 // should still fire when it dismisses the help overlay (see handleKey). The
 // globally-reserved keys apply on every screen; keyHelp is intentionally absent
 // (dismissing help already satisfies its toggle, and re-dispatching it would
@@ -3928,7 +3928,7 @@ func (m Model) handleSetupKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.ctrl.SetRoot(abs)
 		m.screen = screenPicker
-		flashTick := m.flashCmd("config saved — welcome to caretaker!")
+		flashTick := m.flashCmd("config saved — welcome to yardmaster!")
 		cmds := []tea.Cmd{m.loadCmd(), m.pollStatusCmd(), flashTick}
 		if m.usageEnabled() {
 			cmds = append(cmds, m.pollUsageCmds(), m.scheduleUsageTick())
@@ -4702,14 +4702,14 @@ func (m Model) beginQuitConfirm(n int) Model {
 	m.mode = modeConfirmQuit
 	m.status = ""
 	m.confirm = confirmState{
-		title: "QUIT CT",
+		title: "QUIT YM",
 		context: []string{
 			dimStyle.Render(fmt.Sprintf("%d busy agent(s) still running", n)),
-			errStyle.Render("! quitting ct will stop all hosted agents and terminals"),
+			errStyle.Render("! quitting ym will stop all hosted agents and terminals"),
 		},
 		options: []confirmOption{
 			{label: "cancel", key: "esc"},
-			{label: "quit ct", key: "y", danger: true},
+			{label: "quit ym", key: "y", danger: true},
 		},
 	}
 	return m
@@ -5300,7 +5300,7 @@ func (m Model) diffOptions() repo.DiffOptions {
 // diffPager translates the user's [diff.pager] config into the formatter the
 // fetch path pipes patch bodies through. A zero value — no command configured —
 // is inert (diffpager.Pager.Enabled reports false), which is the default and
-// leaves ct's built-in styling in charge.
+// leaves ym's built-in styling in charge.
 func (m Model) diffPager() diffpager.Pager {
 	if m.ctrl == nil {
 		return diffpager.Pager{}
@@ -5647,7 +5647,7 @@ func (m Model) openMain(it activeItem) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-// mostRecentWorktree returns the worktree opened most recently in ct (across
+// mostRecentWorktree returns the worktree opened most recently in ym (across
 // all repos), or ok=false if none has ever been opened.
 func (m Model) mostRecentWorktree() (repoName, wtName, path string, ok bool) {
 	if m.state == nil {
@@ -5665,7 +5665,7 @@ func (m Model) mostRecentWorktree() (repoName, wtName, path string, ok bool) {
 	return
 }
 
-// computeRecentRanks finds the three worktrees opened most recently in ct
+// computeRecentRanks finds the three worktrees opened most recently in ym
 // (across all repos) and maps their keys to ranks 1..3 for badge display.
 func (m *Model) computeRecentRanks() {
 	m.recentRank = nil
@@ -5697,7 +5697,7 @@ func (m *Model) computeRecentRanks() {
 	m.recentRank = ranks
 }
 
-// sortByRecency orders a repo's worktrees most-recent-first: by when ct last
+// sortByRecency orders a repo's worktrees most-recent-first: by when ym last
 // opened them, then (for never-opened ones) by HEAD commit time, then by name.
 func (m *Model) sortByRecency(repoName string, views []WorktreeView) {
 	opened := func(name string) int64 {
@@ -5771,10 +5771,10 @@ func (m Model) agentLocation(target *session.Session) (key, path string, ok bool
 }
 
 // busyHostedAgents counts agents polled as busy whose working directory maps to
-// a workspace ct still hosts, optionally filtered to a single workspace key
+// a workspace ym still hosts, optionally filtered to a single workspace key
 // (onlyKey == "" counts across every hosted workspace). It backs the quit and
-// stop guards: only agents ct hosts are killed by CloseAll/Close, so agents
-// running outside ct don't count.
+// stop guards: only agents ym hosts are killed by CloseAll/Close, so agents
+// running outside ym don't count.
 //
 // Note: agentStatus is refreshed on a poll timer and can lag reality by up to
 // one poll interval, so this may briefly miss an agent that just went busy or

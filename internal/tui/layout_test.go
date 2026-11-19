@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 func TestSessionPanesBesideTheSidePanel(t *testing.T) {

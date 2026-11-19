@@ -50,7 +50,7 @@ func itoa(n int) string {
 
 func TestReconcile(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 
 	cases := []struct {
 		name          string
@@ -224,7 +224,7 @@ func TestReconcile(t *testing.T) {
 			remotes: map[string]string{"aaaaaaaa": "aaaaaaa1111", "bbbbbbbb": "bbbbbbb2222"},
 			prs: []prRecord{
 				pr(1, "OPEN", br("aaaaaaaa"), main, "APPROVED", "passing"),
-				pr(2, "OPEN", br("bbbbbbbb"), main, "APPROVED", "passing"), // should base on ct/wt/aaaaaaaa
+				pr(2, "OPEN", br("bbbbbbbb"), main, "APPROVED", "passing"), // should base on ym/wt/aaaaaaaa
 			},
 			wantStates:  []State{StateOpen, StateOpen},
 			wantAction:  "submit", // broken chain routes to submit (restack the bases)
@@ -439,7 +439,7 @@ func TestReconcilePRProjection(t *testing.T) {
 	const wt, main = "wt", "main"
 	commits := []LocalCommit{commit("aaaaaaa1111", "aaaaaaaa", "feat")}
 	remotes := map[string]string{"aaaaaaaa": "aaaaaaa1111"}
-	rec := pr(1, "OPEN", "ct/wt/aaaaaaaa", main, "APPROVED", "passing")
+	rec := pr(1, "OPEN", "ym/wt/aaaaaaaa", main, "APPROVED", "passing")
 	rec.MergedAt = ""
 	_, got := reconcile(wt, main, commits, remotes, []prRecord{rec})
 
@@ -450,8 +450,8 @@ func TestReconcilePRProjection(t *testing.T) {
 	if c.PR.MergedAt != nil {
 		t.Errorf("open PR merged_at should be nil, got %v", *c.PR.MergedAt)
 	}
-	if c.RemoteBranch == nil || *c.RemoteBranch != "ct/wt/aaaaaaaa" {
-		t.Errorf("remote_branch = %v, want ct/wt/aaaaaaaa", c.RemoteBranch)
+	if c.RemoteBranch == nil || *c.RemoteBranch != "ym/wt/aaaaaaaa" {
+		t.Errorf("remote_branch = %v, want ym/wt/aaaaaaaa", c.RemoteBranch)
 	}
 	if !c.RemoteInSync {
 		t.Error("remote_in_sync should be true when tip matches")
@@ -470,7 +470,7 @@ func TestReconcilePRProjection(t *testing.T) {
 func TestCompleteStackOffersArchiveAndReuse(t *testing.T) {
 	commits := []LocalCommit{commit("aaaaaaa1111", "aaaaaaaa", "done")}
 	stk, _ := reconcile("wt", "main", commits, map[string]string{"aaaaaaaa": "aaaaaaa1111"}, []prRecord{
-		pr(1, "MERGED", "ct/wt/aaaaaaaa", "main", "APPROVED", "passing"),
+		pr(1, "MERGED", "ym/wt/aaaaaaaa", "main", "APPROVED", "passing"),
 	})
 	if stk.NextAction != "complete" || !reflect.DeepEqual(stk.Actions, []string{"archive", "reuse"}) {
 		t.Fatalf("complete stack = %+v", stk)
@@ -482,10 +482,10 @@ func TestCompleteStackOffersArchiveAndReuse(t *testing.T) {
 
 // TestMergeHintContents verifies the squash subject/body hint: it targets the
 // bottom open PR, carries the commit subject, and keeps the message body verbatim
-// (ct-stack-id trailer included, unlike a PR body which strips it).
+// (ym-stack-id trailer included, unlike a PR body which strips it).
 func TestMergeHintContents(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
 		commit("bbbbbbb2222", "bbbbbbbb", "add the widget"),
@@ -508,7 +508,7 @@ func TestMergeHintContents(t *testing.T) {
 		t.Fatalf("bottom open commit PR = %+v, want #2", c.PR)
 	}
 
-	body := "why the widget is needed\n\nct-stack-id: bbbbbbbb"
+	body := "why the widget is needed\n\nym-stack-id: bbbbbbbb"
 	hint := makeMergeHint(c, body+"\n")
 	if hint == nil {
 		t.Fatal("makeMergeHint returned nil")

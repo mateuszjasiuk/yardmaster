@@ -13,16 +13,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/stack"
-	"github.com/KCaverly/caretaker/internal/tui"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/tui"
 )
 
 // These values are replaced by the release build. They live in main.go so
-// `go run ./cmd/ct/main.go` remains a complete development entrypoint.
+// `go run ./cmd/ym/main.go` remains a complete development entrypoint.
 var (
 	version = "dev"
 	commit  = "unknown"
@@ -30,7 +30,7 @@ var (
 )
 
 func versionString() string {
-	return fmt.Sprintf("ct %s (commit %s, built %s)", version, commit, date)
+	return fmt.Sprintf("ym %s (commit %s, built %s)", version, commit, date)
 }
 
 func main() {
@@ -43,24 +43,24 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "stack" {
 		os.Exit(runStack(os.Args[2:]))
 	}
-	// `ct ctl` is the client side of the control socket: it talks to a running
-	// ct and never starts one.
+	// `ym ctl` is the client side of the control socket: it talks to a running
+	// ym and never starts one.
 	if len(os.Args) > 1 && os.Args[1] == "ctl" {
 		os.Exit(runCtl(os.Args[2:]))
 	}
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "ct:", err)
+		fmt.Fprintln(os.Stderr, "ym:", err)
 		os.Exit(1)
 	}
 }
 
-// runStack dispatches the `ct stack …` subcommands and returns a process exit
+// runStack dispatches the `ym stack …` subcommands and returns a process exit
 // code. Only usage/resolution errors are non-zero; a successfully computed
 // status exits 0 regardless of how troubled the stack is, because the state
 // lives in the output, not the exit code.
 func runStack(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: ct stack (status|submit|restack|reuse|merge|setup|repair|reorder|watch) [flags] [-C <dir>]")
+		fmt.Fprintln(os.Stderr, "usage: ym stack (status|submit|restack|reuse|merge|setup|repair|reorder|watch) [flags] [-C <dir>]")
 		return 2
 	}
 	switch args[0] {
@@ -83,8 +83,8 @@ func runStack(args []string) int {
 	case "watch":
 		return runStackWatch(args[1:])
 	default:
-		fmt.Fprintf(os.Stderr, "ct stack: unknown subcommand %q\n", args[0])
-		fmt.Fprintln(os.Stderr, "usage: ct stack (status|submit|restack|reuse|merge|setup|repair|reorder|watch) [flags] [-C <dir>]")
+		fmt.Fprintf(os.Stderr, "ym stack: unknown subcommand %q\n", args[0])
+		fmt.Fprintln(os.Stderr, "usage: ym stack (status|submit|restack|reuse|merge|setup|repair|reorder|watch) [flags] [-C <dir>]")
 		return 2
 	}
 }
@@ -100,18 +100,18 @@ func runStackWatch(args []string) int {
 		case "--interval", "--timeout":
 			flag := args[i]
 			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "ct stack watch: %s requires a duration\n", flag)
+				fmt.Fprintf(os.Stderr, "ym stack watch: %s requires a duration\n", flag)
 				return 2
 			}
 			i++
 			d, err := time.ParseDuration(args[i])
 			if err != nil || d < 0 {
-				fmt.Fprintf(os.Stderr, "ct stack watch: invalid %s duration %q\n", flag, args[i])
+				fmt.Fprintf(os.Stderr, "ym stack watch: invalid %s duration %q\n", flag, args[i])
 				return 2
 			}
 			if flag == "--interval" {
 				if d == 0 {
-					fmt.Fprintln(os.Stderr, "ct stack watch: --interval must be greater than zero")
+					fmt.Fprintln(os.Stderr, "ym stack watch: --interval must be greater than zero")
 					return 2
 				}
 				interval = d
@@ -120,13 +120,13 @@ func runStackWatch(args []string) int {
 			}
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack watch: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack watch: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack watch: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack watch: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -134,13 +134,13 @@ func runStackWatch(args []string) int {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack watch:", err)
+			fmt.Fprintln(os.Stderr, "ym stack watch:", err)
 			return 1
 		}
 	}
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack watch:", err)
+		fmt.Fprintln(os.Stderr, "ym stack watch:", err)
 		return 1
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -159,13 +159,13 @@ func runStackWatch(args []string) int {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if encErr := enc.Encode(res); encErr != nil {
-			fmt.Fprintln(os.Stderr, "ct stack watch:", encErr)
+			fmt.Fprintln(os.Stderr, "ym stack watch:", encErr)
 			return 1
 		}
 	}
 	if err != nil {
 		if !asJSON {
-			fmt.Fprintln(os.Stderr, "ct stack watch:", err)
+			fmt.Fprintln(os.Stderr, "ym stack watch:", err)
 		}
 		return 1
 	}
@@ -190,31 +190,31 @@ func runStackReorder(args []string) int {
 			watch = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack reorder: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack reorder: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack reorder: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack reorder: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
 	if dryRun && watch {
-		fmt.Fprintln(os.Stderr, "ct stack reorder: --watch cannot be used with --dry-run")
+		fmt.Fprintln(os.Stderr, "ym stack reorder: --watch cannot be used with --dry-run")
 		return 2
 	}
 	if dir == "" {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack reorder:", err)
+			fmt.Fprintln(os.Stderr, "ym stack reorder:", err)
 			return 1
 		}
 	}
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack reorder:", err)
+		fmt.Fprintln(os.Stderr, "ym stack reorder:", err)
 		return 1
 	}
 	confirm := func(plan stack.ReorderPlan) bool {
@@ -229,14 +229,14 @@ func runStackReorder(args []string) int {
 		for _, done := range res.Executed {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
-		fmt.Fprintln(os.Stderr, "ct stack reorder:", err)
+		fmt.Fprintln(os.Stderr, "ym stack reorder:", err)
 		return 1
 	}
 	if watch && !res.Nothing {
 		st, err := watchStackAfter(params, asJSON)
 		res.Status = st
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack reorder --watch:", err)
+			fmt.Fprintln(os.Stderr, "ym stack reorder --watch:", err)
 			return 1
 		}
 	}
@@ -244,7 +244,7 @@ func runStackReorder(args []string) int {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(res); err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack reorder:", err)
+			fmt.Fprintln(os.Stderr, "ym stack reorder:", err)
 			return 1
 		}
 		return 0
@@ -273,41 +273,41 @@ func runStackRepair(args []string) int {
 			dryRun = true
 		case "--pr":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack repair: --pr requires a number")
+				fmt.Fprintln(os.Stderr, "ym stack repair: --pr requires a number")
 				return 2
 			}
 			i++
 			if _, err := fmt.Sscan(args[i], &number); err != nil || number <= 0 {
-				fmt.Fprintln(os.Stderr, "ct stack repair: --pr requires a positive number")
+				fmt.Fprintln(os.Stderr, "ym stack repair: --pr requires a positive number")
 				return 2
 			}
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack repair: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack repair: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack repair: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack repair: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
 	if number == 0 {
-		fmt.Fprintln(os.Stderr, "ct stack repair: --pr is required")
+		fmt.Fprintln(os.Stderr, "ym stack repair: --pr is required")
 		return 2
 	}
 	if dir == "" {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack repair:", err)
+			fmt.Fprintln(os.Stderr, "ym stack repair:", err)
 			return 1
 		}
 	}
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack repair:", err)
+		fmt.Fprintln(os.Stderr, "ym stack repair:", err)
 		return 1
 	}
 	res, err := stack.Repair(stack.RepairOptions{Params: params, PR: number, DryRun: dryRun})
@@ -315,14 +315,14 @@ func runStackRepair(args []string) int {
 		for _, done := range res.Executed {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
-		fmt.Fprintln(os.Stderr, "ct stack repair:", err)
+		fmt.Fprintln(os.Stderr, "ym stack repair:", err)
 		return 1
 	}
 	if asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(res); err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack repair:", err)
+			fmt.Fprintln(os.Stderr, "ym stack repair:", err)
 			return 1
 		}
 		return 0
@@ -346,13 +346,13 @@ func runStackSetup(args []string) int {
 			enable = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack setup: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack setup: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack setup: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack setup: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -360,20 +360,20 @@ func runStackSetup(args []string) int {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack setup:", err)
+			fmt.Fprintln(os.Stderr, "ym stack setup:", err)
 			return 1
 		}
 	}
 	settings, err := stack.Setup(stack.SetupOptions{Dir: dir, EnableAutoDelete: enable})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack setup:", err)
+		fmt.Fprintln(os.Stderr, "ym stack setup:", err)
 		return 1
 	}
 	if asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(settings); err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack setup:", err)
+			fmt.Fprintln(os.Stderr, "ym stack setup:", err)
 			return 1
 		}
 		return 0
@@ -384,7 +384,7 @@ func runStackSetup(args []string) int {
 	}
 	fmt.Printf("%s\n  automatic branch deletion: %s\n", settings.Repository, state)
 	if !settings.DeleteBranchOnMerge {
-		fmt.Println("  enable with: ct stack setup --enable-auto-delete")
+		fmt.Println("  enable with: ym stack setup --enable-auto-delete")
 	}
 	return 0
 }
@@ -400,13 +400,13 @@ func runStackReuse(args []string) int {
 			dryRun = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack reuse: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack reuse: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack reuse: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack reuse: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -414,13 +414,13 @@ func runStackReuse(args []string) int {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack reuse:", err)
+			fmt.Fprintln(os.Stderr, "ym stack reuse:", err)
 			return 1
 		}
 	}
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack reuse:", err)
+		fmt.Fprintln(os.Stderr, "ym stack reuse:", err)
 		return 1
 	}
 	res, err := stack.Reuse(stack.ReuseOptions{Params: params, DryRun: dryRun})
@@ -428,7 +428,7 @@ func runStackReuse(args []string) int {
 		for _, done := range res.Executed {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
-		fmt.Fprintln(os.Stderr, "ct stack reuse:", err)
+		fmt.Fprintln(os.Stderr, "ym stack reuse:", err)
 		return 1
 	}
 	if dryRun {
@@ -451,13 +451,13 @@ func runStackMerge(args []string) int {
 		switch args[i] {
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack merge: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack merge: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack merge: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack merge: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -465,13 +465,13 @@ func runStackMerge(args []string) int {
 		var err error
 		dir, err = os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack merge:", err)
+			fmt.Fprintln(os.Stderr, "ym stack merge:", err)
 			return 1
 		}
 	}
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack merge:", err)
+		fmt.Fprintln(os.Stderr, "ym stack merge:", err)
 		return 1
 	}
 	res, err := stack.Merge(stack.MergeOptions{Params: params})
@@ -483,9 +483,9 @@ func runStackMerge(args []string) int {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
 		if res.Merged > 0 {
-			fmt.Fprintf(os.Stderr, "ct stack merge: PR #%d merged, but the cleanup after it did not finish: %v\n", res.Merged, err)
+			fmt.Fprintf(os.Stderr, "ym stack merge: PR #%d merged, but the cleanup after it did not finish: %v\n", res.Merged, err)
 		} else {
-			fmt.Fprintln(os.Stderr, "ct stack merge:", err)
+			fmt.Fprintln(os.Stderr, "ym stack merge:", err)
 		}
 		return 1
 	}
@@ -513,13 +513,13 @@ func runStackRestack(args []string) int {
 			dryRun = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack restack: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack restack: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack restack: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack restack: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -527,7 +527,7 @@ func runStackRestack(args []string) int {
 	if dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack restack:", err)
+			fmt.Fprintln(os.Stderr, "ym stack restack:", err)
 			return 1
 		}
 		dir = cwd
@@ -536,7 +536,7 @@ func runStackRestack(args []string) int {
 	// Restack always fetches internally; the resolve step needn't.
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack restack:", err)
+		fmt.Fprintln(os.Stderr, "ym stack restack:", err)
 		return 1
 	}
 
@@ -545,7 +545,7 @@ func runStackRestack(args []string) int {
 		for _, done := range res.Executed {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
-		fmt.Fprintln(os.Stderr, "ct stack restack:", err)
+		fmt.Fprintln(os.Stderr, "ym stack restack:", err)
 		return 1
 	}
 
@@ -598,25 +598,25 @@ func runStackSubmit(args []string) int {
 			watch = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack submit: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack submit: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack submit: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack submit: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
 	if dryRun && watch {
-		fmt.Fprintln(os.Stderr, "ct stack submit: --watch cannot be used with --dry-run")
+		fmt.Fprintln(os.Stderr, "ym stack submit: --watch cannot be used with --dry-run")
 		return 2
 	}
 
 	if dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack submit:", err)
+			fmt.Fprintln(os.Stderr, "ym stack submit:", err)
 			return 1
 		}
 		dir = cwd
@@ -625,7 +625,7 @@ func runStackSubmit(args []string) int {
 	// Submit always fetches internally; the resolve step needn't.
 	params, err := resolveStackParams(dir, false)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack submit:", err)
+		fmt.Fprintln(os.Stderr, "ym stack submit:", err)
 		return 1
 	}
 	res, err := stack.Submit(stack.SubmitOptions{Params: params, DryRun: dryRun, Draft: draft})
@@ -633,7 +633,7 @@ func runStackSubmit(args []string) int {
 		for _, done := range res.Executed {
 			fmt.Fprintln(os.Stderr, "  did:", done)
 		}
-		fmt.Fprintln(os.Stderr, "ct stack submit:", err)
+		fmt.Fprintln(os.Stderr, "ym stack submit:", err)
 		return 1
 	}
 
@@ -648,7 +648,7 @@ func runStackSubmit(args []string) int {
 		st, err := watchStackAfter(params, asJSON)
 		res.Status = st
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack submit --watch:", err)
+			fmt.Fprintln(os.Stderr, "ym stack submit --watch:", err)
 			return 1
 		}
 	}
@@ -699,7 +699,7 @@ func encodeStackJSON(st stack.StackStatus, plan *stack.Plan) int {
 		}{st, *plan}
 	}
 	if err := enc.Encode(payload); err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack submit:", err)
+		fmt.Fprintln(os.Stderr, "ym stack submit:", err)
 		return 1
 	}
 	return 0
@@ -722,13 +722,13 @@ func runStackStatus(args []string) int {
 			fetch = true
 		case "-C":
 			if i+1 >= len(args) {
-				fmt.Fprintln(os.Stderr, "ct stack status: -C requires a directory argument")
+				fmt.Fprintln(os.Stderr, "ym stack status: -C requires a directory argument")
 				return 2
 			}
 			i++
 			dir = args[i]
 		default:
-			fmt.Fprintf(os.Stderr, "ct stack status: unknown argument %q\n", args[i])
+			fmt.Fprintf(os.Stderr, "ym stack status: unknown argument %q\n", args[i])
 			return 2
 		}
 	}
@@ -736,7 +736,7 @@ func runStackStatus(args []string) int {
 	if dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack status:", err)
+			fmt.Fprintln(os.Stderr, "ym stack status:", err)
 			return 1
 		}
 		dir = cwd
@@ -744,13 +744,13 @@ func runStackStatus(args []string) int {
 
 	params, err := resolveStackParams(dir, fetch)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack status:", err)
+		fmt.Fprintln(os.Stderr, "ym stack status:", err)
 		return 1
 	}
 
 	st, err := stack.Status(params)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct stack status:", err)
+		fmt.Fprintln(os.Stderr, "ym stack status:", err)
 		return 1
 	}
 
@@ -758,7 +758,7 @@ func runStackStatus(args []string) int {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(st); err != nil {
-			fmt.Fprintln(os.Stderr, "ct stack status:", err)
+			fmt.Fprintln(os.Stderr, "ym stack status:", err)
 			return 1
 		}
 	} else {
@@ -817,7 +817,7 @@ func resolveStackParams(dir string, fetch bool) (stack.Params, error) {
 
 // findWorktree picks the worktree matching the current tree, preferring a path
 // match (symlinks resolved, since macOS /tmp is a symlink) and falling back to a
-// branch match in ct's one-branch-per-worktree model.
+// branch match in ym's one-branch-per-worktree model.
 func findWorktree(wts []repo.Worktree, toplevel, branch string) *repo.Worktree {
 	target := resolveSymlinks(toplevel)
 	for i := range wts {
@@ -872,7 +872,7 @@ func run() error {
 	defer mgr.CloseAll() // reap all ptys on exit
 
 	// The control socket must exist before any session starts: hosted programs
-	// find it through CT_SOCKET, which they inherit from ct's own environment.
+	// find it through YM_SOCKET, which they inherit from ym's own environment.
 	srv, err := ctl.Listen()
 	if err != nil {
 		return fmt.Errorf("control socket: %w", err)

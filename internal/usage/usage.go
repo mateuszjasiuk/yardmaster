@@ -121,7 +121,7 @@ func (s Snapshot) BindingWindow() (NamedWindow, bool) {
 
 // usageResponse mirrors the live shape of GET
 // https://api.anthropic.com/api/oauth/usage (verified 2026-07). The payload
-// carries many named windows, most null; ct only reads the three the /usage
+// carries many named windows, most null; ym only reads the three the /usage
 // screen shows. Each present window is an object with a `utilization` percent
 // (0–100) and an RFC3339 `resets_at`.
 type usageResponse struct {
@@ -224,7 +224,7 @@ func FetchCodex(ctx context.Context, command string, args []string) (Snapshot, e
 	if err := enc.Encode(map[string]any{
 		"method": "initialize", "id": 1,
 		"params": map[string]any{"clientInfo": map[string]string{
-			"name": "caretaker", "title": "Caretaker", "version": "dev",
+			"name": "yardmaster", "title": "Yardmaster", "version": "dev",
 		}},
 	}); err != nil {
 		return Snapshot{}, fmt.Errorf("usage: initialize Codex App Server: %w", err)

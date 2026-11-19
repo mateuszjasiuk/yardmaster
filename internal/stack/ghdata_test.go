@@ -12,7 +12,7 @@ import (
 // one aliased field per branch. r0 is an open PR with a mixed check rollup, r1 a
 // merged one whose rollup came back null (GitHub attaches none when nothing ran),
 // and r2 a branch with no PR at all. A stray field carrying a PR outside the
-// ct/wt/ namespace stands in for a widened scope and must be filtered out. The
+// ym/wt/ namespace stands in for a widened scope and must be filtered out. The
 // rollup mixes the CheckRun node shape (status/conclusion) with the legacy
 // StatusContext shape (state) so summarizeChecks is exercised on both.
 const ghFixture = `{"data":{"repository":{
@@ -23,7 +23,7 @@ const ghFixture = `{"data":{"repository":{
     "body": "the bottom PR",
     "state": "OPEN",
     "isDraft": false,
-    "headRefName": "ct/wt/aaaaaaaa",
+    "headRefName": "ym/wt/aaaaaaaa",
     "headRefOid": "aaaa111",
     "baseRefName": "main",
     "reviewDecision": "APPROVED",
@@ -42,7 +42,7 @@ const ghFixture = `{"data":{"repository":{
     "body": "the landed PR",
     "state": "MERGED",
     "isDraft": false,
-    "headRefName": "ct/wt/bbbbbbbb",
+    "headRefName": "ym/wt/bbbbbbbb",
     "headRefOid": "bbbb222",
     "baseRefName": "main",
     "reviewDecision": "APPROVED",
@@ -168,7 +168,7 @@ func TestSummarizeChecks(t *testing.T) {
 // contract: no records, available=false, and a warning — never a hard error.
 func TestGatherGitHubUnavailable(t *testing.T) {
 	t.Setenv("PATH", "")
-	recs, gh := gatherGitHubFor(t.TempDir(), "wt", []ghRef{{Branch: "ct/wt/aaaaaaaa", Tracked: true}})
+	recs, gh := gatherGitHubFor(t.TempDir(), "wt", []ghRef{{Branch: "ym/wt/aaaaaaaa", Tracked: true}})
 	if len(recs) != 0 {
 		t.Errorf("expected no records when gh is absent, got %d", len(recs))
 	}
@@ -210,9 +210,9 @@ func TestHeadRefsFrom(t *testing.T) {
 	}
 	got := headRefsFrom("wt", commits, remotes)
 	want := []ghRef{
-		{Branch: "ct/wt/aaaaaaaa", Tracked: true},
-		{Branch: "ct/wt/bbbbbbbb", Tracked: true}, // a live commit wins over the remote ref
-		{Branch: "ct/wt/cccccccc", Tracked: false},
+		{Branch: "ym/wt/aaaaaaaa", Tracked: true},
+		{Branch: "ym/wt/bbbbbbbb", Tracked: true}, // a live commit wins over the remote ref
+		{Branch: "ym/wt/cccccccc", Tracked: false},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("headRefsFrom = %v, want %v", got, want)
@@ -224,12 +224,12 @@ func TestHeadRefsFrom(t *testing.T) {
 // wide pullRequests listing anywhere in it.
 func TestGHQueryDocument(t *testing.T) {
 	doc := ghQueryDocument([]ghRef{
-		{Branch: "ct/wt/aaaaaaaa", Tracked: true},
-		{Branch: "ct/wt/bbbbbbbb", Tracked: false},
+		{Branch: "ym/wt/aaaaaaaa", Tracked: true},
+		{Branch: "ym/wt/bbbbbbbb", Tracked: false},
 	})
 	for _, want := range []string{
-		`r0:pullRequests(headRefName:"ct/wt/aaaaaaaa"`,
-		`r1:pullRequests(headRefName:"ct/wt/bbbbbbbb"`,
+		`r0:pullRequests(headRefName:"ym/wt/aaaaaaaa"`,
+		`r1:pullRequests(headRefName:"ym/wt/bbbbbbbb"`,
 		"fragment pr on PullRequest{",
 		"statusCheckRollup",
 	} {
@@ -245,7 +245,7 @@ func TestGHQueryDocument(t *testing.T) {
 }
 
 func TestGHQueryArgs(t *testing.T) {
-	args := ghQueryArgs(ghRepo{Owner: "acme", Name: "repo"}, []ghRef{{Branch: "ct/wt/aaaaaaaa", Tracked: true}})
+	args := ghQueryArgs(ghRepo{Owner: "acme", Name: "repo"}, []ghRef{{Branch: "ym/wt/aaaaaaaa", Tracked: true}})
 	if args[0] != "api" || args[1] != "graphql" {
 		t.Errorf("args = %v, want an api graphql call", args[:2])
 	}

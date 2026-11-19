@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // TestInjectTrailersIntegration drives the real trailer rewrite against a scripted
@@ -147,7 +147,7 @@ func TestPushIntegration(t *testing.T) {
 
 	// Every stack branch now exists on the bare remote at the local tip.
 	for _, c := range commits {
-		ref := "refs/heads/ct/feat/" + c.StackID
+		ref := "refs/heads/ym/feat/" + c.StackID
 		out, err := repo.Git(bare, "rev-parse", ref)
 		if err != nil {
 			t.Fatalf("remote missing %s: %v", ref, err)
@@ -184,7 +184,7 @@ func TestPushIntegration(t *testing.T) {
 	if _, err := repo.Git(dir, pushArgs(pushes[0].Branch, pushes[0].SHA, pushes[0].Expected, pushes[0].Create)...); err != nil {
 		t.Fatalf("force push: %v", err)
 	}
-	out, err := repo.Git(bare, "rev-parse", "refs/heads/ct/feat/"+top.StackID)
+	out, err := repo.Git(bare, "rev-parse", "refs/heads/ym/feat/"+top.StackID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestPushIntegration(t *testing.T) {
 }
 
 // scriptStackRepo builds a repo with a `feat` worktree carrying three stack
-// commits — two without a ct-stack-id trailer and a top one with a valid id — and
+// commits — two without a ym-stack-id trailer and a top one with a valid id — and
 // returns the worktree path.
 func scriptStackRepo(t *testing.T) string {
 	t.Helper()
@@ -228,7 +228,7 @@ func scriptStackRepo(t *testing.T) string {
 		"commit", "--allow-empty", "--date=2020-01-02T03:04:05", "-m", "bottom no trailer")
 	run(wt.Path, "-c", "user.name=Author One", "-c", "user.email=author@x.y",
 		"commit", "--allow-empty", "--date=2020-02-03T04:05:06", "-m", "middle no trailer")
-	run(wt.Path, "commit", "--allow-empty", "-m", "top\n\nct-stack-id: cccccccc")
+	run(wt.Path, "commit", "--allow-empty", "-m", "top\n\nym-stack-id: cccccccc")
 	return wt.Path
 }
 

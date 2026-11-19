@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	fakeProcessEnv = "CARETAKER_CODEX_FAKE_PROCESS"
-	fakeModeEnv    = "CARETAKER_CODEX_FAKE_MODE"
-	fakeRecordEnv  = "CARETAKER_CODEX_FAKE_RECORD"
+	fakeProcessEnv = "YARDMASTER_CODEX_FAKE_PROCESS"
+	fakeModeEnv    = "YARDMASTER_CODEX_FAKE_MODE"
+	fakeRecordEnv  = "YARDMASTER_CODEX_FAKE_RECORD"
 )
 
 func TestObserverHandshakeAndEvents(t *testing.T) {
@@ -87,7 +87,7 @@ eventsClosed:
 	if record.Initialize.Method != "initialize" || record.Initialize.ID != initializeRequestID {
 		t.Fatalf("initialize envelope = %#v", record.Initialize)
 	}
-	if record.Initialize.Params.ClientInfo.Name != "caretaker" || record.Initialize.Params.ClientInfo.Title != "Caretaker" || record.Initialize.Params.ClientInfo.Version != "test-version" {
+	if record.Initialize.Params.ClientInfo.Name != "yardmaster" || record.Initialize.Params.ClientInfo.Title != "Yardmaster" || record.Initialize.Params.ClientInfo.Version != "test-version" {
 		t.Fatalf("clientInfo = %#v", record.Initialize.Params.ClientInfo)
 	}
 	if record.Initialized.Method != "initialized" || record.Initialized.Params == nil {

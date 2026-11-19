@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // TestLocalGathering exercises the local git gathering (localCommits +
@@ -47,9 +47,9 @@ func TestLocalGathering(t *testing.T) {
 	}
 
 	// Three commits on the stack: trailer / no trailer / trailer, bottom-first.
-	runGit(wt.Path, "commit", "--allow-empty", "-m", "bottom\n\nct-stack-id: aaaaaaaa")
+	runGit(wt.Path, "commit", "--allow-empty", "-m", "bottom\n\nym-stack-id: aaaaaaaa")
 	runGit(wt.Path, "commit", "--allow-empty", "-m", "middle no trailer")
-	runGit(wt.Path, "commit", "--allow-empty", "-m", "top\n\nct-stack-id: bbbbbbbb")
+	runGit(wt.Path, "commit", "--allow-empty", "-m", "top\n\nym-stack-id: bbbbbbbb")
 
 	commits, err := localCommits(wt.Path, "main")
 	if err != nil {
@@ -74,7 +74,7 @@ func TestLocalGathering(t *testing.T) {
 	// Register a remote stack branch for the bottom commit at its real SHA, so
 	// remoteBranches reads it back and reconcile sees it in sync.
 	bottomSHA := commits[0].SHA
-	runGit(wt.Path, "update-ref", "refs/remotes/origin/ct/feat/aaaaaaaa", bottomSHA)
+	runGit(wt.Path, "update-ref", "refs/remotes/origin/ym/feat/aaaaaaaa", bottomSHA)
 
 	remotes, err := remoteBranches(wt.Path, "feat")
 	if err != nil {
@@ -89,7 +89,7 @@ func TestLocalGathering(t *testing.T) {
 
 	// Reconcile the real local data with a synthetic open PR on the bottom commit.
 	prs := []prRecord{{
-		Number: 1, State: "OPEN", Head: "ct/feat/aaaaaaaa", Base: "main",
+		Number: 1, State: "OPEN", Head: "ym/feat/aaaaaaaa", Base: "main",
 		Review: "APPROVED", Checks: Checks{Summary: "passing", Failing: []string{}},
 	}}
 	stk, out := reconcile("feat", "main", commits, remotes, prs)
@@ -106,8 +106,8 @@ func TestLocalGathering(t *testing.T) {
 	if stk.NextAction != "submit" {
 		t.Errorf("next_action = %q, want submit", stk.NextAction)
 	}
-	if !strings.HasPrefix(*out[0].RemoteBranch, "ct/feat/") {
-		t.Errorf("remote_branch = %v, want ct/feat/… prefix", out[0].RemoteBranch)
+	if !strings.HasPrefix(*out[0].RemoteBranch, "ym/feat/") {
+		t.Errorf("remote_branch = %v, want ym/feat/… prefix", out[0].RemoteBranch)
 	}
 }
 
@@ -132,13 +132,13 @@ func TestLocalCommitsUsesFetchedMain(t *testing.T) {
 	runGit("config", "user.name", "t")
 	runGit("commit", "--allow-empty", "-m", "local main")
 	runGit("checkout", "-b", "feat")
-	runGit("commit", "--allow-empty", "-m", "landed remotely\n\nct-stack-id: aaaaaaaa")
+	runGit("commit", "--allow-empty", "-m", "landed remotely\n\nym-stack-id: aaaaaaaa")
 	remoteMain, err := repo.Git(dir, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	runGit("update-ref", "refs/remotes/origin/main", strings.TrimSpace(remoteMain))
-	runGit("commit", "--allow-empty", "-m", "actual stack commit\n\nct-stack-id: bbbbbbbb")
+	runGit("commit", "--allow-empty", "-m", "actual stack commit\n\nym-stack-id: bbbbbbbb")
 
 	commits, err := localCommits(dir, "main")
 	if err != nil {

@@ -1,7 +1,7 @@
 // Package session hosts real interactive programs (nvim, claude, a shell) inside
-// ct: each runs on its own pty, with a virtual-terminal emulator maintaining the
-// screen so ct can render it beneath the status bar. Sessions persist (and keep
-// running) for ct's lifetime; switching views never relaunches them.
+// ym: each runs on its own pty, with a virtual-terminal emulator maintaining the
+// screen so ym can render it beneath the status bar. Sessions persist (and keep
+// running) for ym's lifetime; switching views never relaunches them.
 package session
 
 import (
@@ -18,10 +18,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/agent"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 // Kind identifies the type of program a session runs.
@@ -42,7 +42,7 @@ type Session struct {
 	// non-agent sessions and legacy agent specs that predate provider metadata.
 	Provider agent.Provider
 	// SessionID is the provider-owned, opaque conversation ID an Agent session
-	// runs under. It lets ct resume the same conversation across runs; empty for
+	// runs under. It lets ym resume the same conversation across runs; empty for
 	// non-agent sessions and conversations whose provider has not supplied an ID.
 	SessionID string
 	// Events carries lifecycle notifications from the provider integration.
@@ -173,7 +173,7 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 	cmd.Dir = dir
 	cmd.Env = buildEnv(spec.Env, spec.UnsetEnv)
 	if dir != "" {
-		// PWD would otherwise name the folder ct was started in, and programs
+		// PWD would otherwise name the folder ym was started in, and programs
 		// that trust it (ranger, shells) would start there, not in the worktree.
 		cmd.Env = upsertEnv(cmd.Env, "PWD="+dir)
 	}
@@ -217,7 +217,7 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 }
 
 // checkDir reports a clear error when dir, the folder a session starts in, is
-// missing or not a directory. An empty dir means ct's own working directory.
+// missing or not a directory. An empty dir means ym's own working directory.
 func checkDir(dir string) error {
 	if dir == "" {
 		return nil
@@ -235,7 +235,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-// buildEnv returns the current process environment with caretaker's terminal
+// buildEnv returns the current process environment with yardmaster's terminal
 // default and the spec's provider-specific changes applied. Explicit Env
 // entries replace inherited entries with the same key; UnsetEnv wins over both
 // inherited and explicit entries.
@@ -446,7 +446,7 @@ func (s *Session) Size() (w, h int) { return s.emu.Width(), s.emu.Height() }
 // Alive reports whether the program is still running.
 func (s *Session) Alive() bool { return !s.closed.Load() }
 
-// Pid returns the program's process id, or 0 if it isn't running. ct uses it to
+// Pid returns the program's process id, or 0 if it isn't running. ym uses it to
 // match the session against `claude agents --json` entries.
 func (s *Session) Pid() int {
 	if s.cmd == nil || s.cmd.Process == nil {

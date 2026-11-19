@@ -7,7 +7,7 @@ import (
 
 // Render returns a compact, human-readable view of a StackStatus: one aligned
 // row per commit followed by a summary line carrying the next action. It is the
-// non-JSON output of `ct stack status`, meant to be skimmed in a terminal.
+// non-JSON output of `ym stack status`, meant to be skimmed in a terminal.
 func Render(st StackStatus) string {
 	var b strings.Builder
 
@@ -44,7 +44,7 @@ func Render(st StackStatus) string {
 	}
 	for _, c := range st.Commits {
 		if c.State == StateClosed && c.PR != nil {
-			fmt.Fprintf(&b, "  repair: ct stack repair --pr %d\n", c.PR.Number)
+			fmt.Fprintf(&b, "  repair: ym stack repair --pr %d\n", c.PR.Number)
 		}
 	}
 	if h := st.MergeHint; h != nil {

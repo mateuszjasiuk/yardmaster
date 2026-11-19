@@ -17,13 +17,13 @@ func navNums(numbers ...int) []navEntry {
 
 func TestRenderNavRegion(t *testing.T) {
 	got := renderNavRegion(navNums(41, 42, 43), 1)
-	want := "<!-- ct-stack-begin -->\n" +
+	want := "<!-- ym-stack-begin -->\n" +
 		"---\n" +
 		"**Stack** (bottom → top):\n" +
 		"1. #41\n" +
 		"2. #42 ← this PR\n" +
 		"3. #43\n" +
-		"<!-- ct-stack-end -->"
+		"<!-- ym-stack-end -->"
 	if got != want {
 		t.Errorf("renderNavRegion mismatch:\n got %q\nwant %q", got, want)
 	}
@@ -41,12 +41,12 @@ func TestRenderNavRegionMerged(t *testing.T) {
 		{Number: 41, Merged: true},
 		{Number: 42, Merged: false},
 	}, 1)
-	want := "<!-- ct-stack-begin -->\n" +
+	want := "<!-- ym-stack-begin -->\n" +
 		"---\n" +
 		"**Stack** (bottom → top):\n" +
 		"1. ✓ #41 (merged)\n" +
 		"2. #42 ← this PR\n" +
-		"<!-- ct-stack-end -->"
+		"<!-- ym-stack-end -->"
 	if got != want {
 		t.Errorf("merged nav render mismatch:\n got %q\nwant %q", got, want)
 	}

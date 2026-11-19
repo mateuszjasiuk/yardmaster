@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/ghstack"
-	"github.com/KCaverly/caretaker/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/ghstack"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
 )
 
 // ghPRsFresh is how long fetched review state is shown before opening the popup

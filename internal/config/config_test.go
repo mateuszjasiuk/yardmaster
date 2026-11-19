@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 func TestPath(t *testing.T) {
@@ -19,19 +19,19 @@ func TestPath(t *testing.T) {
 	}
 
 	t.Run("default", func(t *testing.T) {
-		t.Setenv("CT_CONFIG", "")
+		t.Setenv("YM_CONFIG", "")
 		got, err := Path()
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := filepath.Join(home, ".caretaker", "config.toml")
+		want := filepath.Join(home, ".yardmaster", "config.toml")
 		if got != want {
 			t.Fatalf("Path() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("env override", func(t *testing.T) {
-		t.Setenv("CT_CONFIG", "/custom/path/config.toml")
+		t.Setenv("YM_CONFIG", "/custom/path/config.toml")
 		got, err := Path()
 		if err != nil {
 			t.Fatal(err)
@@ -254,7 +254,7 @@ func loadTOML(t *testing.T, body string) Config {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CT_CONFIG", path)
+	t.Setenv("YM_CONFIG", path)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -506,7 +506,7 @@ func TestLoadRootsSection(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CT_CONFIG", path)
+	t.Setenv("YM_CONFIG", path)
 
 	// `roots` alone satisfies the requirement that used to fall on `root`.
 	cfg, err := Load()
@@ -527,7 +527,7 @@ func TestLoadRejectsMissingRoot(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CT_CONFIG", path)
+	t.Setenv("YM_CONFIG", path)
 
 	_, err := Load()
 	if err == nil {
@@ -545,7 +545,7 @@ func TestLoadWithNoRootAtAll(t *testing.T) {
 	if err := os.WriteFile(path, []byte("editor = \"vim\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CT_CONFIG", path)
+	t.Setenv("YM_CONFIG", path)
 	if _, err := Load(); err == nil {
 		t.Fatal("a config with neither root nor roots should fail")
 	}
@@ -590,7 +590,7 @@ func TestLoadRejectsBadWorktreeFiles(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("CT_CONFIG", path)
+		t.Setenv("YM_CONFIG", path)
 		_, err := Load()
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: want an error naming %s, got %v", body, want, err)
@@ -615,7 +615,7 @@ config_dir = `+strconv.Quote(filepath.Join(base, ".other"))+`
 folders = [`+strconv.Quote(filepath.Join(base, "private", "work"))+`]
 `)
 	cases := map[string]string{
-		filepath.Join(base, "private", "caretaker"):    "private",
+		filepath.Join(base, "private", "yardmaster"):   "private",
 		filepath.Join(base, "private"):                 "private",
 		filepath.Join(base, "private", "work", "repo"): "other", // the longer folder wins
 		filepath.Join(base, "private-not"):             "",
@@ -648,7 +648,7 @@ func TestLoadRejectsBadClaudeAccounts(t *testing.T) {
 		if err := os.WriteFile(path, []byte("root = "+dir+"\n"+body), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("CT_CONFIG", path)
+		t.Setenv("YM_CONFIG", path)
 		_, err := Load()
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: error %v, want it to mention %q", body, err, want)

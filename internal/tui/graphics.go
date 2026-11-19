@@ -6,10 +6,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
-// Image pass-through (see internal/session/graphics.go): ct asks the real
+// Image pass-through (see internal/session/graphics.go): ym asks the real
 // terminal for its name at startup, then lets sessions forward kitty image
 // commands through graphicsOut. They are written out in arrival order, since
 // a large image arrives as many chunks.

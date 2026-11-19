@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // SubmitOptions configures a submit. It embeds the same Params a status uses
@@ -44,7 +44,7 @@ type Plan struct {
 }
 
 // AssignAction is a previously-unsubmitted commit that will get a fresh
-// ct-stack-id trailer (the actual id is minted during execution, so a dry-run
+// ym-stack-id trailer (the actual id is minted during execution, so a dry-run
 // only reports the commit).
 type AssignAction struct {
 	Position int    `json:"position"`
@@ -112,7 +112,7 @@ func planSubmit(st StackStatus, prs []prRecord) (Plan, error) {
 	// paper over escalations.
 	for _, c := range st.Commits {
 		if c.State == StateDuplicateID {
-			return Plan{}, fmt.Errorf("commit %s (%s) has a duplicate or malformed ct-stack-id; make ids unique before submitting", c.ShortSHA, c.Subject)
+			return Plan{}, fmt.Errorf("commit %s (%s) has a duplicate or malformed ym-stack-id; make ids unique before submitting", c.ShortSHA, c.Subject)
 		}
 	}
 	for _, c := range st.Commits {
@@ -139,11 +139,11 @@ func planSubmit(st StackStatus, prs []prRecord) (Plan, error) {
 
 	branchOf := func(c Commit) string {
 		if c.StackID != nil {
-			return "ct/" + st.Worktree + "/" + *c.StackID
+			return "ym/" + st.Worktree + "/" + *c.StackID
 		}
 		// A not-yet-assigned commit: its real id is minted during execution. The
 		// placeholder only ever shows up in a dry-run plan.
-		return "ct/" + st.Worktree + "/(new)"
+		return "ym/" + st.Worktree + "/(new)"
 	}
 
 	// Any commit at or above the oldest unsubmitted commit will be rebuilt by the
@@ -325,7 +325,7 @@ func execute(o SubmitOptions, p Params, st StackStatus, res SubmitResult) (Submi
 		return res, fmt.Errorf("trailer injection: %w", err)
 	}
 	if len(assigns) > 0 {
-		res.Executed = append(res.Executed, fmt.Sprintf("assigned %d ct-stack-id(s)", len(assigns)))
+		res.Executed = append(res.Executed, fmt.Sprintf("assigned %d ym-stack-id(s)", len(assigns)))
 	}
 
 	// Re-gather now that SHAs may have moved.
@@ -475,7 +475,7 @@ func computePushes(commits []LocalCommit, remotes map[string]string, worktree st
 		if !validStackID(c.StackID) {
 			continue // unsubmitted commits are handled by the rewrite, before this
 		}
-		branch := "ct/" + worktree + "/" + c.StackID
+		branch := "ym/" + worktree + "/" + c.StackID
 		remoteSHA, has := remotes[c.StackID]
 		switch {
 		case !has:
@@ -496,7 +496,7 @@ func pushArgs(branch, sha, expected string, create bool) []string {
 }
 
 // prCreateBody builds the initial body for a new PR: the commit's message body
-// (minus the ct-stack-id trailer) plus a nav region. The region's numbers are
+// (minus the ym-stack-id trailer) plus a nav region. The region's numbers are
 // filled in by the later nav pass once every PR exists, so any "#?" here is
 // transient.
 func prCreateBody(dir string, st StackStatus, position int) (string, error) {
@@ -516,7 +516,7 @@ func prCreateBody(dir string, st StackStatus, position int) (string, error) {
 }
 
 // commitBody returns a commit's message body (everything after the subject),
-// with any ct-stack-id trailer line removed so it never leaks into the PR body.
+// with any ym-stack-id trailer line removed so it never leaks into the PR body.
 func commitBody(dir, sha string) (string, error) {
 	out, err := repo.Git(dir, "show", "-s", "--format=%b", sha)
 	if err != nil {
@@ -524,7 +524,7 @@ func commitBody(dir, sha string) (string, error) {
 	}
 	var kept []string
 	for _, ln := range strings.Split(out, "\n") {
-		if strings.HasPrefix(ln, "ct-stack-id:") {
+		if strings.HasPrefix(ln, "ym-stack-id:") {
 			continue
 		}
 		kept = append(kept, ln)

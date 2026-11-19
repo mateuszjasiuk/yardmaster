@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // RestackOptions configures a restack. It embeds the same Params a status/submit
@@ -59,7 +59,7 @@ type restackPlan struct {
 func planRestack(st StackStatus) (restackPlan, bool, error) {
 	for _, c := range st.Commits {
 		if c.State == StateDuplicateID {
-			return restackPlan{}, false, fmt.Errorf("commit %s (%s) has a duplicate or malformed ct-stack-id; make ids unique before restacking", c.ShortSHA, c.Subject)
+			return restackPlan{}, false, fmt.Errorf("commit %s (%s) has a duplicate or malformed ym-stack-id; make ids unique before restacking", c.ShortSHA, c.Subject)
 		}
 	}
 	for _, c := range st.Commits {
@@ -256,9 +256,9 @@ func predictRestackSubmit(st StackStatus) Plan {
 	}
 	branchOf := func(c Commit) string {
 		if c.StackID != nil {
-			return "ct/" + st.Worktree + "/" + *c.StackID
+			return "ym/" + st.Worktree + "/" + *c.StackID
 		}
-		return "ct/" + st.Worktree + "/(new)"
+		return "ym/" + st.Worktree + "/(new)"
 	}
 
 	var plan Plan
@@ -343,7 +343,7 @@ func Restack(o RestackOptions) (RestackResult, error) {
 	res.Drops = plan.Drops
 	res.RebaseCmd = append([]string{"git"}, rebaseOntoArgs("origin/"+st.MainBranch, plan.LastMergedSHA, st.Branch)...)
 	for _, id := range plan.MergedIDs {
-		res.BranchDeletes = append(res.BranchDeletes, "ct/"+st.Worktree+"/"+id)
+		res.BranchDeletes = append(res.BranchDeletes, "ym/"+st.Worktree+"/"+id)
 	}
 
 	if o.DryRun {

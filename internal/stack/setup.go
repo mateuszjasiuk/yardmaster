@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 type SetupOptions struct {

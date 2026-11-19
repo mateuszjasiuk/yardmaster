@@ -16,7 +16,7 @@ import (
 )
 
 // Pager hands a patch's line-by-line styling to an external command (delta,
-// diff-so-fancy, bat, ...) while ct keeps ownership of scrolling and
+// diff-so-fancy, bat, ...) while ym keeps ownership of scrolling and
 // keybindings. A zero-value Pager is inert: see Enabled.
 type Pager struct {
 	Command string
@@ -38,7 +38,7 @@ type Chunk struct {
 // maxChunks bounds how many per-file pieces a single Render call will spawn a
 // process for. Past this the cost of spawning that many formatter processes on
 // the fetch path outweighs what the formatting buys; the caller's fallback is
-// to re-render with ct's own built-in styling instead.
+// to re-render with ym's own built-in styling instead.
 const maxChunks = 256
 
 // renderTimeout bounds the whole Render call, mirroring repo.gitTimeout: a
@@ -193,7 +193,7 @@ func substituteWidth(args []string, width int) []string {
 // renderChunk pipes one chunk's lines through the formatter and shapes its
 // stdout back into lines. cmd.Dir is set to dir so a formatter that reads the
 // repo's git config or .gitattributes (delta does) sees the repo it's running
-// against, not ct's own working directory.
+// against, not ym's own working directory.
 func (p Pager) renderChunk(ctx context.Context, dir string, args []string, width int, lines []string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, p.Command, args...)
 	cmd.Dir = dir

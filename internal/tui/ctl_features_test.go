@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // ctlDo runs one request against m and returns the updated model and the reply.

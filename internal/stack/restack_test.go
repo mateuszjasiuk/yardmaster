@@ -13,15 +13,15 @@ func TestRebaseAndDeleteArgs(t *testing.T) {
 		[]string{"rebase", "--onto", "origin/main", "deadbeef", "feat"}) {
 		t.Errorf("rebaseOntoArgs = %v", got)
 	}
-	if got := pushDeleteArgs("ct/wt/aaaaaaaa"); !reflect.DeepEqual(got,
-		[]string{"push", "origin", "--delete", "ct/wt/aaaaaaaa"}) {
+	if got := pushDeleteArgs("ym/wt/aaaaaaaa"); !reflect.DeepEqual(got,
+		[]string{"push", "origin", "--delete", "ym/wt/aaaaaaaa"}) {
 		t.Errorf("pushDeleteArgs = %v", got)
 	}
 }
 
 func TestPlanRestackGuards(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 
 	cases := []struct {
 		name    string
@@ -87,7 +87,7 @@ func TestPlanRestackGuards(t *testing.T) {
 
 func TestPlanRestackNothing(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	// A healthy all-open stack has nothing landed to drop.
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
@@ -110,7 +110,7 @@ func TestPlanRestackNothing(t *testing.T) {
 
 func TestPlanRestackDropsLandedPrefix(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
 		commit("bbbbbbb2222", "bbbbbbbb", "two"),
@@ -149,10 +149,10 @@ func TestRenderRestackPlan(t *testing.T) {
 		Status:        StackStatus{Repo: "demo", Worktree: "feat", MainBranch: "main"},
 		Drops:         []DropAction{{Position: 1, ShortSHA: "aaaaaaa", Subject: "one", Number: 41}},
 		RebaseCmd:     []string{"git", "rebase", "--onto", "origin/main", "aaaaaaa1111", "feat"},
-		BranchDeletes: []string{"ct/feat/aaaaaaaa"},
+		BranchDeletes: []string{"ym/feat/aaaaaaaa"},
 		Plan: Plan{
-			Pushes:    []PushAction{{Position: 1, Branch: "ct/feat/bbbbbbbb"}},
-			Retargets: []RetargetAction{{Number: 42, OldBase: "ct/feat/aaaaaaaa", NewBase: "main"}},
+			Pushes:    []PushAction{{Position: 1, Branch: "ym/feat/bbbbbbbb"}},
+			Retargets: []RetargetAction{{Number: 42, OldBase: "ym/feat/aaaaaaaa", NewBase: "main"}},
 			Bodies:    []BodyAction{{Number: 42}},
 		},
 	}
@@ -161,9 +161,9 @@ func TestRenderRestackPlan(t *testing.T) {
 		"restack plan (dry-run)",
 		"would drop landed  aaaaaaa #41",
 		"git rebase --onto origin/main aaaaaaa1111 feat",
-		"would delete branch origin/ct/feat/aaaaaaaa",
-		"ct/feat/bbbbbbbb (rebased, position 1)",
-		"would retarget PR #42  ct/feat/aaaaaaaa -> main",
+		"would delete branch origin/ym/feat/aaaaaaaa",
+		"ym/feat/bbbbbbbb (rebased, position 1)",
+		"would retarget PR #42  ym/feat/aaaaaaaa -> main",
 		"would update body PR #42",
 	} {
 		if !strings.Contains(out, want) {
@@ -189,7 +189,7 @@ func TestRenderReusePlan(t *testing.T) {
 // surviving PR's nav table is re-spliced. The landed commit is excluded.
 func TestPredictRestackSubmit(t *testing.T) {
 	const wt, main = "wt", "main"
-	br := func(id string) string { return "ct/" + wt + "/" + id }
+	br := func(id string) string { return "ym/" + wt + "/" + id }
 	commits := []LocalCommit{
 		commit("aaaaaaa1111", "aaaaaaaa", "one"),
 		commit("bbbbbbb2222", "bbbbbbbb", "two"),
@@ -204,7 +204,7 @@ func TestPredictRestackSubmit(t *testing.T) {
 	plan := predictRestackSubmit(st)
 
 	if len(plan.Pushes) != 1 || plan.Pushes[0].Branch != br("bbbbbbbb") || plan.Pushes[0].Create {
-		t.Errorf("pushes = %+v, want a single force-update of ct/wt/bbbbbbbb", plan.Pushes)
+		t.Errorf("pushes = %+v, want a single force-update of ym/wt/bbbbbbbb", plan.Pushes)
 	}
 	if plan.Pushes[0].Position != 1 {
 		t.Errorf("survivor position = %d, want 1 (renumbered after the drop)", plan.Pushes[0].Position)

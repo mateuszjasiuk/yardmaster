@@ -1,4 +1,4 @@
-// Package agent defines the agent providers caretaker can host.
+// Package agent defines the agent providers yardmaster can host.
 package agent
 
 // Provider identifies the CLI that owns an agent conversation.
@@ -9,7 +9,7 @@ const (
 	Codex  Provider = "codex"
 )
 
-// Valid reports whether p is a provider caretaker knows how to launch.
+// Valid reports whether p is a provider yardmaster knows how to launch.
 func (p Provider) Valid() bool {
 	switch p {
 	case Claude, Codex:

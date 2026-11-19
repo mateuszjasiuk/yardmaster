@@ -8,11 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
-// ctlList answers `ct ctl list`, all worktrees or only one feature's.
+// ctlList answers `ym ctl list`, all worktrees or only one feature's.
 func (m Model) ctlList(p *ctl.Pending) {
 	worktrees := m.ctlWorktrees()
 	if p.Req.Feature == "" {
@@ -21,7 +21,7 @@ func (m Model) ctlList(p *ctl.Pending) {
 	}
 
 	if _, ok := m.state.Features[p.Req.Feature]; !ok {
-		p.Fail(fmt.Errorf("no feature %s (run `ct ctl feature list`)", p.Req.Feature))
+		p.Fail(fmt.Errorf("no feature %s (run `ym ctl feature list`)", p.Req.Feature))
 		return
 	}
 	var out []ctl.WorktreeInfo
@@ -147,7 +147,7 @@ func (m Model) ctlSpawnFeature(repoName, feature string) (string, error) {
 		return "", fmt.Errorf("feature %s is not in repo %s; a feature lives in one repo", feature, repoName)
 	}
 	if _, ok := m.state.Features[feature]; !ok {
-		return "", fmt.Errorf("no feature %s (run `ct ctl feature list`)", feature)
+		return "", fmt.Errorf("no feature %s (run `ym ctl feature list`)", feature)
 	}
 	return feature, nil
 }
@@ -159,7 +159,7 @@ func (m Model) ctlFeatureKey(key string) (repoName, name string, err error) {
 		return "", "", fmt.Errorf("feature %q should be written as repo/name", key)
 	}
 	if !slices.ContainsFunc(m.groups, func(g Group) bool { return g.Repo.Name == repoName }) {
-		return "", "", fmt.Errorf("no repo %q (run `ct ctl list`)", repoName)
+		return "", "", fmt.Errorf("no repo %q (run `ym ctl list`)", repoName)
 	}
 	return repoName, name, nil
 }

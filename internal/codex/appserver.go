@@ -22,7 +22,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/KCaverly/caretaker/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 const (
@@ -62,7 +62,7 @@ const (
 	Disconnected        = agent.Disconnected
 )
 
-// Event is the provider-neutral subset of App Server state caretaker needs.
+// Event is the provider-neutral subset of App Server state yardmaster needs.
 // Unknown JSON fields and unknown notification methods are ignored.
 type Event = agent.Event
 
@@ -108,7 +108,7 @@ func Start(ctx context.Context, cfg Config) (*Observer, error) {
 		cfg.ClientVersion = "dev"
 	}
 
-	socketDir, err := os.MkdirTemp(os.TempDir(), "ct-cdx-")
+	socketDir, err := os.MkdirTemp(os.TempDir(), "ym-cdx-")
 	if err != nil {
 		return nil, fmt.Errorf("create Codex socket directory: %w", err)
 	}
@@ -235,8 +235,8 @@ func initialize(ctx context.Context, conn *websocket.Conn, version string) error
 			} `json:"clientInfo"`
 		} `json:"params"`
 	}{Method: "initialize", ID: initializeRequestID}
-	request.Params.ClientInfo.Name = "caretaker"
-	request.Params.ClientInfo.Title = "Caretaker"
+	request.Params.ClientInfo.Name = "yardmaster"
+	request.Params.ClientInfo.Title = "Yardmaster"
 	request.Params.ClientInfo.Version = version
 	if err := conn.WriteJSON(request); err != nil {
 		return fmt.Errorf("send initialize request: %w", err)
