@@ -252,6 +252,17 @@ func (c *Controller) StackAutoMerge() bool { return c.cfg.Stack.AutoMerge }
 // AgentStrip reports whether the bar lists open worktrees after its icons.
 func (c *Controller) AgentStrip() bool { return c.cfg.Display.AgentStrip }
 
+// HighlightColors are the colours the highlight key hands out, in order. It
+// falls back to the defaults, so the pool is never empty.
+func (c *Controller) HighlightColors() []string {
+	names := c.cfg.Display.HighlightColors
+	if len(names) == 0 {
+		names = config.DefaultHighlightColors()
+	}
+
+	return names
+}
+
 // DisplayIcons returns the configured persistent icon vocabulary.
 func (c *Controller) DisplayIcons() string {
 	if c.cfg.Display.Icons == "" {

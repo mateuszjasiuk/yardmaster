@@ -1598,7 +1598,7 @@ func TestSeenMarkerLifecycle(t *testing.T) {
 	if m.attention[2].level != attnSeen || m.attention[3].level != attnDone {
 		t.Errorf("highlight should leave other markers alone, got %v", m.attention)
 	}
-	if m.highlighted["r/a"] {
+	if _, ok := m.highlighted["r/a"]; ok {
 		t.Error("turning a seen worktree dim should not flag it")
 	}
 
@@ -1607,17 +1607,17 @@ func TestSeenMarkerLifecycle(t *testing.T) {
 	m.attention = map[int]attnEntry{}
 	mm, _ = m.handleKey(ctrlKey('q'))
 	m = mm.(Model)
-	if !m.highlighted["r/a"] {
+	if _, ok := m.highlighted["r/a"]; !ok {
 		t.Fatal("highlight on a dim worktree should flag it")
 	}
 	mm, _ = m.update(statusMsg{byPid: map[int]AgentStatus{1: {Status: "busy", Cwd: "/r/a"}}})
 	m = mm.(Model)
-	if !m.highlighted["r/a"] {
+	if _, ok := m.highlighted["r/a"]; !ok {
 		t.Error("a new turn should keep the flag")
 	}
 	mm, _ = m.handleKey(ctrlKey('q'))
 	m = mm.(Model)
-	if m.highlighted["r/a"] {
+	if _, ok := m.highlighted["r/a"]; ok {
 		t.Error("a second press should remove the flag")
 	}
 

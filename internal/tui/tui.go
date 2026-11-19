@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"maps"
 	"math/rand"
 	"os"
@@ -431,9 +432,11 @@ type Model struct {
 	// stored unread markers (done) keyed by agent pid; waiting badges are
 	// derived live from agentStatus and never stored here
 	attention map[int]attnEntry
-	// highlighted marks worktrees (by key) the user flagged with the highlight
-	// key; they show white in the bar's agent strip until flagged off.
-	highlighted map[string]bool
+	// highlighted maps worktrees (by key) the user flagged with the highlight
+	// key to their colour's index in highlightColors; they show in that colour
+	// in the bar's agent strip until flagged off.
+	highlighted     map[string]int
+	highlightColors []color.Color
 
 	// returnLocation is a one-level navigation toggle, captured before an
 	// attention jump or cross-worktree activation.
@@ -638,7 +641,8 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		focus:           focusNew,
 		agentPrevStatus: map[int]string{},
 		attention:       map[int]attnEntry{},
-		highlighted:     map[string]bool{},
+		highlighted:     map[string]int{},
+		highlightColors: highlightColors(ctrl.HighlightColors()),
 		removed:         map[int]int64{},
 		codexTranscript: map[*session.Session]bool{},
 		stackInfo:       map[string]stackEntry{},
@@ -651,6 +655,16 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		stackAutoMerge:  ctrl.StackAutoMerge(),
 		termPaneBusy:    func(s *session.Session) bool { return s.HasForegroundProcess() },
 	}
+}
+
+// highlightColors turns the configured "#RRGGBB" names into colours.
+func highlightColors(names []string) []color.Color {
+	colors := make([]color.Color, len(names))
+	for i, name := range names {
+		colors[i] = lipgloss.Color(name)
+	}
+
+	return colors
 }
 
 func providerIn(provider agent.Provider, providers []agent.Provider) bool {
@@ -1991,22 +2005,23 @@ func (m Model) clearWorkspaceAttention() {
 	}
 }
 
-// toggleHighlight flips the current workspace between white and dim in the
-// bar's agent strip. Turning it white flags it until the next toggle; turning
-// it dim also drops its agents' seen markers.
+// toggleHighlight flags the current workspace with the next colour in the
+// bar's agent strip, until the next toggle. On a flagged or white workspace it
+// turns it dim instead: it drops the flag and its agents' seen markers.
 func (m Model) toggleHighlight() {
 	if m.current == nil {
 		return
 	}
 	key := m.current.key
+	_, flagged := m.highlighted[key]
 	seen := false
 	for _, e := range m.attention {
 		if e.key == key && e.level == attnSeen {
 			seen = true
 		}
 	}
-	if !m.highlighted[key] && !seen {
-		m.highlighted[key] = true
+	if !flagged && !seen {
+		m.highlighted[key] = m.nextHighlightColor()
 		return
 	}
 	delete(m.highlighted, key)
@@ -2015,6 +2030,22 @@ func (m Model) toggleHighlight() {
 			m.dropSeen(pid)
 		}
 	}
+}
+
+// nextHighlightColor is the first colour no flagged workspace uses, so clearing
+// a flag frees its colour. With every colour taken, it wraps around.
+func (m Model) nextHighlightColor() int {
+	used := map[int]bool{}
+	for _, i := range m.highlighted {
+		used[i] = true
+	}
+	for i := range m.highlightColors {
+		if !used[i] {
+			return i
+		}
+	}
+
+	return len(m.highlighted) % len(m.highlightColors)
 }
 
 // dropSeen removes pid's seen marker, leaving any other marker in place.
@@ -2112,9 +2143,9 @@ func (m Model) attnSummary() (waiting, done int) {
 type agentGroup struct {
 	key, repo, worktree, path string
 	agents                    []boardRow
-	attn                      attnLevel // highest attention among agents
-	busy                      bool      // some agent is working
-	highlighted               bool      // flagged with the highlight key
+	attn                      attnLevel   // highest attention among agents
+	busy                      bool        // some agent is working
+	flag                      color.Color // the highlight key's colour; nil when not flagged
 	opened                    int64
 	account                   string           // Claude account; set by stripGroups only
 	stack                     ghstack.Position // set by stripGroups only; zero outside a gh stack
@@ -2135,7 +2166,9 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	if m.state != nil {
 		g.opened = m.state.Opened(key)
 	}
-	g.highlighted = m.highlighted[key]
+	if i, ok := m.highlighted[key]; ok {
+		g.flag = m.highlightColors[i]
+	}
 	for i, a := range ws.Agents {
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
