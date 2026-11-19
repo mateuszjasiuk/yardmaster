@@ -188,7 +188,7 @@ agent_strip = true
 # that don't show faint text).
 side_by_side_dim = "faint" # faint | gray
 # The colours ctrl+q gives flagged worktrees in the bar, in order ("#RRGGBB").
-highlight_colors = ["#D3869B", "#4FD6E0", "#B392F0", "#6F9BFF"]
+highlight_colors = ["#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"]
 
 # The diff viewer (deck `v` and the stack `d` preview). All optional.
 [diff]
@@ -403,7 +403,7 @@ are doing: yellow while working, green `✓` when done and unread, red `!` when 
 dim when idle. White means "look at this". A finished agent you have looked at turns white
 ("your turn" in the board) until it works again. **`ctrl+q`** flags the current worktree with a
 colour, so you can mark the worktrees you want to come back to and tell them apart. Each flag takes
-the next free colour from `display.highlight_colors` (pink, cyan, violet, blue by default) and starts
+the next free colour from `display.highlight_colors` (purple, cyan, pink, teal by default) and starts
 again from the first one when all are taken. The flag stays until you press `ctrl+q` again, which
 frees its colour. In the bar, while an agent there is working, done or waiting, its status colour
 shows instead. The board always shows the worktree's name in its flag colour. On a white

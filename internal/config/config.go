@@ -107,7 +107,7 @@ type Display struct {
 // DefaultHighlightColors stay apart from the strip's status colours (dim,
 // yellow, green, red, white) and from each other on a dark background.
 func DefaultHighlightColors() []string {
-	return []string{"#D3869B", "#4FD6E0", "#B392F0", "#6F9BFF"}
+	return []string{"#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"}
 }
 
 var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)

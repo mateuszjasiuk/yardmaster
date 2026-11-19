@@ -90,7 +90,7 @@ func TestAgentStripShowsAttention(t *testing.T) {
 func TestAgentStripMarksCurrentWorktree(t *testing.T) {
 	m := stripModel(t, 120, "alpha", "beta")
 	raw, _ := m.agentStripLayout()
-	blue := "38;2;131;165;152" // cAccent as a truecolor foreground
+	blue := "38;2;130;170;255" // cAccent as a truecolor foreground
 
 	if st := stripStyleOf(t, raw, "beta"); !strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
 		t.Fatalf("the current worktree should be blue and underlined: %q", st)
@@ -139,17 +139,17 @@ func TestHighlightHandsOutColoursInOrder(t *testing.T) {
 
 func TestAgentStripShowsFlagColours(t *testing.T) {
 	m := stripModel(t, 120, "alpha", "beta", "gamma") // gamma is current
-	pink := "38;2;211;134;155"                        // the first default flag colour
-	cyan := "38;2;79;214;224"                         // the second
-	blue := "38;2;131;165;152"                        // cAccent
+	purple := "38;2;199;146;234"                      // the first default flag colour
+	cyan := "38;2;137;221;255"                        // the second
+	blue := "38;2;130;170;255"                        // cAccent
 	m.highlighted["repo/alpha"] = 0
 	m.highlighted["repo/gamma"] = 1
 	raw, _ := m.agentStripLayout()
 
-	if st := stripStyleOf(t, raw, "alpha"); !strings.Contains(st, pink) {
+	if st := stripStyleOf(t, raw, "alpha"); !strings.Contains(st, purple) {
 		t.Fatalf("a flagged worktree should show its colour: %q", st)
 	}
-	if st := stripStyleOf(t, raw, "beta"); strings.Contains(st, pink) || strings.Contains(st, cyan) {
+	if st := stripStyleOf(t, raw, "beta"); strings.Contains(st, purple) || strings.Contains(st, cyan) {
 		t.Fatalf("an unflagged worktree should have no flag colour: %q", st)
 	}
 	st := stripStyleOf(t, raw, "gamma")
@@ -171,7 +171,7 @@ func TestAgentStripStatusWinsOverFlag(t *testing.T) {
 	if row := ansi.Strip(raw); !strings.Contains(row, "! alpha") {
 		t.Fatalf("a waiting flagged worktree should show \"! alpha\": %q", row)
 	}
-	if st := stripStyleOf(t, raw, "!"); strings.Contains(st, "38;2;211;134;155") {
+	if st := stripStyleOf(t, raw, "!"); strings.Contains(st, "38;2;199;146;234") {
 		t.Fatalf("waiting red should win over the flag colour: %q", st)
 	}
 }
@@ -473,7 +473,7 @@ func TestStripStackSitsOnItsOwnBackground(t *testing.T) {
 	m = mm.(Model)
 
 	raw := strings.Split(m.renderBar(), "\n")[stripRow]
-	tint := "48;2;31;58;54" // cStackBg as a truecolor background
+	tint := "48;2;26;46;59" // cStackBg as a truecolor background
 	first, last := strings.Index(raw, tint), strings.LastIndex(raw, tint)
 	if first < 0 {
 		t.Fatalf("no stack background in %q", raw)

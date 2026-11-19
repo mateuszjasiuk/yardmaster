@@ -63,7 +63,7 @@ var patterns = map[string]evalFunc{
 	},
 }
 
-// Gruvbox anchors (same hexes as the TUI's palette in view.go). Ramps run
+// Gruvbox anchors, from the TUI's first palette. Ramps run
 // dark→bright so the pattern's low end melts into the terminal background.
 type rgb struct{ r, g, b float64 }
 
