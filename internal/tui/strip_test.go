@@ -473,7 +473,7 @@ func TestStripStackSitsOnItsOwnBackground(t *testing.T) {
 	m = mm.(Model)
 
 	raw := strings.Split(m.renderBar(), "\n")[stripRow]
-	tint := "48;2;26;46;59" // cStackBg as a truecolor background
+	tint := "48;2;26;28;37" // cStackBg as a truecolor background
 	first, last := strings.Index(raw, tint), strings.LastIndex(raw, tint)
 	if first < 0 {
 		t.Fatalf("no stack background in %q", raw)
