@@ -32,21 +32,6 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
-homebrew_casks:
-  - name: ym
-    ids: [ym]
-    binaries: [ym]
-    homepage: https://github.com/mateuszjasiuk/yardmaster
-    description: Terminal deck for managing git worktrees and coding agents
-    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_TOKEN "" }}true{{ else }}false{{ end }}'
-    repository:
-      owner: mateuszjasiuk
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    commit_author:
-      name: yardmaster-release
-      email: 41898282+github-actions[bot]@users.noreply.github.com
-
 changelog:
   use: github
   sort: asc
