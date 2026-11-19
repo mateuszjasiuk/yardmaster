@@ -1,6 +1,6 @@
 // Package plasma renders the deck's ambient panel: a classic demoscene
 // sum-of-sines plasma mapped onto a character-density ramp and a smooth
-// gruvbox color ramp. A frame is a pure function of (cell, phase), so the
+// Material color ramp. A frame is a pure function of (cell, phase), so the
 // panel needs no stored pixel state — the model keeps one float and the
 // renderer does the rest.
 package plasma
@@ -63,25 +63,25 @@ var patterns = map[string]evalFunc{
 	},
 }
 
-// Gruvbox anchors, from the TUI's first palette. Ramps run
+// Material anchors, the TUI's palette (material.nvim, Deep Ocean). Ramps run
 // dark→bright so the pattern's low end melts into the terminal background.
 type rgb struct{ r, g, b float64 }
 
 var (
-	gbBg     = rgb{29, 32, 33}    // #1D2021 bg0_h
-	gbFaint  = rgb{102, 92, 84}   // #665C54 bg3
-	gbDim    = rgb{146, 131, 116} // #928374 gray
-	gbBlue   = rgb{131, 165, 152} // #83A598
-	gbPurple = rgb{211, 134, 155} // #D3869B
-	gbYellow = rgb{250, 189, 47}  // #FABD2F
-	gbRed    = rgb{251, 73, 52}   // #FB4934
-	gbFg     = rgb{235, 219, 178} // #EBDBB2
+	mBg     = rgb{15, 17, 26}    // #0F111A background
+	mFaint  = rgb{70, 75, 93}    // #464B5D disabled
+	mDim    = rgb{113, 124, 180} // #717CB4 secondary text
+	mBlue   = rgb{130, 170, 255} // #82AAFF
+	mPurple = rgb{199, 146, 234} // #C792EA
+	mYellow = rgb{255, 203, 107} // #FFCB6B
+	mRed    = rgb{255, 83, 112}  // #FF5370
+	mFg     = rgb{238, 255, 255} // #EEFFFF
 )
 
 var palettes = map[string][]rgb{
-	"aurora": {gbBg, gbFaint, gbBlue, gbPurple},
-	"ember":  {gbBg, gbFaint, gbYellow, gbRed},
-	"mono":   {gbBg, gbFaint, gbDim, gbFg},
+	"aurora": {mBg, mFaint, mBlue, mPurple},
+	"ember":  {mBg, mFaint, mYellow, mRed},
+	"mono":   {mBg, mFaint, mDim, mFg},
 }
 
 var charsets = map[string][]rune{

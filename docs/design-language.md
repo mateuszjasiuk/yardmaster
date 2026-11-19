@@ -123,14 +123,14 @@ Delight comes from coherence, responsiveness, and small moments of character.
 
 ### Palette
 
-The current palette is Material Theme, Ocean. Preserve its soft, low-glare character and semantic roles.
+The current palette is material.nvim, Deep Ocean, so ym matches the editor inside it. Preserve its soft, low-glare character and semantic roles.
 
 | Token | Hex | Role |
 |---|---:|---|
 | Ink | `#0F111A` | Dark text on filled accent selections |
 | Primary text | `#EEFFFF` | Names, selected content, primary facts |
-| Secondary text | `#8F93A2` | Explanations, metadata, key descriptions |
-| Faint | `#4B526D` | Rules, idle borders, disabled/inert chrome |
+| Secondary text | `#717CB4` | Explanations, metadata, key descriptions |
+| Faint | `#464B5D` | Rules, idle borders, disabled/inert chrome |
 | Accent blue | `#82AAFF` | Focus, keys, interactive affordance, active terminal concepts |
 | Purple | `#C792EA` | Agent identity and panel headings |
 | Green | `#C3E88D` | Healthy, live, ahead, completed, additions |

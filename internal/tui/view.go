@@ -19,7 +19,7 @@ import (
 	"github.com/mateuszjasiuk/yardmaster/internal/usage"
 )
 
-// Palette (Material Theme, Ocean).
+// Palette (material.nvim, Deep Ocean).
 var (
 	cAccent = lipgloss.Color("#82AAFF") // blue
 	cPurple = lipgloss.Color("#C792EA") // purple
@@ -27,13 +27,13 @@ var (
 	cYellow = lipgloss.Color("#FFCB6B") // yellow
 	cRed    = lipgloss.Color("#FF5370") // error red
 	cFg     = lipgloss.Color("#EEFFFF") // foreground
-	cFg3    = lipgloss.Color("#B0BEC5") // text
-	cDim    = lipgloss.Color("#8F93A2") // secondary text
-	cFaint  = lipgloss.Color("#4B526D") // line numbers
-	cSelBg  = lipgloss.Color("#3B3F51") // selection (strong)
+	cFg3    = lipgloss.Color("#A6ACCD") // text
+	cDim    = lipgloss.Color("#717CB4") // secondary text
+	cFaint  = lipgloss.Color("#464B5D") // disabled
+	cSelBg  = lipgloss.Color("#1F2233") // selection
 	// cStackBg sits behind a gh stack in the agent strip, so you can see where
 	// it ends.
-	cStackBg = lipgloss.Color("#1A2E3B") // dark blue-teal
+	cStackBg = lipgloss.Color("#1A1C25") // cursor line
 	cInk     = lipgloss.Color("#0F111A") // background
 )
 
