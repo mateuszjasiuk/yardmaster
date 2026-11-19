@@ -3357,7 +3357,25 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 	if !wasActive {
 		watches = m.watchWorkspaceAgents(ws)
 	}
-	return m, tea.Batch(m.loadCmd(), save, watches)
+	reload := m.refreshAfterSwitch(key)
+
+	return m, tea.Batch(reload, save, watches)
+}
+
+// refreshAfterSwitch updates the deck's order and open marks after a switch
+// from what is already loaded. Only a worktree the deck hasn't loaded yet, such
+// as one just created, reloads git: a reload runs git in every worktree, which
+// takes seconds with many repos, and the deck reloads anyway when it opens.
+func (m *Model) refreshAfterSwitch(key string) tea.Cmd {
+	_, loaded := m.worktreePath(key)
+	if !loaded && key != homeKey {
+		return m.loadCmd()
+	}
+
+	m.recomputeActive()
+	m.computeRecentRanks()
+
+	return nil
 }
 
 // workspaceSpecs builds the session set for activating key: nvim and a shell
