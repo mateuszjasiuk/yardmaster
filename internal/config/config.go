@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -98,7 +99,18 @@ type Display struct {
 	// SideBySideDim is how the side without focus looks side by side: faint
 	// keeps its colours darker, gray draws it in plain gray.
 	SideBySideDim string `toml:"side_by_side_dim"`
+	// HighlightColors are the colours the highlight key gives flagged
+	// worktrees in the agent strip, in order, as "#RRGGBB".
+	HighlightColors []string `toml:"highlight_colors"`
 }
+
+// DefaultHighlightColors stay apart from the strip's status colours (dim,
+// yellow, green, red, white) and from each other on a dark background.
+func DefaultHighlightColors() []string {
+	return []string{"#D3869B", "#4FD6E0", "#B392F0", "#6F9BFF"}
+}
+
+var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // Stack configures stacked-PR workflow behavior.
 type Stack struct {
@@ -264,9 +276,10 @@ type Keys struct {
 	// the next such agent on each press, collapsing the open-board/scan/select
 	// flow into one chord. An empty string disables it.
 	Attention string `toml:"attention"`
-	// Highlight toggles the current worktree between white and dim in the bar's
-	// agent strip. White means "look at this": set by hand, or automatically
-	// once you have seen an agent's finished output but not answered it.
+	// Highlight flags the current worktree in the bar's agent strip with the
+	// next free colour of display.highlight_colors; the next press clears it.
+	// On a white worktree (an agent's finished output you have seen but not
+	// answered) it turns it dim instead.
 	Highlight string `toml:"highlight"`
 	// Back returns to the work location captured before the last attention jump
 	// or cross-worktree activation. Repeated presses toggle between the two.
@@ -330,8 +343,11 @@ func Default() Config {
 			TermScrollUp: "shift+pgup", TermScrollDown: "shift+pgdown",
 			Usage: "alt+u", CommandPalette: "alt+p",
 		},
-		Usage:   Usage{Threshold: 50},
-		Display: Display{Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint},
+		Usage: Usage{Threshold: 50},
+		Display: Display{
+			Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint,
+			HighlightColors: DefaultHighlightColors(),
+		},
 		Plasma: Plasma{
 			Pattern: "classic", Palette: "aurora", Charset: "dots",
 			Speed: 0.3, Width: 40,
@@ -510,6 +526,14 @@ func (c *Config) validate() error {
 	case DimFaint, DimGray:
 	default:
 		return fmt.Errorf("config `display.side_by_side_dim` must be %q or %q", DimFaint, DimGray)
+	}
+	if len(c.Display.HighlightColors) == 0 {
+		return fmt.Errorf("config `display.highlight_colors` must list at least one colour")
+	}
+	for i, col := range c.Display.HighlightColors {
+		if !hexColor.MatchString(col) {
+			return fmt.Errorf("config `display.highlight_colors[%d]` must be a colour like \"#D3869B\", got %q", i, col)
+		}
 	}
 	if !c.Agents.Default.Valid() {
 		return fmt.Errorf("config `agents.default` must be %q or %q", agent.Claude, agent.Codex)

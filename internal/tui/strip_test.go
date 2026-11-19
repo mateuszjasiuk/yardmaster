@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -91,20 +92,87 @@ func TestAgentStripMarksCurrentWorktree(t *testing.T) {
 	raw, _ := m.agentStripLayout()
 	blue := "38;2;131;165;152" // cAccent as a truecolor foreground
 
-	// The style is the escape code right before each name. Underlined text is
-	// written one letter at a time, so look for the first letter only.
-	styleOf := func(name string) string {
-		at := strings.Index(raw, "m"+name[:1])
-		if at < 0 {
-			t.Fatalf("no %s in %q", name, raw)
-		}
-		return raw[strings.LastIndex(raw[:at], "\x1b["):at]
-	}
-	if st := styleOf("beta"); !strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
+	if st := stripStyleOf(t, raw, "beta"); !strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
 		t.Fatalf("the current worktree should be blue and underlined: %q", st)
 	}
-	if st := styleOf("alpha"); strings.Contains(st, blue) {
+	if st := stripStyleOf(t, raw, "alpha"); strings.Contains(st, blue) {
 		t.Fatalf("another worktree should not be blue: %q", st)
+	}
+}
+
+// stripStyleOf is the escape code right before name in the raw strip. Underlined
+// text is written one letter at a time, so it looks for the first letter only.
+func stripStyleOf(t *testing.T, raw, name string) string {
+	t.Helper()
+	at := strings.Index(raw, "m"+name[:1])
+	if at < 0 {
+		t.Fatalf("no %s in %q", name, raw)
+	}
+
+	return raw[strings.LastIndex(raw[:at], "\x1b["):at]
+}
+
+// TestHighlightHandsOutColoursInOrder checks that each flag takes the first free
+// colour, that clearing a flag frees its colour, and that a full pool wraps.
+func TestHighlightHandsOutColoursInOrder(t *testing.T) {
+	m := stripModel(t, 120, "a", "b", "c", "d") // d is current
+	m.highlightColors = m.highlightColors[:2]
+
+	m = pressCtrl(t, m, 'q')                    // d
+	m = pressCtrl(t, pressCtrl(t, m, 'h'), 'q') // c
+	m = pressCtrl(t, pressCtrl(t, m, 'h'), 'q') // b: the pool is used up
+	want := map[string]int{"repo/d": 0, "repo/c": 1, "repo/b": 0}
+	if !maps.Equal(m.highlighted, want) {
+		t.Fatalf("flags = %v, want %v", m.highlighted, want)
+	}
+
+	m = pressCtrl(t, pressCtrl(t, m, 'l'), 'q') // c again clears it
+	if _, ok := m.highlighted["repo/c"]; ok {
+		t.Fatalf("a second press should clear c: %v", m.highlighted)
+	}
+	m = pressCtrl(t, m, 'h')
+	m = pressCtrl(t, pressCtrl(t, m, 'h'), 'q') // a takes the colour c freed
+	if got := m.highlighted["repo/a"]; got != 1 {
+		t.Fatalf("a should take c's freed colour 1, got %d", got)
+	}
+}
+
+func TestAgentStripShowsFlagColours(t *testing.T) {
+	m := stripModel(t, 120, "alpha", "beta", "gamma") // gamma is current
+	pink := "38;2;211;134;155"                        // the first default flag colour
+	cyan := "38;2;79;214;224"                         // the second
+	blue := "38;2;131;165;152"                        // cAccent
+	m.highlighted["repo/alpha"] = 0
+	m.highlighted["repo/gamma"] = 1
+	raw, _ := m.agentStripLayout()
+
+	if st := stripStyleOf(t, raw, "alpha"); !strings.Contains(st, pink) {
+		t.Fatalf("a flagged worktree should show its colour: %q", st)
+	}
+	if st := stripStyleOf(t, raw, "beta"); strings.Contains(st, pink) || strings.Contains(st, cyan) {
+		t.Fatalf("an unflagged worktree should have no flag colour: %q", st)
+	}
+	st := stripStyleOf(t, raw, "gamma")
+	if !strings.Contains(st, cyan) || strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
+		t.Fatalf("the flagged current worktree should be underlined in its colour: %q", st)
+	}
+}
+
+func TestAgentStripStatusWinsOverFlag(t *testing.T) {
+	m := stripModel(t, 120, "alpha", "beta")
+	ws, _ := m.mgr.Workspace("repo/alpha")
+	if len(ws.Agents) == 0 {
+		t.Skip("workspace started without an agent")
+	}
+	m.highlighted["repo/alpha"] = 0
+	m.agentStatus = map[int]AgentStatus{ws.Agents[0].Pid(): {Status: "waiting"}}
+	raw, _ := m.agentStripLayout()
+
+	if row := ansi.Strip(raw); !strings.Contains(row, "! alpha") {
+		t.Fatalf("a waiting flagged worktree should show \"! alpha\": %q", row)
+	}
+	if st := stripStyleOf(t, raw, "!"); strings.Contains(st, "38;2;211;134;155") {
+		t.Fatalf("waiting red should win over the flag colour: %q", st)
 	}
 }
 

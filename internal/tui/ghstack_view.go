@@ -130,7 +130,9 @@ func collapseGhStack(run []agentGroup) agentGroup {
 	for _, g := range run {
 		entry.attn = max(entry.attn, g.attn)
 		entry.busy = entry.busy || g.busy
-		entry.highlighted = entry.highlighted || g.highlighted
+		if entry.flag == nil {
+			entry.flag = g.flag
+		}
 	}
 	return entry
 }

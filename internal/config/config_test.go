@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -328,6 +329,24 @@ func TestDisplaySideBySideDim(t *testing.T) {
 	c.Display.SideBySideDim = "blur"
 	if err := c.validate(); err == nil || !strings.Contains(err.Error(), "faint") || !strings.Contains(err.Error(), "gray") {
 		t.Fatalf("invalid side_by_side_dim error = %v", err)
+	}
+}
+
+func TestDisplayHighlightColors(t *testing.T) {
+	if d := Default(); !slices.Equal(d.Display.HighlightColors, DefaultHighlightColors()) {
+		t.Fatalf("default highlight_colors = %v", d.Display.HighlightColors)
+	}
+	cfg := loadTOML(t, "[display]\nhighlight_colors = [\"#112233\", \"#aabbcc\"]\n")
+	if want := []string{"#112233", "#aabbcc"}; !slices.Equal(cfg.Display.HighlightColors, want) {
+		t.Fatalf("highlight_colors = %v, want %v", cfg.Display.HighlightColors, want)
+	}
+	for _, bad := range [][]string{{}, {"#112233", "pink"}, {"#12345"}} {
+		c := Default()
+		c.Root = t.TempDir()
+		c.Display.HighlightColors = bad
+		if err := c.validate(); err == nil || !strings.Contains(err.Error(), "highlight_colors") {
+			t.Errorf("highlight_colors %v: error = %v", bad, err)
+		}
 	}
 }
 

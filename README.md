@@ -139,7 +139,7 @@ side_by_side = "ctrl+shift+\\" # nvim and the agent next to each other (ctrl+|)
 stack_popup = "ctrl+s"  # the current gh stack's PRs, reviews and checks
 global_config = "alt+g" # open the home-directory workspace
 attention   = "alt+n"  # jump to the agent needing attention (cycles on repeat)
-highlight   = "ctrl+q" # toggle the current worktree white/dim in the bar
+highlight   = "ctrl+q" # flag the current worktree with a colour in the bar (toggle)
 back        = "alt+b"  # return to the previous work location (toggles on repeat)
 usage       = "alt+u"  # plan usage for enabled agent providers
 help        = "f1"     # toggle the key/legend overlay (also "?" in the deck)
@@ -187,6 +187,8 @@ agent_strip = true
 # faint keeps its colours darker, gray draws it in plain gray (for terminals
 # that don't show faint text).
 side_by_side_dim = "faint" # faint | gray
+# The colours ctrl+q gives flagged worktrees in the bar, in order ("#RRGGBB").
+highlight_colors = ["#D3869B", "#4FD6E0", "#B392F0", "#6F9BFF"]
 
 # The diff viewer (deck `v` and the stack `d` preview). All optional.
 [diff]
@@ -399,10 +401,14 @@ marker. These four are chords because the search takes every letter; change them
 The bar lists every open worktree after its icons, in a fixed order, coloured by what its agents
 are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you, and
 dim when idle. White means "look at this". A finished agent you have looked at turns white
-("your turn" in the board) until it works again. **`ctrl+q`** toggles the current worktree between
-white and dim: use it to dismiss a "your turn", or to flag any worktree you want to come back to.
-A worktree you flag stays white until you press `ctrl+q` again. `ctrl+x` in the board dismisses one
-agent's "your turn". The current worktree is underlined. Click a name to jump there, or press
+("your turn" in the board) until it works again. **`ctrl+q`** flags the current worktree with a
+colour, so you can mark the worktrees you want to come back to and tell them apart. Each flag takes
+the next free colour from `display.highlight_colors` (pink, cyan, violet, blue by default) and starts
+again from the first one when all are taken. The flag stays until you press `ctrl+q` again, which
+frees its colour. While an agent there is working, done or waiting, that colour shows instead. On
+a white worktree `ctrl+q` dismisses its "your turn" and makes it dim. `ctrl+x` in the board
+dismisses one agent's "your turn". The current worktree is underlined, in its flag colour when it
+has one. Click a name to jump there, or press
 **`ctrl+h`** / **`ctrl+l`** to move left / right through the worktrees like tabs (wrapping). ct takes
 these two keys from the programs inside it, such as nvim and the shell. With more than one
 repo open, each repo's worktrees follow its name (`front: beta · zeta │ back: alpha`); the repo

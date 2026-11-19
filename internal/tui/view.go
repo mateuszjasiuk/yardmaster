@@ -1894,7 +1894,7 @@ func (m Model) renderHelp(h int) string {
 	)
 	rows = append(rows,
 		row(m.keys.Attention, "jump to agent needing attention"),
-		row(m.keys.Highlight, "highlight this worktree in the bar (toggle)"),
+		row(m.keys.Highlight, "flag this worktree in the bar with a colour (toggle)"),
 		row(m.keys.PrevAgent+" / "+m.keys.NextAgent, "prev / next agent"),
 		row(m.keys.PrevWorktree+" / "+m.keys.NextWorktree, "prev / next worktree"),
 		row(m.keys.ToggleStacks, "collapse or expand stacks in the bar"),
@@ -2422,8 +2422,9 @@ func (m Model) stripShown() bool {
 
 // agentStripLayout lays the agent strip out on its own row under the bar, so
 // it has the full width: each open worktree's name, coloured by its
-// agents (yellow working, green ✓ done, red ! waiting, white seen but not
-// answered or highlighted, dim idle), with the current worktree underlined. With more than
+// agents (yellow working, green ✓ done, red ! waiting, its flag colour when
+// flagged, white seen but not answered, dim idle), with the current worktree
+// underlined. With more than
 // one repo open, each repo's worktrees follow its name. A gh stack you're not in
 // shows as one item, and the stack you're in follows its name. When space is
 // short, names shorten, then items are dropped and show as "+N", and only then
@@ -2605,8 +2606,9 @@ func (m Model) openStripGroup(g agentGroup) (tea.Model, tea.Cmd) {
 
 // stripLook is how the strip and the side panel show a worktree's agents: the
 // sign ("!" waiting, "✓" done, "●" working, "" otherwise), the sign's style, and
-// the name's style, which is underlined in the accent colour for the current
-// worktree. idle is the style of a worktree with nothing to show.
+// the name's style, which is underlined for the current worktree: in its flag
+// colour when that shows, else in the accent colour. idle is the style of a
+// worktree with nothing to show.
 func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt, nameSt lipgloss.Style) {
 	sign, signSt = "", idle
 	switch {
@@ -2616,13 +2618,18 @@ func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt
 		sign, signSt = "✓", boldGreen
 	case g.busy:
 		sign, signSt = "●", dirtyStyle
-	case g.attn == attnSeen || g.highlighted:
+	case g.flag != nil:
+		signSt = idle.Foreground(g.flag)
+	case g.attn == attnSeen:
 		signSt = nameStyle
 	}
 
 	nameSt = signSt
 	if m.current != nil && g.key == m.current.key {
-		nameSt = nameSt.Foreground(cAccent).Underline(true)
+		nameSt = nameSt.Underline(true)
+		if sign != "" || g.flag == nil {
+			nameSt = nameSt.Foreground(cAccent)
+		}
 	}
 	return sign, signSt, nameSt
 }
