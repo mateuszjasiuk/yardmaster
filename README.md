@@ -405,10 +405,11 @@ dim when idle. White means "look at this". A finished agent you have looked at t
 colour, so you can mark the worktrees you want to come back to and tell them apart. Each flag takes
 the next free colour from `display.highlight_colors` (pink, cyan, violet, blue by default) and starts
 again from the first one when all are taken. The flag stays until you press `ctrl+q` again, which
-frees its colour. While an agent there is working, done or waiting, that colour shows instead. On
-a white worktree `ctrl+q` dismisses its "your turn" and makes it dim. `ctrl+x` in the board
-dismisses one agent's "your turn". The current worktree is underlined, in its flag colour when it
-has one. Click a name to jump there, or press
+frees its colour. In the bar, while an agent there is working, done or waiting, its status colour
+shows instead. The board always shows the worktree's name in its flag colour. On a white
+worktree `ctrl+q` dismisses its "your turn" and makes it dim. `ctrl+x` in the board dismisses one
+agent's "your turn". The current worktree is underlined, in its flag colour when it has one. Click
+a name to jump there, or press
 **`ctrl+h`** / **`ctrl+l`** to move left / right through the worktrees like tabs (wrapping). ct takes
 these two keys from the programs inside it, such as nvim and the shell. With more than one
 repo open, each repo's worktrees follow its name (`front: beta · zeta │ back: alpha`); the repo
