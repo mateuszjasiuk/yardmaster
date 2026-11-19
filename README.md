@@ -24,8 +24,8 @@ go install ./cmd/ym
 ym version
 ```
 
-Release binaries for macOS and an install script exist too; see [docs/releasing.md](docs/releasing.md).
-They work once the GitHub repo is renamed to `mateuszjasiuk/yardmaster`.
+There is no release yet. Once there is one, macOS binaries and an install script will be
+available; see [docs/releasing.md](docs/releasing.md).
 
 ## Configure
 

@@ -1,7 +1,7 @@
 # Install script and releases
 
-The install script and release downloads point at `mateuszjasiuk/yardmaster`, so they work only
-once the GitHub repo has that name. Until then, install from a checkout with `go install ./cmd/ym`.
+There is no release yet, so the install script has nothing to download. Until there is one,
+install from a checkout with `go install ./cmd/ym`.
 
 ## Install a release
 
@@ -32,6 +32,3 @@ and attestations can be checked before publishing.
    Then publish it.
 3. After the first release that works end to end, turn on immutable releases in the repository
    settings.
-
-Homebrew: `.goreleaser.yaml` has a cask for `mateuszjasiuk/homebrew-tap`, but that tap does not
-exist yet. Without a `HOMEBREW_TAP_TOKEN` secret the upload is skipped, and releases still work.
