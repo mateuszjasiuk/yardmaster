@@ -19,22 +19,22 @@ import (
 	"github.com/KCaverly/caretaker/internal/usage"
 )
 
-// Palette (gruvbox dark, medium contrast).
+// Palette (Material Theme, Ocean).
 var (
-	cAccent = lipgloss.Color("#83A598") // bright blue
-	cPurple = lipgloss.Color("#D3869B") // bright purple
-	cGreen  = lipgloss.Color("#B8BB26") // bright green
-	cYellow = lipgloss.Color("#FABD2F") // bright yellow
-	cRed    = lipgloss.Color("#FB4934") // bright red
-	cFg     = lipgloss.Color("#EBDBB2") // fg1
-	cFg3    = lipgloss.Color("#BDAE93") // fg3
-	cDim    = lipgloss.Color("#928374") // gray
-	cFaint  = lipgloss.Color("#665C54") // bg3
-	cSelBg  = lipgloss.Color("#665C54") // bg3 (strong selection)
+	cAccent = lipgloss.Color("#82AAFF") // blue
+	cPurple = lipgloss.Color("#C792EA") // purple
+	cGreen  = lipgloss.Color("#C3E88D") // green
+	cYellow = lipgloss.Color("#FFCB6B") // yellow
+	cRed    = lipgloss.Color("#FF5370") // error red
+	cFg     = lipgloss.Color("#EEFFFF") // foreground
+	cFg3    = lipgloss.Color("#B0BEC5") // text
+	cDim    = lipgloss.Color("#8F93A2") // secondary text
+	cFaint  = lipgloss.Color("#4B526D") // line numbers
+	cSelBg  = lipgloss.Color("#3B3F51") // selection (strong)
 	// cStackBg sits behind a gh stack in the agent strip, so you can see where
 	// it ends.
-	cStackBg = lipgloss.Color("#1F3A36") // dark aqua
-	cInk     = lipgloss.Color("#1D2021") // bg0_h (hard)
+	cStackBg = lipgloss.Color("#1A2E3B") // dark blue-teal
+	cInk     = lipgloss.Color("#0F111A") // background
 )
 
 var (

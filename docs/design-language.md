@@ -123,19 +123,19 @@ Delight comes from coherence, responsiveness, and small moments of character.
 
 ### Palette
 
-The current palette is Gruvbox Dark, medium contrast. Preserve its warm, low-glare character and semantic roles.
+The current palette is Material Theme, Ocean. Preserve its soft, low-glare character and semantic roles.
 
 | Token | Hex | Role |
 |---|---:|---|
-| Ink | `#1D2021` | Dark text on filled accent selections |
-| Primary text | `#EBDBB2` | Names, selected content, primary facts |
-| Secondary text | `#928374` | Explanations, metadata, key descriptions |
-| Faint | `#665C54` | Rules, idle borders, disabled/inert chrome |
-| Accent blue | `#83A598` | Focus, keys, interactive affordance, active terminal concepts |
-| Purple | `#D3869B` | Agent identity and panel headings |
-| Green | `#B8BB26` | Healthy, live, ahead, completed, additions |
-| Yellow | `#FABD2F` | Deck identity, caution, dirty/recent/pending |
-| Red | `#FB4934` | Error, destructive consequence, required attention, removals |
+| Ink | `#0F111A` | Dark text on filled accent selections |
+| Primary text | `#EEFFFF` | Names, selected content, primary facts |
+| Secondary text | `#8F93A2` | Explanations, metadata, key descriptions |
+| Faint | `#4B526D` | Rules, idle borders, disabled/inert chrome |
+| Accent blue | `#82AAFF` | Focus, keys, interactive affordance, active terminal concepts |
+| Purple | `#C792EA` | Agent identity and panel headings |
+| Green | `#C3E88D` | Healthy, live, ahead, completed, additions |
+| Yellow | `#FFCB6B` | Deck identity, caution, dirty/recent/pending |
+| Red | `#FF5370` | Error, destructive consequence, required attention, removals |
 
 Rules:
 
