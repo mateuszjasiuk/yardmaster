@@ -7,8 +7,8 @@ import (
 
 func TestPlanRepairDeletedBase(t *testing.T) {
 	const wt, main = "wt", "main"
-	old := "ct/wt/aaaaaaaa"
-	head := "ct/wt/bbbbbbbb"
+	old := "ym/wt/aaaaaaaa"
+	head := "ym/wt/bbbbbbbb"
 	st := StackStatus{
 		Worktree: wt, MainBranch: main,
 		Commits: []Commit{{State: StateClosed, StackID: stringPtr("bbbbbbbb"), PR: &PR{Number: 9, Base: old}}},
@@ -34,15 +34,15 @@ func TestPlanRepairDeletedBase(t *testing.T) {
 
 func TestPlanRepairGuards(t *testing.T) {
 	st := StackStatus{Worktree: "wt", MainBranch: "main", Commits: []Commit{{State: StateClosed, PR: &PR{Number: 9}}}}
-	base := prRecord{Number: 8, State: "MERGED", Head: "ct/wt/aaaaaaaa", HeadSHA: "aaaaaaa1111", MergedAt: "now"}
+	base := prRecord{Number: 8, State: "MERGED", Head: "ym/wt/aaaaaaaa", HeadSHA: "aaaaaaa1111", MergedAt: "now"}
 	for _, tc := range []struct {
 		name string
 		prs  []prRecord
 		want string
 	}{
-		{"not closed", []prRecord{{Number: 9, State: "OPEN", Head: "ct/wt/bbbbbbbb", Base: base.Head}, base}, "requires a closed"},
-		{"not stack base", []prRecord{{Number: 9, State: "CLOSED", Head: "ct/wt/bbbbbbbb", Base: "feature"}, base}, "not a stack branch"},
-		{"no recoverable sha", []prRecord{{Number: 9, State: "CLOSED", Head: "ct/wt/bbbbbbbb", Base: base.Head}}, "no merged PR"},
+		{"not closed", []prRecord{{Number: 9, State: "OPEN", Head: "ym/wt/bbbbbbbb", Base: base.Head}, base}, "requires a closed"},
+		{"not stack base", []prRecord{{Number: 9, State: "CLOSED", Head: "ym/wt/bbbbbbbb", Base: "feature"}, base}, "not a stack branch"},
+		{"no recoverable sha", []prRecord{{Number: 9, State: "CLOSED", Head: "ym/wt/bbbbbbbb", Base: base.Head}}, "no merged PR"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := planRepair(st, tc.prs, 9)

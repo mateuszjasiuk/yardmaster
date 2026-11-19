@@ -17,13 +17,13 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/codex"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/stack"
-	"github.com/KCaverly/caretaker/internal/state"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/codex"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/state"
 )
 
 func ctrlKey(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
@@ -108,10 +108,10 @@ func TestBarShowsWorkspaceWhenActive(t *testing.T) {
 	}
 
 	// Active workspace: repo / worktree shown.
-	m.current = &workspaceRef{repo: "caretaker", worktree: "feat-login", key: "caretaker/feat-login"}
+	m.current = &workspaceRef{repo: "yardmaster", worktree: "feat-login", key: "yardmaster/feat-login"}
 	m.screen = screenEditor
 	bar = m.renderBar()
-	if !strings.Contains(bar, "caretaker / feat-login") {
+	if !strings.Contains(bar, "yardmaster / feat-login") {
 		t.Errorf("bar should show active repo/worktree:\n%s", bar)
 	}
 	if testing.Verbose() {
@@ -189,7 +189,7 @@ func TestActiveSortByRecency(t *testing.T) {
 		},
 	}}
 
-	// "a" was opened in ct most recently; "b"/"c" never opened, so they fall
+	// "a" was opened in ym most recently; "b"/"c" never opened, so they fall
 	// back to commit time (b=30 before c=20).
 	m.state.LastOpened["r/a"] = 1000
 	m.recomputeActive()
@@ -336,7 +336,7 @@ func TestDeckClickActiveSection(t *testing.T) {
 	// Worktree rows begin at content line 2 of the ACTIVE box.
 	yRow := func(di int) int { return m.barHeight() + L.newOuterH + 1 + 2 + (di - start) }
 
-	// rowItem = [-1 caretaker, 0 feat-login, 1 bugfix, -1 api, 2 spike].
+	// rowItem = [-1 yardmaster, 0 feat-login, 1 bugfix, -1 api, 2 spike].
 	mm, _, ok := m.deckClick(5, yRow(1))
 	m = mm.(Model)
 	if !ok || m.focus != focusActive || m.activeCursor != 0 {
@@ -369,7 +369,7 @@ func TestDeckClickDetailLineMisses(t *testing.T) {
 	L := m.deckLayout(m.height - m.barHeight())
 	display, rowItem := m.activeDisplay(m.width - 4)
 	start, _ := activeWindowStart(rowItem, m.activeCursor, L.activeRows)
-	// display = [caretaker(-1), (main)(0), feat-login(1), └ detail(-1), bugfix(2), api(-1), (main)(3), spike(4)].
+	// display = [yardmaster(-1), (main)(0), feat-login(1), └ detail(-1), bugfix(2), api(-1), (main)(3), spike(4)].
 	if len(rowItem) != 8 || rowItem[3] != -1 || !strings.Contains(display[3], "└") {
 		t.Fatalf("expected the detail line at display index 3 with rowItem -1, got %v", rowItem)
 	}
@@ -491,7 +491,7 @@ func TestStatusTickInterval(t *testing.T) {
 		t.Errorf("empty deck interval = %v, want 30s", got)
 	}
 
-	// A busy agent (even one started outside ct) forces the fast cadence.
+	// A busy agent (even one started outside ym) forces the fast cadence.
 	m.agentStatus = map[int]AgentStatus{7: {Status: "busy"}}
 	if got := m.statusTickInterval(); got != 2*time.Second {
 		t.Errorf("busy interval = %v, want 2s", got)
@@ -902,7 +902,7 @@ func TestBoardFormFieldCycleAndToggles(t *testing.T) {
 func mixedProviderModel(defaultProvider agent.Provider) Model {
 	cfg := config.Default()
 	// Keep the fixture independent of developer-machine tools. CI runners do
-	// not necessarily have ct's default editor installed.
+	// not necessarily have ym's default editor installed.
 	cfg.Editor = "/usr/bin/true"
 	cfg.Shell = "/bin/sh"
 	cfg.Agents.Enabled = []agent.Provider{agent.Claude, agent.Codex}
@@ -911,7 +911,7 @@ func mixedProviderModel(defaultProvider agent.Provider) Model {
 	cfg.Agents.Codex.Command = "/usr/bin/true"
 	ctrl := NewController(cfg)
 	ctrl.startCodex = func(context.Context, codex.Config) (codexRuntime, error) {
-		return newFakeCodexRuntime("unix:///tmp/caretaker-fake-codex.sock"), nil
+		return newFakeCodexRuntime("unix:///tmp/yardmaster-fake-codex.sock"), nil
 	}
 	m := New(ctrl, session.NewManager())
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -2536,14 +2536,14 @@ func TestQuitGuardBusyConfirms(t *testing.T) {
 	if isQuit(cmd) {
 		t.Fatal("ctrl+c with a busy agent must not quit yet")
 	}
-	if m.confirm.title != "QUIT CT" {
-		t.Fatalf("expected the QUIT CT panel, got title %q", m.confirm.title)
+	if m.confirm.title != "QUIT YM" {
+		t.Fatalf("expected the QUIT YM panel, got title %q", m.confirm.title)
 	}
 	if !confirmHasContext(m.confirm, "busy agent(s) still running") ||
-		!confirmHasContext(m.confirm, "quitting ct will stop all hosted agents and terminals") {
+		!confirmHasContext(m.confirm, "quitting ym will stop all hosted agents and terminals") {
 		t.Fatalf("expected a quit-guard context line, got %q", m.confirm.context)
 	}
-	if !confirmHasOption(m.confirm, "y") || m.confirm.options[1].label != "quit ct" {
+	if !confirmHasOption(m.confirm, "y") || m.confirm.options[1].label != "quit ym" {
 		t.Fatalf("quit confirmation should name its action precisely: %+v", m.confirm.options)
 	}
 	// The safe "cancel" row is the default, so a reflexive enter must not quit.
@@ -3728,7 +3728,7 @@ func TestDiffViewersAgreeOnFileJumps(t *testing.T) {
 
 // TestCreatingWorktreeShowsInDeck covers issue #54: on a large repository the
 // fetch and checkout take long enough that a deck with no sign of the request
-// reads as ct having ignored it. The row has to appear the moment the name is
+// reads as ym having ignored it. The row has to appear the moment the name is
 // submitted, not when git finishes.
 func TestCreatingWorktreeShowsInDeck(t *testing.T) {
 	m := sampleModel()
@@ -3767,7 +3767,7 @@ func TestCreatingWorktreeShowsInDeck(t *testing.T) {
 	// header and leaves the existing rows navigable.
 	grouped := sampleModel()
 	grouped.groupsLoaded = true
-	grouped.beginCreating("caretaker", "feature-y")
+	grouped.beginCreating("yardmaster", "feature-y")
 	gBody := strings.Join(grouped.renderActive(60, 20), "\n")
 	if !strings.Contains(gBody, "feature-y") || !strings.Contains(gBody, "bugfix") {
 		t.Errorf("pending and real rows should coexist:\n%s", gBody)
@@ -3924,7 +3924,7 @@ func TestClaudeRenameShowsAndIsSavedOnce(t *testing.T) {
 	pid := a.Pid()
 
 	if cmd := m.syncAgentNames(map[int]AgentStatus{pid: {Status: "idle"}}); cmd != nil || a.Title == "" {
-		t.Fatalf("an empty name should keep ct's label %q and save nothing", a.Title)
+		t.Fatalf("an empty name should keep ym's label %q and save nothing", a.Title)
 	}
 
 	mm, _ := m.update(statusMsg{byPid: map[int]AgentStatus{pid: {Status: "idle", Name: "Mewtwo"}}})

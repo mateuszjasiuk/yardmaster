@@ -5,13 +5,13 @@ import (
 	"strings"
 )
 
-// The nav region is a tool-owned block ct splices into every stack PR body so a
+// The nav region is a tool-owned block ym splices into every stack PR body so a
 // reader on GitHub can see the whole stack from any one PR. Everything between
-// (and including) these two HTML-comment markers is owned by ct; everything
+// (and including) these two HTML-comment markers is owned by ym; everything
 // outside is user prose that must survive resubmits byte-for-byte.
 const (
-	navBeginMarker = "<!-- ct-stack-begin -->"
-	navEndMarker   = "<!-- ct-stack-end -->"
+	navBeginMarker = "<!-- ym-stack-begin -->"
+	navEndMarker   = "<!-- ym-stack-end -->"
 )
 
 // navEntry is one row of the nav table: a PR number (0 when the PR does not yet

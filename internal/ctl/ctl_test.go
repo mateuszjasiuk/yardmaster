@@ -93,8 +93,8 @@ func TestFindSocketScansAndPrunes(t *testing.T) {
 	dir := shortDir(t)
 	srv := listenAt(t, dir)
 	t.Setenv(SocketEnv, "")
-	// A leftover from a crashed ct: a socket file nobody listens on.
-	stale := filepath.Join(dir, "ct", "ct-1.sock")
+	// A leftover from a crashed ym: a socket file nobody listens on.
+	stale := filepath.Join(dir, "ym", "ym-1.sock")
 	ln, err := net.Listen("unix", stale)
 	if err != nil {
 		t.Fatal(err)
@@ -119,11 +119,11 @@ func TestFindSocketScansAndPrunes(t *testing.T) {
 func TestFindSocketNone(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", shortDir(t))
 	t.Setenv(SocketEnv, "")
-	// Only the fallback dir could hold a live socket from a real ct on this
+	// Only the fallback dir could hold a live socket from a real ym on this
 	// machine; the test can't rule that out, so it only checks the no-socket
 	// state dir doesn't error on its own.
-	if _, err := FindSocket(); err != nil && !strings.Contains(err.Error(), "no running ct") &&
-		!strings.Contains(err.Error(), "several ct") {
+	if _, err := FindSocket(); err != nil && !strings.Contains(err.Error(), "no running ym") &&
+		!strings.Contains(err.Error(), "several ym") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

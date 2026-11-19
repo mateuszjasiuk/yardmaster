@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // TestRestackIntegration drives the git-side restack pipeline against a file://
@@ -17,7 +17,7 @@ import (
 // run — with the GitHub half stubbed by synthetic prRecords, exactly as the
 // existing integration tests avoid gh. It asserts A is dropped, B′/C′ reparent on
 // origin/main with byte-identical messages/trailers, the working tree stays
-// clean, the remote ct branches move to B′/C′, the landed branch is gone, and a
+// clean, the remote ym branches move to B′/C′, the landed branch is gone, and a
 // rerun is a no-op.
 func TestRestackIntegration(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
@@ -40,8 +40,8 @@ func TestRestackIntegration(t *testing.T) {
 	// Squash-land A: a squash-equivalent A′ carrying A's message+trailer is
 	// committed onto main in a clone and pushed, then A's remote branch is deleted
 	// (as GitHub's post-merge branch cleanup would do).
-	squashLand(t, h, "A\n\nct-stack-id: aaaaaaaa", "landed-a")
-	if err := deleteRemoteBranch(h.dir, "ct/feat/aaaaaaaa"); err != nil {
+	squashLand(t, h, "A\n\nym-stack-id: aaaaaaaa", "landed-a")
+	if err := deleteRemoteBranch(h.dir, "ym/feat/aaaaaaaa"); err != nil {
 		t.Fatalf("deleting landed branch: %v", err)
 	}
 	if _, err := repo.Git(h.dir, "fetch", "origin"); err != nil {
@@ -52,9 +52,9 @@ func TestRestackIntegration(t *testing.T) {
 	// Build the status the reconciler would produce: A merged, B/C open (B already
 	// auto-retargeted onto main after A's branch was deleted).
 	st := restackStatus(h.dir, before, []prRecord{
-		mergedPR(41, "ct/feat/aaaaaaaa", "main"),
-		openPR(42, "ct/feat/bbbbbbbb", "main"),
-		openPR(43, "ct/feat/cccccccc", "ct/feat/bbbbbbbb"),
+		mergedPR(41, "ym/feat/aaaaaaaa", "main"),
+		openPR(42, "ym/feat/bbbbbbbb", "main"),
+		openPR(43, "ym/feat/cccccccc", "ym/feat/bbbbbbbb"),
 	})
 	plan, nothing, err := planRestack(st)
 	if err != nil {
@@ -118,7 +118,7 @@ func TestRestackIntegration(t *testing.T) {
 
 	// Delete the landed remote branch and push the rebased survivors.
 	for _, id := range plan.MergedIDs {
-		if err := deleteRemoteBranch(h.dir, "ct/feat/"+id); err != nil {
+		if err := deleteRemoteBranch(h.dir, "ym/feat/"+id); err != nil {
 			t.Fatalf("delete landed branch %s: %v", id, err)
 		}
 	}
@@ -139,15 +139,15 @@ func TestRestackIntegration(t *testing.T) {
 		}
 	}
 
-	// The remote ct branches now point at B′/C′; the landed branch is gone.
-	if got := revParse(t, h.bare, "refs/heads/ct/feat/bbbbbbbb"); got != after[0].SHA {
-		t.Errorf("remote ct/feat/bbbbbbbb = %s, want B′ %s", got, after[0].SHA)
+	// The remote ym branches now point at B′/C′; the landed branch is gone.
+	if got := revParse(t, h.bare, "refs/heads/ym/feat/bbbbbbbb"); got != after[0].SHA {
+		t.Errorf("remote ym/feat/bbbbbbbb = %s, want B′ %s", got, after[0].SHA)
 	}
-	if got := revParse(t, h.bare, "refs/heads/ct/feat/cccccccc"); got != after[1].SHA {
-		t.Errorf("remote ct/feat/cccccccc = %s, want C′ %s", got, after[1].SHA)
+	if got := revParse(t, h.bare, "refs/heads/ym/feat/cccccccc"); got != after[1].SHA {
+		t.Errorf("remote ym/feat/cccccccc = %s, want C′ %s", got, after[1].SHA)
 	}
-	if _, err := repo.Git(h.bare, "rev-parse", "--verify", "refs/heads/ct/feat/aaaaaaaa"); err == nil {
-		t.Error("landed remote branch ct/feat/aaaaaaaa still exists")
+	if _, err := repo.Git(h.bare, "rev-parse", "--verify", "refs/heads/ym/feat/aaaaaaaa"); err == nil {
+		t.Error("landed remote branch ym/feat/aaaaaaaa still exists")
 	}
 
 	// Rerun: with A dropped and main caught up, there is nothing left to restack.
@@ -160,9 +160,9 @@ func TestRestackIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	st2 := restackStatus(h.dir, after2, []prRecord{
-		mergedPR(41, "ct/feat/aaaaaaaa", "main"), // still MERGED on GitHub, matches no local commit
-		openPRSynced(42, "ct/feat/bbbbbbbb", "main", remotes2["bbbbbbbb"]),
-		openPRSynced(43, "ct/feat/cccccccc", "ct/feat/bbbbbbbb", remotes2["cccccccc"]),
+		mergedPR(41, "ym/feat/aaaaaaaa", "main"), // still MERGED on GitHub, matches no local commit
+		openPRSynced(42, "ym/feat/bbbbbbbb", "main", remotes2["bbbbbbbb"]),
+		openPRSynced(43, "ym/feat/cccccccc", "ym/feat/bbbbbbbb", remotes2["cccccccc"]),
 	})
 	_, nothing2, err := planRestack(st2)
 	if err != nil {
@@ -190,8 +190,8 @@ func TestRestackIntegrationConflict(t *testing.T) {
 	origA := before[0]
 
 	// Land a DIFFERENT A′ (conflicting content on file `a`).
-	squashLand(t, h, "A\n\nct-stack-id: aaaaaaaa", "A-landed-different")
-	if err := deleteRemoteBranch(h.dir, "ct/feat/aaaaaaaa"); err != nil {
+	squashLand(t, h, "A\n\nym-stack-id: aaaaaaaa", "A-landed-different")
+	if err := deleteRemoteBranch(h.dir, "ym/feat/aaaaaaaa"); err != nil {
 		t.Fatalf("deleting landed branch: %v", err)
 	}
 	if _, err := repo.Git(h.dir, "fetch", "origin"); err != nil {
@@ -199,9 +199,9 @@ func TestRestackIntegrationConflict(t *testing.T) {
 	}
 
 	st := restackStatus(h.dir, before, []prRecord{
-		mergedPR(41, "ct/feat/aaaaaaaa", "main"),
-		openPR(42, "ct/feat/bbbbbbbb", "main"),
-		openPR(43, "ct/feat/cccccccc", "ct/feat/bbbbbbbb"),
+		mergedPR(41, "ym/feat/aaaaaaaa", "main"),
+		openPR(42, "ym/feat/bbbbbbbb", "main"),
+		openPR(43, "ym/feat/cccccccc", "ym/feat/bbbbbbbb"),
 	})
 	plan, _, err := planRestack(st)
 	if err != nil {
@@ -253,7 +253,7 @@ type restackHarness struct {
 }
 
 // buildRestackStack scripts a repo with a 3-commit stack A/B/C (each with a
-// ct-stack-id trailer and real file content) on a `feat` worktree, a bare origin,
+// ym-stack-id trailer and real file content) on a `feat` worktree, a bare origin,
 // and every stack branch plus main pushed. When bConflicts is set, B modifies the
 // same file A created, so a later diverging land of A makes B's replay conflict.
 func buildRestackStack(t *testing.T, bConflicts bool) restackHarness {
@@ -286,7 +286,7 @@ func buildRestackStack(t *testing.T, bConflicts bool) restackHarness {
 	// A creates file `a`.
 	writeFile(t, dir, "a", "from A\n")
 	run(dir, "add", ".")
-	run(dir, "commit", "-m", "A\n\nct-stack-id: aaaaaaaa")
+	run(dir, "commit", "-m", "A\n\nym-stack-id: aaaaaaaa")
 	// B either modifies `a` (conflict setup) or adds its own file `b`.
 	if bConflicts {
 		writeFile(t, dir, "a", "from B\n")
@@ -294,11 +294,11 @@ func buildRestackStack(t *testing.T, bConflicts bool) restackHarness {
 		writeFile(t, dir, "b", "from B\n")
 	}
 	run(dir, "add", ".")
-	run(dir, "commit", "-m", "B\n\nct-stack-id: bbbbbbbb")
+	run(dir, "commit", "-m", "B\n\nym-stack-id: bbbbbbbb")
 	// C adds file `c`.
 	writeFile(t, dir, "c", "from C\n")
 	run(dir, "add", ".")
-	run(dir, "commit", "-m", "C\n\nct-stack-id: cccccccc")
+	run(dir, "commit", "-m", "C\n\nym-stack-id: cccccccc")
 
 	bare := filepath.Join(root, "origin.git")
 	// The clone used by squashLand follows the bare remote's HEAD. Make it
@@ -315,7 +315,7 @@ func buildRestackStack(t *testing.T, bConflicts bool) restackHarness {
 		t.Fatal(err)
 	}
 	for _, c := range commits {
-		run(dir, "push", "origin", c.SHA+":refs/heads/ct/feat/"+c.StackID)
+		run(dir, "push", "origin", c.SHA+":refs/heads/ym/feat/"+c.StackID)
 	}
 	// Refresh remote-tracking refs so remoteBranches sees the pushed branches.
 	run(dir, "fetch", "origin")

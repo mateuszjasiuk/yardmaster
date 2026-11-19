@@ -46,39 +46,39 @@ type Server struct {
 	once     sync.Once
 }
 
-// SocketDirs lists where ct instances publish their sockets, in order of
-// preference: ct's state directory (honouring XDG_STATE_HOME), then a short
+// SocketDirs lists where ym instances publish their sockets, in order of
+// preference: ym's state directory (honouring XDG_STATE_HOME), then a short
 // per-user directory under /tmp. Unix socket paths are limited to about a
 // hundred bytes, which a long state directory can exceed; the short one is
 // the fallback for that case.
 func SocketDirs() ([]string, error) {
-	short := filepath.Join(os.TempDir(), fmt.Sprintf("ct-%d", os.Getuid()))
+	short := filepath.Join(os.TempDir(), fmt.Sprintf("ym-%d", os.Getuid()))
 	if runtime.GOOS == "darwin" {
-		short = fmt.Sprintf("/tmp/ct-%d", os.Getuid()) // $TMPDIR is long on macOS
+		short = fmt.Sprintf("/tmp/ym-%d", os.Getuid()) // $TMPDIR is long on macOS
 	}
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return []string{filepath.Join(x, "ct"), short}, nil
+		return []string{filepath.Join(x, "ym"), short}, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	return []string{filepath.Join(home, ".local", "state", "ct"), short}, nil
+	return []string{filepath.Join(home, ".local", "state", "ym"), short}, nil
 }
 
 // maxSocketPath is the longest socket path that binds on every supported
 // platform (sun_path is 104 bytes on macOS, including the terminator).
 const maxSocketPath = 100
 
-// Listen starts a server on a socket named after this process, so several ct
+// Listen starts a server on a socket named after this process, so several ym
 // instances can run side by side. The returned path is also what child
-// processes should get in CT_SOCKET.
+// processes should get in YM_SOCKET.
 func Listen() (*Server, error) {
 	dirs, err := SocketDirs()
 	if err != nil {
 		return nil, err
 	}
-	name := fmt.Sprintf("ct-%d.sock", os.Getpid())
+	name := fmt.Sprintf("ym-%d.sock", os.Getpid())
 	var path string
 	for _, dir := range dirs {
 		if p := filepath.Join(dir, name); len(p) <= maxSocketPath {
@@ -92,7 +92,7 @@ func Listen() (*Server, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	_ = os.Remove(path) // a stale socket from a crashed ct with the same pid
+	_ = os.Remove(path) // a stale socket from a crashed ym with the same pid
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
@@ -150,19 +150,19 @@ func (s *Server) serve(conn net.Conn) {
 	select {
 	case s.requests <- p:
 	case <-s.closed:
-		writeResponse(conn, Response{Error: "ct is shutting down"})
+		writeResponse(conn, Response{Error: "ym is shutting down"})
 		return
 	case <-time.After(replyTimeout):
-		writeResponse(conn, Response{Error: "ct did not pick up the request"})
+		writeResponse(conn, Response{Error: "ym did not pick up the request"})
 		return
 	}
 	select {
 	case resp := <-p.reply:
 		writeResponse(conn, resp)
 	case <-time.After(replyTimeout):
-		writeResponse(conn, Response{Error: "timed out waiting for ct"})
+		writeResponse(conn, Response{Error: "timed out waiting for ym"})
 	case <-s.closed:
-		writeResponse(conn, Response{Error: "ct is shutting down"})
+		writeResponse(conn, Response{Error: "ym is shutting down"})
 	}
 }
 

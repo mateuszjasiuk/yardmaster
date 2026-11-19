@@ -66,7 +66,7 @@ func resolveCommit(i int, lc LocalCommit, worktree string, idCounts map[string]i
 		return c
 	}
 
-	branch := "ct/" + worktree + "/" + id
+	branch := "ym/" + worktree + "/" + id
 	remoteSHA, hasRemote := remotes[id]
 	inSync := hasRemote && remoteSHA == lc.SHA
 	if hasRemote {
@@ -152,7 +152,7 @@ func publicPR(p *prRecord) *PR {
 
 // baseChainOK walks the open PRs of the non-merged commits bottom-up: the lowest
 // such PR must target mainBranch, and every open PR above it must target the
-// branch of the previous non-merged open-PR commit (ct/<wt>/<id>). Merged commits
+// branch of the previous non-merged open-PR commit (ym/<wt>/<id>). Merged commits
 // are skipped entirely — their branches are being deleted by the squash-land, so
 // the expected base never advances through them. This is what makes a lowest
 // non-merged PR that still bases on a landed commit's branch (auto-retarget not
@@ -170,12 +170,12 @@ func baseChainOK(commits []Commit, worktree, mainBranch string) bool {
 		if c.PR.Base != expected {
 			return false
 		}
-		expected = "ct/" + worktree + "/" + *c.StackID
+		expected = "ym/" + worktree + "/" + *c.StackID
 	}
 	return true
 }
 
-// findOrphans lists open PRs under this worktree's ct/<worktree>/ namespace whose
+// findOrphans lists open PRs under this worktree's ym/<worktree>/ namespace whose
 // id matches no local commit. They are reported for the human but never acted on
 // — a landed-and-restacked commit's PR, or a PR for a commit that was dropped.
 func findOrphans(commits []Commit, worktree string, prs []prRecord) []Orphan {
@@ -185,7 +185,7 @@ func findOrphans(commits []Commit, worktree string, prs []prRecord) []Orphan {
 			known[*c.StackID] = true
 		}
 	}
-	prefix := "ct/" + worktree + "/"
+	prefix := "ym/" + worktree + "/"
 	orphans := []Orphan{}
 	for _, p := range prs {
 		if p.State != "OPEN" || !strings.HasPrefix(p.Head, prefix) {
@@ -386,7 +386,7 @@ func bottomOpenCommit(commits []Commit) *Commit {
 }
 
 // makeMergeHint builds the squash subject/body hint for a merge-eligible bottom
-// commit. body is the commit's raw message body (ct-stack-id trailer included),
+// commit. body is the commit's raw message body (ym-stack-id trailer included),
 // which the merging agent passes to `gh pr merge --squash --body` so a multi-
 // commit squash keeps this commit's message verbatim. It returns nil when the
 // commit has no PR.

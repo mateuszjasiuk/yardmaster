@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 type ReorderOptions struct {
@@ -99,7 +99,7 @@ func parseReorderTodo(text string, commits []Commit) (ReorderPlan, error) {
 }
 
 func editReorderTodo(dir, initial string) (string, error) {
-	f, err := os.CreateTemp("", "ct-reorder-*.todo")
+	f, err := os.CreateTemp("", "ym-reorder-*.todo")
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +120,7 @@ func editReorderTodo(dir, initial string) (string, error) {
 	if editor == "" {
 		return "", fmt.Errorf("Git editor resolved to an empty command")
 	}
-	cmd := exec.Command("sh", "-c", editor+` "$1"`, "ct-editor", path)
+	cmd := exec.Command("sh", "-c", editor+` "$1"`, "ym-editor", path)
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -139,7 +139,7 @@ func rebaseSequence(plan ReorderPlan) string {
 }
 
 func applyReorder(dir, mainBranch, branch, preSHA string, plan ReorderPlan) error {
-	todo, err := os.CreateTemp("", "ct-rebase-*.todo")
+	todo, err := os.CreateTemp("", "ym-rebase-*.todo")
 	if err != nil {
 		return err
 	}
@@ -152,12 +152,12 @@ func applyReorder(dir, mainBranch, branch, preSHA string, plan ReorderPlan) erro
 		return err
 	}
 
-	script, err := os.CreateTemp("", "ct-sequence-editor-*.sh")
+	script, err := os.CreateTemp("", "ym-sequence-editor-*.sh")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(script.Name())
-	if _, err := script.WriteString("#!/bin/sh\ncp \"$CT_REORDER_TODO\" \"$1\"\n"); err != nil {
+	if _, err := script.WriteString("#!/bin/sh\ncp \"$YM_REORDER_TODO\" \"$1\"\n"); err != nil {
 		script.Close()
 		return err
 	}
@@ -168,7 +168,7 @@ func applyReorder(dir, mainBranch, branch, preSHA string, plan ReorderPlan) erro
 		return err
 	}
 
-	_, err = gitEnv(dir, []string{"GIT_SEQUENCE_EDITOR=" + script.Name(), "GIT_EDITOR=true", "CT_REORDER_TODO=" + todo.Name()}, "rebase", "-i", mainBranch, branch)
+	_, err = gitEnv(dir, []string{"GIT_SEQUENCE_EDITOR=" + script.Name(), "GIT_EDITOR=true", "YM_REORDER_TODO=" + todo.Name()}, "rebase", "-i", mainBranch, branch)
 	if err == nil {
 		return nil
 	}

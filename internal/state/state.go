@@ -1,4 +1,4 @@
-// Package state persists ct's small bits of cross-session state — currently the
+// Package state persists ym's small bits of cross-session state — currently the
 // last time each worktree was opened, used to order the active list.
 package state
 
@@ -10,17 +10,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
-// State is ct's persisted state, loaded from and saved to a JSON file in the
+// State is ym's persisted state, loaded from and saved to a JSON file in the
 // user's XDG state directory.
 type State struct {
 	path       string
 	LastOpened map[string]int64           `json:"last_opened"` // "repo/worktree" -> unix seconds
 	Workspaces map[string]*WorkspaceState `json:"workspaces"`  // "repo/worktree" -> agent pool
 	// Queues holds messages waiting for a workspace's agent to go idle, so a
-	// note queued just before ct exits is still delivered on the next run.
+	// note queued just before ym exits is still delivered on the next run.
 	Queues map[string][]string `json:"queues,omitempty"` // "repo/worktree" -> pending messages
 	// Open lists the workspaces that were open at the last save, so a start
 	// with restore_sessions on can reopen them.
@@ -44,7 +44,7 @@ type State struct {
 	writeMu sync.Mutex
 }
 
-// WorkspaceState records a worktree's agent pool so ct can rebuild it (resuming
+// WorkspaceState records a worktree's agent pool so ym can rebuild it (resuming
 // each claude conversation) the next time the worktree is opened.
 type WorkspaceState struct {
 	Agents      []AgentState `json:"agents"`
@@ -59,16 +59,16 @@ type AgentState struct {
 	Label     string         `json:"label"`
 }
 
-// dir returns ct's state directory (honoring XDG_STATE_HOME).
+// dir returns ym's state directory (honoring XDG_STATE_HOME).
 func dir() (string, error) {
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return filepath.Join(x, "ct"), nil
+		return filepath.Join(x, "ym"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".local", "state", "ct"), nil
+	return filepath.Join(home, ".local", "state", "ym"), nil
 }
 
 // Load reads the state file, returning an empty (usable) state if it's missing

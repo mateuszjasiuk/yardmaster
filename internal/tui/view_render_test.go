@@ -13,16 +13,16 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/vt"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/diffpager"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/usage"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/diffpager"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/usage"
 )
 
 // renderToTerminal writes styled frame content into a real terminal emulator
-// (the same vt engine ct uses to host sessions) and returns the visible
+// (the same vt engine ym uses to host sessions) and returns the visible
 // screen as plain text — the closest test approximation of what a user sees,
 // with ANSI styling and layout applied. Run tests with -v to eyeball the
 // rendered frames.
@@ -111,7 +111,7 @@ func TestBelowViableSizeShowsOnlyResizeInstruction(t *testing.T) {
 		m := sampleModel()
 		mm, _ := m.Update(tea.WindowSizeMsg{Width: size.w, Height: size.h})
 		m = mm.(Model)
-		if got := m.View().Content; got != "ct — please enlarge the terminal" {
+		if got := m.View().Content; got != "ym — please enlarge the terminal" {
 			t.Errorf("%dx%d rendered %q", size.w, size.h, got)
 		}
 	}
@@ -119,12 +119,12 @@ func TestBelowViableSizeShowsOnlyResizeInstruction(t *testing.T) {
 
 func TestNarrowBarPreservesActiveDestinationAndContext(t *testing.T) {
 	m := sampleModel()
-	m.current = &workspaceRef{repo: "caretaker", worktree: "polish", key: "caretaker/polish", ws: &session.Workspace{}}
+	m.current = &workspaceRef{repo: "ym", worktree: "polish", key: "ym/polish", ws: &session.Workspace{}}
 	m.screen = screenTerminal
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: minViableWidth, Height: minViableHeight})
 	m = mm.(Model)
 	bar := m.renderBar()
-	if !strings.Contains(bar, iconTerm) || !strings.Contains(bar, "caretaker / polish") {
+	if !strings.Contains(bar, iconTerm) || !strings.Contains(bar, "ym / polish") {
 		t.Errorf("narrow bar lost active destination or context:\n%s", bar)
 	}
 	if strings.Contains(bar, iconDeck) || strings.Contains(bar, iconEditor) || strings.Contains(bar, iconAgent) {
@@ -235,7 +235,7 @@ func TestDisplayIconModesRenderAndHitTest(t *testing.T) {
 		pane, zoom   string
 	}{
 		{config.IconsNerd, []string{iconDeck, iconEditor, iconAgent, iconTerm}, iconPanes, iconZoomIn},
-		{config.IconsText, []string{"ct", "edit", "agent", "term"}, "panes", "zoom"},
+		{config.IconsText, []string{"ym", "edit", "agent", "term"}, "panes", "zoom"},
 		{config.IconsASCII, []string{"C", "E", "A", "T"}, "#", "+"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
@@ -334,13 +334,13 @@ func TestPaneZoomToggleClick(t *testing.T) {
 	}
 }
 
-func TestCaretakerSeedlingTab(t *testing.T) {
+func TestYardmasterSeedlingTab(t *testing.T) {
 	m := sampleModel()
 	m.active = []activeItem{
 		{repo: repo.Repo{Name: "other"}, view: WorktreeView{WT: repo.Worktree{Name: "wt", Path: "/other/wt"}}},
 	}
 
-	// On the picker the caretaker tab shows the seedling.
+	// On the picker the yardmaster tab shows the seedling.
 	if bar := barLine(t, m); !strings.Contains(bar, iconDeck) {
 		t.Errorf("picker bar should show the seedling:\n%s", bar)
 	}
@@ -358,7 +358,7 @@ func TestCaretakerSeedlingTab(t *testing.T) {
 	m.agentStatus = map[int]AgentStatus{7: {Status: "waiting", Cwd: "/other/wt"}}
 	bar := barLine(t, m)
 	if !strings.Contains(bar, iconDeck) {
-		t.Errorf("waiting agent must not change the caretaker icon:\n%s", bar)
+		t.Errorf("waiting agent must not change the yardmaster icon:\n%s", bar)
 	}
 	if !strings.Contains(bar, "!") {
 		t.Errorf("waiting agent should raise the ! badge:\n%s", bar)
@@ -763,7 +763,7 @@ func TestAppendDiffBodyNilChunksKeepsBuiltInStyling(t *testing.T) {
 }
 
 // TestAppendDiffBodyChunksRenderVerbatim checks the formatter's output is passed
-// through untouched — ANSI included, no re-styling — while ct still records a
+// through untouched — ANSI included, no re-styling — while ym still records a
 // jump anchor at each File chunk's first line and none for the rest.
 func TestAppendDiffBodyChunksRenderVerbatim(t *testing.T) {
 	chunks := []diffpager.Chunk{
@@ -973,7 +973,7 @@ func TestDiffMsgPagerErrFlashesButKeepsTheDiff(t *testing.T) {
 	if m.statusLevel != statusInfo {
 		t.Errorf("a pager failure is a flash, not a sticky error (level %v)", m.statusLevel)
 	}
-	// The body still rendered, with ct's own styling, because chunks were nil.
+	// The body still rendered, with ym's own styling, because chunks were nil.
 	out := ansi.Strip(strings.Join(m.diffView.active().lines, "\n"))
 	if !strings.Contains(out, "diff --git a/one.go b/one.go") || !strings.Contains(out, "+new two") {
 		t.Errorf("the diff should still render via the built-in styler:\n%s", out)

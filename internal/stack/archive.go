@@ -24,7 +24,7 @@ func planArchive(st StackStatus) ([]string, error) {
 	}
 	var branches []string
 	for _, id := range plan.MergedIDs {
-		branches = append(branches, "ct/"+st.Worktree+"/"+id)
+		branches = append(branches, "ym/"+st.Worktree+"/"+id)
 	}
 	return branches, nil
 }

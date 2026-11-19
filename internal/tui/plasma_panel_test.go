@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 // plasmaModel builds a deck model with the plasma panel enabled at 40% and
@@ -22,10 +22,10 @@ func plasmaModel(t *testing.T, w, h int) Model {
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = mm.(Model)
 	m.groups = []Group{
-		{Repo: repo.Repo{Name: "caretaker"}, Worktrees: []WorktreeView{
-			{WT: repo.Worktree{Repo: "caretaker", Name: "(main)", Branch: "main", IsMain: true}},
-			{WT: repo.Worktree{Repo: "caretaker", Name: "feat-login", Branch: "feat-login"}, Live: true},
-			{WT: repo.Worktree{Repo: "caretaker", Name: "bugfix", Branch: "bugfix"}},
+		{Repo: repo.Repo{Name: "yardmaster"}, Worktrees: []WorktreeView{
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "(main)", Branch: "main", IsMain: true}},
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "feat-login", Branch: "feat-login"}, Live: true},
+			{WT: repo.Worktree{Repo: "yardmaster", Name: "bugfix", Branch: "bugfix"}},
 		}},
 	}
 	m.groupsLoaded = true

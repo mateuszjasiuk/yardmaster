@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 func TestParseAgentStatuses(t *testing.T) {
@@ -193,7 +193,7 @@ func TestRestoreProviderAgentSpecs(t *testing.T) {
 		t.Errorf("Codex metadata = provider %q id %q", codexSpec.Provider, codexSpec.SessionID)
 	}
 
-	// If caretaker stopped before the provider supplied an ID, restoration is a
+	// If yardmaster stopped before the provider supplied an ID, restoration is a
 	// fresh launch rather than a malformed resume with an empty argument.
 	emptyCodex, err := c.RestoreProviderAgentSpec(agent.Codex, "", "amber-fox", "continue")
 	if err != nil {
@@ -442,7 +442,7 @@ func TestTranscriptsAcrossClaudeAccounts(t *testing.T) {
 	if c.transcriptExists("missing") {
 		t.Error("a missing transcript was found")
 	}
-	if name, got := c.ClaudeAccount("/home/caretaker"); name != "private" || got != privateDir {
+	if name, got := c.ClaudeAccount("/home/yardmaster"); name != "private" || got != privateDir {
 		t.Errorf("ClaudeAccount = %q %q, want private %q", name, got, privateDir)
 	}
 	if name, got := c.ClaudeAccount("/work/api"); name != "" || got != "" {

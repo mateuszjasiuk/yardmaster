@@ -9,11 +9,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/diffpager"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/stack"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/diffpager"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/stack"
 )
 
 // stackModel builds a deck with a single stackable active worktree (2 commits
@@ -407,7 +407,7 @@ func TestMergeCleanupFailureIsNotAFailedMerge(t *testing.T) {
 			Merged:   10,
 			Executed: []string{"merged PR #10 (squash)"},
 		},
-		err: errors.New("deleting merged remote branch ct/wt/aaaaaaaa: permission denied"),
+		err: errors.New("deleting merged remote branch ym/wt/aaaaaaaa: permission denied"),
 	})
 	body := strings.Join(m.stackView.body, "\n")
 	if strings.Contains(body, "merge failed") {

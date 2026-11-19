@@ -1,6 +1,6 @@
 package agent
 
-// EventKind identifies a provider lifecycle event consumed by caretaker.
+// EventKind identifies a provider lifecycle event consumed by yardmaster.
 type EventKind string
 
 const (
@@ -12,7 +12,7 @@ const (
 	Disconnected        EventKind = "disconnect"
 )
 
-// Event is the provider-neutral lifecycle state caretaker needs for session
+// Event is the provider-neutral lifecycle state yardmaster needs for session
 // persistence, status badges, and attention notifications.
 type Event struct {
 	Kind EventKind

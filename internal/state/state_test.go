@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 func TestStateRoundTrip(t *testing.T) {
@@ -67,7 +67,7 @@ func TestAgentsRoundTrip(t *testing.T) {
 func TestLoadLegacyAgentDefaultsProviderToClaude(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", root)
-	stateDir := filepath.Join(root, "ct")
+	stateDir := filepath.Join(root, "ym")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -3,7 +3,7 @@
 // state in one file shared by all of a repo's worktrees, so reading it needs no
 // subprocess and no network. Nothing here changes a stack.
 //
-// This is a different model from package stack, which drives `ct stack`: there,
+// This is a different model from package stack, which drives `ym stack`: there,
 // each commit on one branch is a PR.
 package ghstack
 

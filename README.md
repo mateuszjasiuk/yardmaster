@@ -1,12 +1,12 @@
-# ct
+# ym
 
 A terminal "deck" for managing git worktrees across your repos. Each worktree gets a
 **workspace** — an nvim window, one or more Claude Code or Codex agents, and a terminal — hosted
-*inside* ct under a pinned status bar, with one session full-screen at a time.
+*inside* ym under a pinned status bar, with one session full-screen at a time.
 
 Built with [Bubble Tea](https://charm.land/bubbletea) v2 and [charmbracelet/x/vt](https://github.com/charmbracelet/x).
 
-![The ct deck showing repositories, active worktrees, branch divergence, and the ambient plasma panel](docs/screenshots/worktree-deck.png)
+![The ym deck showing repositories, active worktrees, branch divergence, and the ambient plasma panel](docs/screenshots/worktree-deck.png)
 
 ## At a glance
 
@@ -27,7 +27,7 @@ Split, focus, and zoom terminals while tests, servers, and monitoring tools keep
 
 Search every action and see its current configurable shortcut without leaving the workspace.
 
-![The searchable ct command palette with live keyboard shortcuts](docs/screenshots/command-palette.png)
+![The searchable ym command palette with live keyboard shortcuts](docs/screenshots/command-palette.png)
 
 ## Requirements
 
@@ -41,16 +41,16 @@ Search every action and see its current configurable shortcut without leaving th
 
 ## Credentials and privacy
 
-`ct` does not implement its own agent login or store copies of provider credentials. To display
+`ym` does not implement its own agent login or store copies of provider credentials. To display
 Claude usage limits, it reads Claude Code's existing OAuth credential from the macOS Keychain (or
 `~/.claude/.credentials.json` as a fallback) and sends it only to Anthropic's
 `https://api.anthropic.com/api/oauth/usage` endpoint. Codex usage and lifecycle information comes
-from a local `codex app-server` process started from your configured Codex command. `ct` has no
-telemetry and does not send repository contents, prompts, or session output to a caretaker service.
+from a local `codex app-server` process started from your configured Codex command. `ym` has no
+telemetry and does not send repository contents, prompts, or session output to a yardmaster service.
 
 ## Configuration
 
-`ct` reads `~/.caretaker/config.toml`, or the path in `CT_CONFIG`. Only a repo root (`root` or `roots`) is required:
+`ym` reads `~/.yardmaster/config.toml`, or the path in `YM_CONFIG`. Only a repo root (`root` or `roots`) is required:
 
 ```toml
 # Parent directory containing your repos (each immediate child with a .git).
@@ -72,12 +72,12 @@ shell  = "/bin/zsh" # defaults to the current $SHELL when omitted
 worktree_path = ".worktrees/{name}"
 branch_name   = "{name}"
 
-# Reopen the worktrees that were open when ct last quit. They start in the
+# Reopen the worktrees that were open when ym last quit. They start in the
 # background while the deck is shown.
 restore_sessions = false
 
 # Run a command in the background whenever a session's folder gains focus
-# (switching to it, or ct's window getting focus back). The folder is added as
+# (switching to it, or ym's window getting focus back). The folder is added as
 # the last argument. Empty is off.
 focus_command = ""
 
@@ -88,12 +88,12 @@ focus_command = ""
 # extra disk space until a file changes. `link` makes a symlink to the main
 # checkout instead, shared by every worktree. A path that already exists in the
 # new worktree is never overwritten, and a pattern that matches nothing is
-# skipped. If something cannot be copied, ct says so and opens the worktree
+# skipped. If something cannot be copied, ym says so and opens the worktree
 # anyway.
 [worktree_files]
 copy = [".env", ".env.local"]
 
-# Per-repo rules, keyed by the repo name ct shows (quote names like "work/api").
+# Per-repo rules, keyed by the repo name ym shows (quote names like "work/api").
 # Each list replaces the default one only when set, so this repo keeps the
 # default `link`; set a list to [] to turn it off for one repo.
 [repos.api.worktree_files]
@@ -123,7 +123,7 @@ cycle_back = "alt+["   # previous session view (wraps)
 goto_editor = "alt+1"  # jump to the editor view
 goto_agent  = "alt+2"  # jump to the agent view
 goto_term   = "alt+3"  # jump to the terminal view
-picker      = "ctrl+g" # return to the CT picker
+picker      = "ctrl+g" # return to the YM picker
 palette     = "alt+a"  # agent board: find, focus, create, restart, or remove agents
 board_new     = "ctrl+e" # in the board: new agent
 board_restart = "ctrl+r" # in the board: restart the selected agent
@@ -172,7 +172,7 @@ charset = "dots"    # dots (braille) | shade | blocks
 speed   = 0.3       # animation rate; 0 freezes the pattern
 width   = 40        # percent of the terminal width; 0 disables the panel
 
-# Stack merges require a confirmation by default. This setting bypasses ct's
+# Stack merges require a confirmation by default. This setting bypasses ym's
 # confirmation; it is not GitHub's "auto-merge when checks pass" feature.
 [stack]
 auto_merge = false
@@ -193,7 +193,7 @@ highlight_colors = ["#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"]
 # The diff viewer (deck `v` and the stack `d` preview). All optional.
 [diff]
 # Extra flags handed to every diff git runs, before the revision range. A later
-# flag wins over ct's own, so `--color=always` here feeds a pager that wants
+# flag wins over ym's own, so `--color=always` here feeds a pager that wants
 # coloured input. Good ones to try: --histogram, -C, --color-moved=zebra, -W,
 # --ignore-blank-lines.
 args    = ["--histogram", "-C"]
@@ -202,8 +202,8 @@ args    = ["--histogram", "-C"]
 exclude = ["*.lock", "go.sum"]
 
 # An external formatter each file's patch is piped through, rendered verbatim
-# inside ct's viewer (which keeps scrolling, file jumps, and the scope toggle).
-# Omit the whole subtable to keep ct's built-in styling. The program must not
+# inside ym's viewer (which keeps scrolling, file jumps, and the scope toggle).
+# Omit the whole subtable to keep ym's built-in styling. The program must not
 # page itself, and `{width}` is replaced with the viewer's column count.
 [diff.pager]
 command = "delta"
@@ -239,8 +239,8 @@ folders = ["~/Projects"]
 
 Claude agents in repos under one of `folders` start with that account's
 `CLAUDE_CONFIG_DIR`; every other repo, and the `~` home workspace, uses the
-default account (`~/.claude`, or whatever `CLAUDE_CONFIG_DIR` was when ct
-started). When folders nest, the longer one wins. ct checks at startup that
+default account (`~/.claude`, or whatever `CLAUDE_CONFIG_DIR` was when ym
+started). When folders nest, the longer one wins. ym checks at startup that
 `config_dir` and every folder exist, and that no two accounts share one.
 
 Status polling covers every account with an open agent, and the bar's agent
@@ -248,23 +248,23 @@ strip shows an extra account's worktrees as one block on a darker background,
 after the default account's. The usage gauge only reads the default account,
 so it is hidden next to agents on another one.
 
-## ct ctl
+## ym ctl
 
-`ct ctl` is a command that talks to the running ct over a Unix socket. Every
-agent ct starts can run it, because it inherits `CT_SOCKET`, so sessions start,
+`ym ctl` is a command that talks to the running ym over a Unix socket. Every
+agent ym starts can run it, because it inherits `YM_SOCKET`, so sessions start,
 brief and stop each other through it (see [Feature managers](#feature-managers)
 for work split over several sessions). You can use it too, from any terminal:
 
 ```sh
-ct ctl list                                # every worktree, its agents and their status
-ct ctl summary caretaker/fix-login         # commits, diffstat, queued messages, last agent message
-ct ctl spawn caretaker fix-login --prompt "Fix the redirect loop after login"
-ct ctl send caretaker/fix-login "Add a test for the expired-token case"
-ct ctl interrupt caretaker/fix-login       # press Escape in that agent
-ct ctl stop caretaker/fix-login            # close its sessions, keep the worktree
-ct ctl open caretaker/fix-login            # start them again, resuming its agents
-ct ctl reopen caretaker/fix-login          # stop and open: restart its agents on the same conversations
-ct ctl remove caretaker/fix-login          # asks you to confirm in the deck
+ym ctl list                                # every worktree, its agents and their status
+ym ctl summary yardmaster/fix-login         # commits, diffstat, queued messages, last agent message
+ym ctl spawn yardmaster fix-login --prompt "Fix the redirect loop after login"
+ym ctl send yardmaster/fix-login "Add a test for the expired-token case"
+ym ctl interrupt yardmaster/fix-login       # press Escape in that agent
+ym ctl stop yardmaster/fix-login            # close its sessions, keep the worktree
+ym ctl open yardmaster/fix-login            # start them again, resuming its agents
+ym ctl reopen yardmaster/fix-login          # stop and open: restart its agents on the same conversations
+ym ctl remove yardmaster/fix-login          # asks you to confirm in the deck
 ```
 
 Messages sent with `send` are queued and delivered when the worktree's agent is
@@ -272,53 +272,53 @@ idle, so they never land in the middle of a turn or on a permission prompt. A
 `send` to a worktree that is not open opens it in the background with the
 message as the first prompt. `spawn` creates the worktree and starts an agent
 on the prompt without switching your view. `remove` never deletes on its own:
-it raises ct's usual remove-confirm panel the next time you are on the deck.
+it raises ym's usual remove-confirm panel the next time you are on the deck.
 
-`ct ctl` cannot answer an agent's permission prompt or question. ct's `!` badge
+`ym ctl` cannot answer an agent's permission prompt or question. ym's `!` badge
 and the attention key show which worktree is waiting; you answer there.
 
 A repo's main checkout, the `(main)` row of the deck, is an ordinary worktree:
 open it to get a plain agent on the main branch. The row is first in its repo.
 A repo with no other worktree shows it only once it has been opened: type `main`
 as the name of a new session, use "open main of <repo>" in the command palette,
-or run `ct ctl open <repo>/main`. `ct ctl` calls it `<repo>/main`, and refuses to
+or run `ym ctl open <repo>/main`. `ym ctl` calls it `<repo>/main`, and refuses to
 spawn or remove it.
 
-Each ct instance has its own socket under `~/.local/state/ct/` (or a short
+Each ym instance has its own socket under `~/.local/state/ym/` (or a short
 per-user directory under `/tmp` when that path is too long for a socket). Programs
-started by ct get its path in `CT_SOCKET`; from elsewhere, `ct ctl` finds the one
-running instance and asks you to set `CT_SOCKET` when there are several.
+started by ym get its path in `YM_SOCKET`; from elsewhere, `ym ctl` finds the one
+running instance and asks you to set `YM_SOCKET` when there are several.
 
 ## Run
 
 ```sh
-go run ./cmd/ct
+go run ./cmd/ym
 # or
-go build -o ct ./cmd/ct && ./ct
+go build -o ym ./cmd/ym && ./ym
 ```
 
 ## Install and update
 
 Release binaries currently support Apple Silicon and Intel Macs. They do not
-require Go or a caretaker source checkout.
+require Go or a yardmaster source checkout.
 
 With Homebrew:
 
 ```sh
-brew install kcaverly/tap/ct
-brew upgrade ct
+brew install kcaverly/tap/ym
+brew upgrade ym
 ```
 
 Without Homebrew, use the checksum-verifying installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KCaverly/caretaker/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/mateuszjasiuk/yardmaster/main/scripts/install.sh | sh
 ```
 
-The installer writes to `~/.local/bin` by default. Set `CT_INSTALL_DIR` to use a
+The installer writes to `~/.local/bin` by default. Set `YM_INSTALL_DIR` to use a
 different directory, or download it first if your environment does not permit
 piping scripts into a shell. A specific release can be installed with
-`--version v0.1.0`. Confirm the installed build with `ct version`.
+`--version v0.1.0`. Confirm the installed build with `ym version`.
 
 ### Maintainer release process
 
@@ -338,14 +338,14 @@ drafts so their archives and attestations can be reviewed before publication.
 Release assets can be verified with GitHub CLI:
 
 ```sh
-gh attestation verify ct_Darwin_arm64.tar.gz --repo KCaverly/caretaker
+gh attestation verify ym_Darwin_arm64.tar.gz --repo mateuszjasiuk/yardmaster
 ```
 
 ## How it works
 
 A pinned status bar sits at the top at all times:
 
-The bar is a row of spaced **Nerd Font** glyphs (a Nerd Font is required). The caretaker is a
+The bar is a row of spaced **Nerd Font** glyphs (a Nerd Font is required). The yardmaster is a
 seedling, lit yellow while you tend the deck and dim once you drop into a session; the nvim (code),
 agent (robot), and term (terminal) icons glow in their own colour when active and dim otherwise
 (faint until a workspace exists). Lifecycle status comes from `claude agents --json` for Claude
@@ -355,14 +355,14 @@ worktree shows on the right.
 
 - **Picker** (seedling): the deck — a `NEW` repo fuzzy-finder and an `ACTIVE` list of your
   worktrees grouped by repo (`●` running · `○` stopped · `✷` uncommitted changes). Within each
-  repo, worktrees are ordered by when you last opened them in ct (most recent first), falling
+  repo, worktrees are ordered by when you last opened them in ym (most recent first), falling
   back to git commit time for ones you haven't opened yet. The three most-recently-opened
   worktrees overall get a `1`/`2`/`3` rank in the left column. Each row also shows how far its
   branch is ahead/behind the repo's main branch (`↑N ↓M`, right-aligned), and the selected row
   expands a `└` detail line with new context only: uncommitted diffstat, last commit subject, age,
   and (when available) pull-request state. Last-opened times are persisted to
-  `$XDG_STATE_HOME/ct/state.json` (default `~/.local/state/ct/state.json`).
-- Pressing **enter** on a worktree **activates** it: ct starts nvim + an agent from
+  `$XDG_STATE_HOME/ym/state.json` (default `~/.local/state/ym/state.json`).
+- Pressing **enter** on a worktree **activates** it: ym starts nvim + an agent from
   `agents.default` + a terminal in that worktree and drops you into the nvim view. The session
   segments light up and the active repo / worktree shows on the right. You can also **click** a
   deck row to select it and click it again to open it (or, in `NEW`, to start naming a worktree).
@@ -372,12 +372,12 @@ worktree shows on the right.
   **`ctrl+g`** jumps straight to your most recently opened worktree, so it toggles you between the
   deck and your latest work. You can also **click** any of the four bar icons to jump straight to
   that view (the session icons are inert until a workspace is active). Sessions keep running —
-  switching never relaunches them, and they persist for ct's lifetime.
+  switching never relaunches them, and they persist for ym's lifetime.
 - **`ctrl+\`** opens the **session list** on the left: the bar's open worktrees under their
   repo and gh stack, with the same signs (`!` waiting, `✓` done, `●` working) and order, so
   `ctrl+l`/`ctrl+h` walk it top to bottom. Click a row to open it. The list pushes the session to
   the right (28 columns) instead of covering it, and the bar hides its strip while it shows. It
-  hides in terminals under 89 columns and on the deck. ct remembers whether it is open. When the
+  hides in terminals under 89 columns and on the deck. ym remembers whether it is open. When the
   bar's strip runs out of room, its `+N` opens the list too.
 - **`ctrl+|`** (`ctrl+shift+\`) shows **nvim and the agent side by side**: nvim on the left,
   the focused agent on the right, half the width each. **`alt+1`** / **`alt+2`**, **`alt+h`** /
@@ -385,7 +385,7 @@ worktree shows on the right.
   (`display.side_by_side_dim`), and the bar lights both icons.
   Cycling treats the two as one stop (side by side → terminal → side by side) and comes back to
   the one you used last; the terminal keeps the full width. Side by side needs 121 columns, and while it is on, the session list hides first in
-  windows under 150. Without an agent nvim fills the width. ct remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
+  windows under 150. Without an agent nvim fills the width. ym remembers the choice. Your terminal has to report `ctrl+|` as its own key (the kitty
   keyboard protocol); without it the key arrives as `ctrl+\`, so pick another `side_by_side` key.
 
 ### Agent providers and lifecycle
@@ -410,7 +410,7 @@ shows instead. The board always shows the worktree's name in its flag colour. On
 worktree `ctrl+q` dismisses its "your turn" and makes it dim. `ctrl+x` in the board dismisses one
 agent's "your turn". The current worktree is underlined, in its flag colour when it has one. Click
 a name to jump there, or press
-**`ctrl+h`** / **`ctrl+l`** to move left / right through the worktrees like tabs (wrapping). ct takes
+**`ctrl+h`** / **`ctrl+l`** to move left / right through the worktrees like tabs (wrapping). ym takes
 these two keys from the programs inside it, such as nvim and the shell. With more than one
 repo open, each repo's worktrees follow its name (`front: beta · zeta │ back: alpha`); the repo
 names are hidden first when the bar is short of space.
@@ -425,28 +425,28 @@ is enabled, the new-agent form adds a Claude/Codex selector; when only one is en
 hidden. Each time the form opens it starts on `agents.default`. Board and status-bar labels include
 the provider so mixed pools remain easy to distinguish.
 
-Caretaker passes the form prompt as the CLI's initial prompt; agents launch interactively.
+Yardmaster passes the form prompt as the CLI's initial prompt; agents launch interactively.
 The prompt editor supports multiple lines; press `ctrl+enter` to launch the agent (plain `enter`
 adds a new line). Codex starts a fresh conversation normally and uses `codex resume <thread-id>`
 when a known thread ID is restored.
 
 Each Codex pane also owns a private companion `codex app-server` on a local Unix socket. The stock
 Codex TUI connects to it with `--remote` and remains responsible for approvals and user input;
-caretaker's passive connection observes thread, turn, waiting, completion, failure, and disconnect
+yardmaster's passive connection observes thread, turn, waiting, completion, failure, and disconnect
 events. This remote/App Server interface is experimental, which is why the Codex CLI version in the
 requirements matters.
 
 Agent state records the provider, conversation ID, display label, pool order, and focused agent in
-`$XDG_STATE_HOME/ct/state.json` (default `~/.local/state/ct/state.json`). Older state without a
-provider is migrated to Claude. On the next activation, ct resumes conversations with stored IDs.
+`$XDG_STATE_HOME/ym/state.json` (default `~/.local/state/ym/state.json`). Older state without a
+provider is migrated to Claude. On the next activation, ym resumes conversations with stored IDs.
 A Claude agent shows its session name from Claude, so a `/rename` there shows on the board and in
 search within one status poll and is saved as the label.
-Restart is transactional: ct starts the replacement before swapping it into the same pool position,
+Restart is transactional: ym starts the replacement before swapping it into the same pool position,
 so a bad command leaves the current process running.
 
-Fresh Claude sessions receive a caretaker-managed ID immediately. Fresh Codex thread IDs are
+Fresh Claude sessions receive a yardmaster-managed ID immediately. Fresh Codex thread IDs are
 assigned by Codex and captured from the pane's App Server as soon as the thread starts. Both are then
-persisted and resumed after restarting ct. Restarting an agent from the board preserves its provider,
+persisted and resumed after restarting ym. Restarting an agent from the board preserves its provider,
 conversation, label, pool position, and focus. Codex lifecycle events feed the same busy, waiting,
 completion, attention, and bell system as Claude; failure of Claude's status poll does not erase
 Codex status. The `alt+u` usage panel includes estimates for every enabled provider. The top-bar
@@ -470,74 +470,74 @@ panel.
 Press **`?`** (in the deck) or **`f1`** (anywhere, including inside a session) for a key + legend
 overlay; any key closes it.
 
-Press **`alt+p`** (anywhere) for the **command palette**: a fuzzy-searchable list of every ct action
+Press **`alt+p`** (anywhere) for the **command palette**: a fuzzy-searchable list of every ym action
 with its live key shown alongside, so you can run any action — and passively learn its chord —
 without memorizing the reserved keys; `enter` runs the selected row, `esc` closes.
 
 ### Feature managers
 
 A feature split into several sessions can have its own manager: an ordinary
-worktree session that plans the feature, starts the other sessions with `ct ctl`
-and tracks what blocks what. Any session inside ct can run `ct ctl`, because it
-inherits `CT_SOCKET`, so a manager needs no special support. Start one with a
+worktree session that plans the feature, starts the other sessions with `ym ctl`
+and tracks what blocks what. Any session inside ym can run `ym ctl`, because it
+inherits `YM_SOCKET`, so a manager needs no special support. Start one with a
 skill as its first prompt:
 
 ```sh
-ct ctl spawn <repo> <name> --prompt "/feature-coordinator <ticket>"
+ym ctl spawn <repo> <name> --prompt "/feature-coordinator <ticket>"
 ```
 
-ct can also record the feature, so the manager and anyone else can see which
+ym can also record the feature, so the manager and anyone else can see which
 worktrees belong to it. A feature lives in one repo and has one manager; a
 worktree belongs to one feature at most.
 
 ```sh
-ct ctl feature new allgravy sch-755 --manager allgravy/sch-755-coordinator --notes ~/Projects/allgravy/notae/sch-755-send-for-approval
-ct ctl spawn allgravy sch-795-rota --base sch-794 --feature sch-755 --prompt -   # joins the feature
-ct ctl feature add allgravy/sch-755 allgravy/some-older-worktree
-ct ctl feature list            # manager, worktrees and gh stacks of every feature
-ct ctl list --feature allgravy/sch-755
-ct ctl feature drop allgravy/sch-755   # forget it; the worktrees stay
+ym ctl feature new allgravy sch-755 --manager allgravy/sch-755-coordinator --notes ~/Projects/allgravy/notae/sch-755-send-for-approval
+ym ctl spawn allgravy sch-795-rota --base sch-794 --feature sch-755 --prompt -   # joins the feature
+ym ctl feature add allgravy/sch-755 allgravy/some-older-worktree
+ym ctl feature list            # manager, worktrees and gh stacks of every feature
+ym ctl list --feature allgravy/sch-755
+ym ctl feature drop allgravy/sch-755   # forget it; the worktrees stay
 ```
 
-`ct ctl list` marks each member with `feature=sch-755`, and the manager with
+`ym ctl list` marks each member with `feature=sch-755`, and the manager with
 `feature=sch-755 manager`. A removed worktree drops out of its feature's list.
-Features are kept in ct's state file, on this machine only.
+Features are kept in ym's state file, on this machine only.
 
 To stack a new session's branch with `gh stack`, spawn it on the top branch, then
 run `gh stack add <branch>` from the top branch's worktree. `gh stack` refuses
 from any other worktree.
 
 For a branch in a `gh stack`, the bar's label shows its position and PR, such as
-`4/5 #1366`, and `ct ctl list` shows `stack=#1369 4/5  pr=#1366`. ct reads this
+`4/5 #1366`, and `ym ctl list` shows `stack=#1369 4/5  pr=#1366`. ym reads this
 from `.git/gh-stack`; it never changes a stack.
 
 The bar's strip keeps a stack's open worktrees together, bottom to top, and
 collapses each stack you're not in to one item (`⛁ #1369`, with its most urgent
-state). `toggle_stacks` shows them all in full instead; ct remembers the choice.
+state). `toggle_stacks` shows them all in full instead; ym remembers the choice.
 `next_worktree` and `prev_worktree` treat a collapsed stack as one stop and open the
 worktree you used last in it. The deck lists every stack in full under a `⛁ #1369`
 header, with each worktree's position and PR.
 
 `stack_popup` lists every branch of the current stack (the selected one on the
-deck) with its PR's state, review and checks. ct asks GitHub through `gh` only when
+deck) with its PR's state, review and checks. ym asks GitHub through `gh` only when
 the popup opens, at most once a minute, or on `r`. `enter` opens the branch's
 session and `o` its PR.
 
 ## Stacked PRs
 
-ct treats each commit on a worktree branch as its own GitHub PR, chained bottom-to-top and
-identified by a `ct-stack-id` commit trailer. The `ct stack` CLI drives the workflow from a
+ym treats each commit on a worktree branch as its own GitHub PR, chained bottom-to-top and
+identified by a `ym-stack-id` commit trailer. The `ym stack` CLI drives the workflow from a
 worktree:
 
-- `ct stack status` — read-only reconciliation of local commits, last-fetched remote branches, and
+- `ym stack status` — read-only reconciliation of local commits, last-fetched remote branches, and
   PR state into a per-commit status plus a stack-level `next_action` hint (`--json` for the machine
   form). It never mutates anything.
-- `ct stack submit` — the additive half: assigns ids to new commits, pushes branches, and creates or
+- `ym stack submit` — the additive half: assigns ids to new commits, pushes branches, and creates or
   updates PRs (retarget/retitle/nav-table) to match the local stack. `--dry-run` prints the plan.
-- `ct stack restack` — repairs a stack after its bottom PRs squash-land: drops the landed commits
+- `ym stack restack` — repairs a stack after its bottom PRs squash-land: drops the landed commits
   from the local branch, deletes their remote branches, and re-submits the survivors. `--dry-run`
   prints the plan; because it rewrites branches, run the plan first.
-- `ct stack merge` — squash-merges the bottom PR with its original commit message. It leaves branch
+- `ym stack merge` — squash-merges the bottom PR with its original commit message. It leaves branch
   cleanup to GitHub's repository setting so dependent stacked PRs are retargeted before the merged
   head branch is deleted. It re-fetches immediately before merging and refuses unless GitHub
   reports `MERGEABLE` and the PR targets the repository's main branch. After merging, it waits
@@ -569,14 +569,14 @@ when GitHub is unavailable):
   <repo>/<wt>` (only with submit-able work).
 
 All three verbs open a read-only, scrollable **stack overlay** titled `STACK <repo> / <wt>` showing
-the same output as `ct stack status`. `submit` runs directly (it is additive) and reports the fresh
+the same output as `ym stack status`. `submit` runs directly (it is additive) and reports the fresh
 status back into the overlay. `restack` shows its **dry-run plan first** with an `enter run · esc
 cancel` footer — `enter` executes it for real, `esc` cancels without touching your branches. Inside
 the overlay, `j`/`k` scroll, `r` re-fetches, and `esc`/`q` close.
 
 ## Layout
 
-- `cmd/ct` — the `ct` entrypoint.
+- `cmd/ym` — the `ym` entrypoint.
 - `internal/config` — config loading + defaults.
 - `internal/repo` — repo discovery and git worktree operations.
 - `internal/session` — hosts programs on ptys with a terminal emulator (`x/vt`) per session.

@@ -1,5 +1,5 @@
 // Package repo handles discovery of repos under the configured root and the git
-// worktree operations ct performs against them.
+// worktree operations ym performs against them.
 package repo
 
 import (
@@ -64,7 +64,7 @@ func DiscoverRepos(root string) ([]Repo, error) {
 // A repository reachable from two roots (nested or symlinked trees) is listed
 // once, keyed by its absolute path. A root that has gone missing since startup —
 // config validation resolves them all, so this means it disappeared underneath a
-// running ct — is skipped rather than allowed to hide the roots that are still
+// running ym — is skipped rather than allowed to hide the roots that are still
 // there; its error surfaces only when no root yielded anything.
 func DiscoverReposIn(roots []string) ([]Repo, error) {
 	var repos []Repo
@@ -242,7 +242,7 @@ type BranchTip struct {
 
 // BranchTips returns the tip metadata of every local branch in r, keyed by
 // short branch name — one subprocess for the whole repo, replacing a
-// per-worktree `git log -1`. Worktree HEADs equal their branch tips in ct's
+// per-worktree `git log -1`. Worktree HEADs equal their branch tips in ym's
 // branch-per-worktree model; detached worktrees simply miss the map (a zero
 // BranchTip).
 //
@@ -434,7 +434,7 @@ type FileStat struct {
 // formatter that wants coloured input. That is safe only because the consumers
 // of a coloured body strip ANSI before matching: diffpager's chunk splitter
 // tests `diff --git` against ANSI-stripped text, so the file-jump index
-// survives. ct's own built-in styler does not, which is why colouring the body
+// survives. ym's own built-in styler does not, which is why colouring the body
 // is worth doing only alongside a configured pager.
 //
 // Only body-producing calls need them. --numstat is computed internally and is
@@ -448,7 +448,7 @@ var diffBodyFlags = []string{"--no-ext-diff", "--no-color"}
 // — to a settings file it has no business knowing about, and would make these
 // functions untestable without one.
 //
-// Args are extra flags placed after ct's pinned diffBodyFlags and before the
+// Args are extra flags placed after ym's pinned diffBodyFlags and before the
 // revisions, so a user flag wins over a pinned one. They go on the --numstat
 // calls too, not just the patch calls: the numstat feeds the file index and the
 // +/− totals in the viewer's header, and a flag like -w or --histogram that
@@ -461,7 +461,7 @@ var diffBodyFlags = []string{"--no-ext-diff", "--no-color"}
 // about which files are in it is worse than not supporting exclusions at all.
 //
 // The zero value is the "no configuration" case and must produce argv identical
-// to what ct sent before these knobs existed — every existing call site passes
+// to what ym sent before these knobs existed — every existing call site passes
 // through the same helpers, so a regression there would be silent.
 type DiffOptions struct {
 	Args    []string
@@ -709,7 +709,7 @@ func parseUntracked(out string) []string {
 // slashes are allowed for branch namespacing.
 const worktreeNameForbidden = "~^:?*[\\"
 
-// ValidateWorktreeName rejects new-worktree names before ct runs `git worktree
+// ValidateWorktreeName rejects new-worktree names before ym runs `git worktree
 // add`, so bad input yields an inline hint instead of raw git stderr — and so a
 // name containing ".." can never place the worktree outside the repo when it is
 // filepath.Join'd into the worktree_path template.
@@ -883,7 +883,7 @@ func resolvePath(path string) string {
 }
 
 // deleteInBackground removes dir without making the caller wait. It runs
-// `rm -rf` as a separate process so the delete finishes even if ct quits
+// `rm -rf` as a separate process so the delete finishes even if ym quits
 // first; where rm is missing it falls back to a goroutine.
 func deleteInBackground(dir string) {
 	cmd := exec.Command("rm", "-rf", dir)

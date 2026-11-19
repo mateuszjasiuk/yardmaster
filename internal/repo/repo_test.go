@@ -163,15 +163,15 @@ func TestParseBranchTipsAheadBehind(t *testing.T) {
 }
 
 func TestParseWorktreeList(t *testing.T) {
-	out := `worktree /home/u/repos/caretaker
+	out := `worktree /home/u/repos/yardmaster
 HEAD abc123
 branch refs/heads/main
 
-worktree /home/u/repos/caretaker/.worktrees/feat-login
+worktree /home/u/repos/yardmaster/.worktrees/feat-login
 HEAD def456
 branch refs/heads/feat-login
 
-worktree /home/u/repos/caretaker/.worktrees/detached
+worktree /home/u/repos/yardmaster/.worktrees/detached
 HEAD 789aaa
 detached
 `
@@ -179,7 +179,7 @@ detached
 	if len(wts) != 3 {
 		t.Fatalf("got %d worktrees, want 3", len(wts))
 	}
-	if wts[0].Path != "/home/u/repos/caretaker" || wts[0].Branch != "main" {
+	if wts[0].Path != "/home/u/repos/yardmaster" || wts[0].Branch != "main" {
 		t.Fatalf("main worktree parsed wrong: %+v", wts[0])
 	}
 	if wts[1].Branch != "feat-login" {
@@ -316,7 +316,7 @@ func TestDiscoverReposInDisambiguatesNames(t *testing.T) {
 
 // TestDiscoverReposInDeduplicatesAndTolerates covers the two edges: one repo
 // reachable from two roots is listed once, and a root that vanished under a
-// running ct must not hide the roots that are still there.
+// running ym must not hide the roots that are still there.
 func TestDiscoverReposInDeduplicatesAndTolerates(t *testing.T) {
 	base := t.TempDir()
 	work := filepath.Join(base, "work")

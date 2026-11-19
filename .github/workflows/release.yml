@@ -45,4 +45,4 @@ jobs:
       - name: Attest release archives
         uses: actions/attest@v4
         with:
-          subject-path: "dist/ct_*.tar.gz"
+          subject-path: "dist/ym_*.tar.gz"

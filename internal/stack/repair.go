@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 type RepairOptions struct {
@@ -45,7 +45,7 @@ func planRepair(st StackStatus, prs []prRecord, number int) (RepairPlan, error) 
 	if target.State != "CLOSED" || target.MergedAt != "" {
 		return RepairPlan{}, fmt.Errorf("PR #%d is %s; repair requires a closed, unmerged PR", number, strings.ToLower(target.State))
 	}
-	prefix := "ct/" + st.Worktree + "/"
+	prefix := "ym/" + st.Worktree + "/"
 	if !strings.HasPrefix(target.Base, prefix) {
 		return RepairPlan{}, fmt.Errorf("PR #%d former base %s is not a stack branch", number, target.Base)
 	}
@@ -69,7 +69,7 @@ func planRepair(st StackStatus, prs []prRecord, number int) (RepairPlan, error) 
 			if st.Commits[j].State == StateMerged || st.Commits[j].StackID == nil {
 				continue
 			}
-			newBase = "ct/" + st.Worktree + "/" + *st.Commits[j].StackID
+			newBase = "ym/" + st.Worktree + "/" + *st.Commits[j].StackID
 			break
 		}
 		break

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // prRecord is a PR reduced to what the reconciler needs. It differs from the
@@ -120,7 +120,7 @@ const (
 )
 
 // ghRef is one head branch in a gather's scope, plus how much of its PRs the
-// reconciler can actually use. Tracked marks a branch a local commit's ct-stack-id
+// reconciler can actually use. Tracked marks a branch a local commit's ym-stack-id
 // trailer names: those PRs drive every per-commit state, so they are read in full
 // and in every state. An untracked branch is a namespace branch left in the fetched
 // refs with no local commit behind it — the only thing it can contribute is an
@@ -134,8 +134,8 @@ type ghRef struct {
 // alongside a GitHub availability report.
 //
 // The query is scoped to the head branches this stack could possibly own —
-// derived locally, from the commits' ct-stack-id trailers and the fetched
-// refs/remotes/origin/ct/<worktree>/ refs — rather than listing the repository's
+// derived locally, from the commits' ym-stack-id trailers and the fetched
+// refs/remotes/origin/ym/<worktree>/ refs — rather than listing the repository's
 // PRs and filtering afterwards. That is what keeps the cost proportional to the
 // stack instead of to the repository: asking GitHub for a 200-PR window of check
 // rollups makes it fan out to every check run on every one of those PRs, which on
@@ -190,8 +190,8 @@ func gatherGitHubFor(dir, worktree string, refs []ghRef) ([]prRecord, GitHub) {
 	return filterStackPRs(prs, worktree), gh
 }
 
-// stackHeadRefs lists every ct/<worktree>/ branch that could carry one of this
-// stack's PRs, without touching the network: one per local commit's ct-stack-id
+// stackHeadRefs lists every ym/<worktree>/ branch that could carry one of this
+// stack's PRs, without touching the network: one per local commit's ym-stack-id
 // trailer (which names the branch even after GitHub deleted it on merge), plus
 // every branch under the namespace in the last-fetched remote refs (which is what
 // surfaces an orphan PR whose commit is gone locally).
@@ -216,7 +216,7 @@ func stackHeadRefs(dir, worktree, mainBranch string) ([]ghRef, error) {
 // headRefsFrom is stackHeadRefs over data the caller already read, so a gather
 // that ran the git log and the ref walk does not run them a second time.
 func headRefsFrom(worktree string, commits []LocalCommit, remotes map[string]string) []ghRef {
-	prefix := "ct/" + worktree + "/"
+	prefix := "ym/" + worktree + "/"
 	seen := map[string]bool{}
 	var refs []ghRef
 	add := func(id string, tracked bool) {
@@ -362,12 +362,12 @@ func decodeGHPRs(data []byte) ([]ghPR, error) {
 }
 
 // filterStackPRs keeps only PRs whose head branch is under this worktree's
-// ct/<worktree>/ namespace and collapses each into a prRecord, summarizing its
+// ym/<worktree>/ namespace and collapses each into a prRecord, summarizing its
 // check rollup. The query is already scoped to those branches; the filter stays
 // as the guarantee the reconciler depends on, so a widened scope can never leak a
 // foreign PR into the stack.
 func filterStackPRs(prs []ghPR, worktree string) []prRecord {
-	prefix := "ct/" + worktree + "/"
+	prefix := "ym/" + worktree + "/"
 	var records []prRecord
 	for _, p := range prs {
 		if !strings.HasPrefix(p.HeadRefName, prefix) {

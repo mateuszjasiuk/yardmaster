@@ -18,17 +18,17 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/codex"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/codex"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
-// Controller exposes ct's worktree operations and session specs to the TUI.
+// Controller exposes ym's worktree operations and session specs to the TUI.
 type Controller struct {
 	cfg config.Config
-	// projectsDir overrides where ct looks for claude's stored transcripts when
+	// projectsDir overrides where ym looks for claude's stored transcripts when
 	// deciding whether a persisted agent can be resumed. Empty means every
 	// account's projects folder (see claudeProjectsDirs); tests point it at a
 	// temp dir.
@@ -245,7 +245,7 @@ func (c *Controller) UsageThreshold() int { return c.cfg.Usage.Threshold }
 // PlasmaConfig returns the deck plasma-panel settings.
 func (c *Controller) PlasmaConfig() config.Plasma { return c.cfg.Plasma }
 
-// StackAutoMerge reports whether an eligible stack merge should bypass ct's
+// StackAutoMerge reports whether an eligible stack merge should bypass ym's
 // confirmation panel. The configuration default is deliberately false.
 func (c *Controller) StackAutoMerge() bool { return c.cfg.Stack.AutoMerge }
 
@@ -548,7 +548,7 @@ func (c *Controller) providerConfig(provider agent.Provider) (config.AgentProvid
 
 // PrepareAgentSpec attaches any provider-side runtime required before the
 // interactive process starts. Claude needs no companion. Each Codex pane owns
-// a private App Server observed by caretaker; the stock Codex TUI connects to
+// a private App Server observed by yardmaster; the stock Codex TUI connects to
 // it through --remote and remains the sole approval/input responder.
 func (c *Controller) PrepareAgentSpec(ctx context.Context, dir string, spec session.Spec) (session.Spec, error) {
 	if normalizedProvider(spec.Provider) != agent.Codex {
@@ -611,7 +611,7 @@ func (c *Controller) NewProviderAgentSpec(provider agent.Provider, label, prompt
 // keeps its missing-transcript fallback; Codex resumes through its resume
 // subcommand.
 func (c *Controller) RestoreProviderAgentSpec(provider agent.Provider, id, label, prompt string) (session.Spec, error) {
-	// A provider may not have reported its conversation ID before caretaker was
+	// A provider may not have reported its conversation ID before yardmaster was
 	// stopped. Relaunch that entry as a fresh session rather than constructing a
 	// malformed resume command with an empty identifier.
 	if id == "" {
@@ -644,11 +644,11 @@ func (c *Controller) RestoreProviderAgentSpec(provider agent.Provider, id, label
 }
 
 // NewAgentSpec returns the spec for a brand-new Claude agent session, optionally
-// named. ct generates the session UUID and passes it as --session-id so it can
+// named. ym generates the session UUID and passes it as --session-id so it can
 // persist the id and resume the same conversation in a later run. The label is
 // passed to claude as -n (so it appears in `claude agents --json` and the agent
 // picker), and teammate split-pane mode is pinned off so any agent team renders
-// in-process inside the pane ct controls.
+// in-process inside the pane ym controls.
 func (c *Controller) NewAgentSpec(label string) session.Spec {
 	providerCfg, _ := c.providerConfig(agent.Claude)
 	return c.freshClaudeAgentSpec(providerCfg, newSessionID(), label, "")
@@ -682,7 +682,7 @@ func (c *Controller) freshClaudeAgentSpec(providerCfg config.AgentProvider, id, 
 // since dropped — the 30-day retention sweep, a session that never persisted
 // (spawned but never used), or a moved/recreated worktree — comes back as a
 // working empty agent instead of a "no conversation found" error in the pane.
-// Reusing the id keeps ct's persisted pool stable and lets the revived session
+// Reusing the id keeps ym's persisted pool stable and lets the revived session
 // resume normally on the next open.
 func (c *Controller) AgentSpec(id, label string) session.Spec {
 	if c.transcriptExists(id) {
@@ -727,7 +727,7 @@ func (c *Controller) claudeProjectsDirs() []string {
 }
 
 // defaultClaudeConfigDir is the default account's config folder: the
-// CLAUDE_CONFIG_DIR ct was started with, else ~/.claude.
+// CLAUDE_CONFIG_DIR ym was started with, else ~/.claude.
 func defaultClaudeConfigDir() (string, error) {
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		return dir, nil
@@ -755,7 +755,7 @@ func defaultClaudeJSON() (string, error) {
 
 // ResumeAgentSpec returns the spec for a Claude agent session that resumes the
 // conversation with the given session id (recorded by a previous run). The label
-// drives only ct's palette title; the conversation's own name is restored by
+// drives only ym's palette title; the conversation's own name is restored by
 // claude on resume.
 func (c *Controller) ResumeAgentSpec(id, label string) session.Spec {
 	providerCfg, _ := c.providerConfig(agent.Claude)
@@ -833,7 +833,7 @@ func (c *Controller) AgentStatuses(ctx context.Context, accounts []string) (map[
 	}
 	argv := append(append([]string(nil), providerCfg.Args...), "agents", "--json")
 
-	configDirs := []string{""} // the default account: ct's own environment
+	configDirs := []string{""} // the default account: ym's own environment
 	for _, name := range accounts {
 		if dir := c.cfg.ClaudeAccounts[name].ConfigDir; dir != "" {
 			configDirs = append(configDirs, dir)

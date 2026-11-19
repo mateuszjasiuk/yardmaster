@@ -12,7 +12,7 @@ import (
 	"github.com/creack/pty"
 )
 
-// Programs inside ct draw on ct's own emulator, not on the real terminal, so
+// Programs inside ym draw on ym's own emulator, not on the real terminal, so
 // kitty's image protocol needs three things passed through:
 //
 //   - the real terminal's name, so a program asking "which terminal is this?"
@@ -24,8 +24,8 @@ import (
 // Only commands that do not depend on the cursor are forwarded: uploads,
 // deletes, and "virtual" placements (U=1). A virtual placement is shown by
 // kitty wherever its Unicode placeholder characters appear on screen, and
-// those are plain text that ct's emulator copies like any other. A direct
-// placement would land wherever ct's own cursor happens to be, so it is
+// those are plain text that ym's emulator copies like any other. A direct
+// placement would land wherever ym's own cursor happens to be, so it is
 // dropped.
 
 var graphics struct {

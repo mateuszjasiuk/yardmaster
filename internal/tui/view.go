@@ -11,12 +11,12 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/diffpager"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
-	"github.com/KCaverly/caretaker/internal/usage"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/diffpager"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/usage"
 )
 
 // Palette (Material Theme, Ocean).
@@ -104,7 +104,7 @@ var (
 func (m Model) View() tea.View {
 	w, h := m.width, m.height
 	if w < minViableWidth || h < minViableHeight {
-		v := tea.NewView("ct — please enlarge the terminal")
+		v := tea.NewView("ym — please enlarge the terminal")
 		v.ReportFocus = true
 		v.AltScreen = true
 		return v
@@ -174,7 +174,7 @@ func (m Model) destinationGlyph(s screen) string {
 	if mode == config.IconsText {
 		switch s {
 		case screenPicker:
-			return "ct"
+			return "ym"
 		case screenEditor:
 			return "edit"
 		case screenAgent:
@@ -236,7 +236,7 @@ const (
 
 // renderBar draws the pinned status bar, the agent strip's row while it shows,
 // and a light separator line (barHeight rows total). The four left icons
-// (caretaker, nvim, claude, term) are bold Nerd Font glyphs evenly spaced: the caretaker is a
+// (yardmaster, nvim, claude, term) are bold Nerd Font glyphs evenly spaced: the yardmaster is a
 // stable seedling, lit yellow while the deck is active and dim once you drop
 // into a session; the session icons glow in their own colour when active and
 // dim otherwise (faint until a workspace exists). Agent attention lives in the
@@ -545,15 +545,15 @@ func (m Model) barZones() []barZone {
 		}
 	}
 
-	// Caretaker: a stable seedling that follows the same lit-when-active rule as
+	// Yardmaster: a stable seedling that follows the same lit-when-active rule as
 	// the other tabs — yellow while the deck is active, dim otherwise (never
 	// faint: the deck is always reachable). Agent attention lives in the ! badge
 	// on the right, so the icon never reacts to agent status.
-	ctStyle := boldDim
+	ymStyle := boldDim
 	if m.screen == screenPicker {
-		ctStyle = boldYellow
+		ymStyle = boldYellow
 	}
-	ct := ctStyle.Render(m.destinationGlyph(screenPicker))
+	ym := ymStyle.Render(m.destinationGlyph(screenPicker))
 
 	// Side by side, nvim and the agent are both on screen, so both are lit; the
 	// gray pane shows which has focus.
@@ -561,7 +561,7 @@ func (m Model) barZones() []barZone {
 	agent := glyph(m.destinationGlyph(screenAgent), boldPurple, m.screen == screenAgent || joined, has)
 
 	zones := []barZone{
-		{screenPicker, ct},
+		{screenPicker, ym},
 		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
 		{screenTerminal, glyph(m.destinationGlyph(screenTerminal), boldAccent, m.screen == screenTerminal, has)},
@@ -970,7 +970,7 @@ const usageBurnMinSpan = 5 * time.Minute
 // window with its reset time, plus a burn-rate estimate once the sample ring
 // spans enough time to be meaningful. Unlike the bar segment it ignores the
 // threshold and staleness gates — when the user explicitly asks, they get
-// whatever ct knows.
+// whatever ym knows.
 func (m Model) renderUsage(h int) string {
 	innerW := panelInnerWidth(m.width, 56)
 	rows := []string{header("usage", -1), ""}
@@ -1214,7 +1214,7 @@ func buildDiffContent(d *diffState, msg diffMsg, width int) {
 //
 // chunks, when non-nil, is the external formatter's rendering of body and
 // replaces it; see appendDiffBody. Everything above the body — the rule, the
-// index, the counts — is ct's own either way, since those come from the numstat
+// index, the counts — is ym's own either way, since those come from the numstat
 // rather than the patch.
 func appendDiffSection(b *diffBuilder, title, meta string, stat []repo.FileStat, untracked []string, body string, chunks []diffpager.Chunk, width int) (files, add, del int) {
 	b.add(diffRule(title, meta, width))
@@ -1245,7 +1245,7 @@ func appendDiffSection(b *diffBuilder, title, meta string, stat []repo.FileStat,
 //
 // With chunks non-nil they supersede body entirely and are emitted verbatim,
 // ANSI and all: the formatter owns every visual decision, and re-styling its
-// output would fight it. What ct keeps is the file-jump index — a chunk the
+// output would fight it. What ym keeps is the file-jump index — a chunk the
 // splitter saw begin at a `diff --git` header registers its first line as an
 // anchor, which is the whole reason chunks carry the flag instead of arriving as
 // one flat block of text. A chunk with no lines (a formatter that printed
@@ -1550,7 +1550,7 @@ var creatingSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", 
 
 // creatingRow draws one worktree-setup row: a spinner, the name it will have, and
 // how long it has been running. The elapsed time is what tells a user waiting on a
-// slow clone that ct is still working rather than wedged, so it is shown from the
+// slow clone that ym is still working rather than wedged, so it is shown from the
 // first second rather than after some threshold.
 func (m Model) creatingRow(c creatingItem, innerW int) string {
 	frame := creatingSpinner[0]
@@ -1634,7 +1634,7 @@ func (m Model) activeRow(it activeItem, highlight bool, innerW int) string {
 		dirtyChar = "✷"
 	}
 
-	// Leading rank column (1..3) for the worktrees most recently opened in ct,
+	// Leading rank column (1..3) for the worktrees most recently opened in ym,
 	// blank otherwise. A fixed-width gutter keeps selected/unselected rows aligned.
 	rank := m.recentRank[key]
 	rankCh := " "
@@ -1985,7 +1985,7 @@ func markLegend() string {
 }
 
 // stackLegend explains the deck's per-worktree stack glyphs (drawn after the
-// ahead/behind cluster) shown once cached `ct stack status` data is available.
+// ahead/behind cluster) shown once cached `ym stack status` data is available.
 func stackLegend() string {
 	return strings.Join([]string{
 		aheadStyle.Render(stackGlyphReady) + helpStyle.Render(" passing"),

@@ -167,7 +167,7 @@ func TestRenderFormatterError(t *testing.T) {
 // TestRenderNonexistentCommand proves an unresolvable command name is an
 // error (not a panic or a hang) and returns nil chunks.
 func TestRenderNonexistentCommand(t *testing.T) {
-	p := Pager{Command: "ct-diffpager-nonexistent-command-xyz"}
+	p := Pager{Command: "ym-diffpager-nonexistent-command-xyz"}
 	body := "diff --git a/foo b/foo\n+hello\n"
 	chunks, err := p.Render(t.TempDir(), body, 80)
 	if err == nil {

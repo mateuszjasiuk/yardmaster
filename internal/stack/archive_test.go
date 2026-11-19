@@ -15,7 +15,7 @@ func TestPlanArchiveCompleteStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"ct/feat/aaaaaaaa", "ct/feat/bbbbbbbb"}
+	want := []string{"ym/feat/aaaaaaaa", "ym/feat/bbbbbbbb"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("archive branches = %v, want %v", got, want)
 	}

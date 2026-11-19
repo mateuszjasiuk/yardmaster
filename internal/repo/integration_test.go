@@ -803,7 +803,7 @@ func diffOptionsRepo(t *testing.T) string {
 // TestDiffOptionsArgsReachGit pins that DiffOptions.Args are actually handed to
 // git and can change the result: the same whitespace-only edit is a patch with
 // the zero value and nothing at all with --ignore-all-space. Args land after
-// ct's pinned flags, so a later flag wins.
+// ym's pinned flags, so a later flag wins.
 func TestDiffOptionsArgsReachGit(t *testing.T) {
 	dir := diffOptionsRepo(t)
 	wt := Worktree{Path: dir}

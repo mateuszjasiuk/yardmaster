@@ -1,18 +1,18 @@
 #!/bin/sh
 set -eu
 
-repo="KCaverly/caretaker"
+repo="mateuszjasiuk/yardmaster"
 version="latest"
-bin_dir="${CT_INSTALL_DIR:-${HOME}/.local/bin}"
+bin_dir="${YM_INSTALL_DIR:-${HOME}/.local/bin}"
 
 usage() {
   cat <<'EOF'
-Install ct from a public GitHub release.
+Install ym from a public GitHub release.
 
 Usage: install.sh [--version vX.Y.Z] [--bin-dir DIR]
 
 Environment:
-  CT_INSTALL_DIR  Default destination directory (default: ~/.local/bin)
+  YM_INSTALL_DIR  Default destination directory (default: ~/.local/bin)
 EOF
 }
 
@@ -42,7 +42,7 @@ done
 
 case "$(uname -s)" in
   Darwin) os="Darwin" ;;
-  *) echo "install.sh: ct releases currently support macOS only" >&2; exit 1 ;;
+  *) echo "install.sh: ym releases currently support macOS only" >&2; exit 1 ;;
 esac
 
 case "$(uname -m)" in
@@ -51,7 +51,7 @@ case "$(uname -m)" in
   *) echo "install.sh: unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-archive="ct_${os}_${arch}.tar.gz"
+archive="ym_${os}_${arch}.tar.gz"
 if [ "$version" = "latest" ]; then
   base_url="https://github.com/${repo}/releases/latest/download"
 else
@@ -59,7 +59,7 @@ else
   base_url="https://github.com/${repo}/releases/download/${version}"
 fi
 
-tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ct-install.XXXXXX")"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ym-install.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
 
 echo "Downloading ${archive}..."
@@ -71,12 +71,12 @@ expected="$(awk -v file="$archive" '$2 == file { print $1 }' "${tmp_dir}/checksu
 actual="$(shasum -a 256 "${tmp_dir}/${archive}" | awk '{ print $1 }')"
 [ "$actual" = "$expected" ] || { echo "install.sh: checksum verification failed" >&2; exit 1; }
 
-tar -xzf "${tmp_dir}/${archive}" -C "$tmp_dir" ct
+tar -xzf "${tmp_dir}/${archive}" -C "$tmp_dir" ym
 mkdir -p "$bin_dir"
-install -m 0755 "${tmp_dir}/ct" "${bin_dir}/ct"
+install -m 0755 "${tmp_dir}/ym" "${bin_dir}/ym"
 
-echo "Installed ct to ${bin_dir}/ct"
+echo "Installed ym to ${bin_dir}/ym"
 case ":${PATH}:" in
   *":${bin_dir}:"*) ;;
-  *) echo "Add ${bin_dir} to PATH to run ct." ;;
+  *) echo "Add ${bin_dir} to PATH to run ym." ;;
 esac

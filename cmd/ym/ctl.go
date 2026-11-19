@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KCaverly/caretaker/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
 )
 
-const ctlUsage = `usage: ct ctl <command> [flags]
+const ctlUsage = `usage: ym ctl <command> [flags]
 
-Talk to the running ct. Worktrees are named "repo/name".
+Talk to the running ym. Worktrees are named "repo/name".
 
   list [--json] [--feature REPO/NAME]   every worktree (or one feature's), with open agents and status
   summary <repo/name> [--json] [-n N]   commits, diffstat, queue, and the agent's last message
@@ -33,9 +33,9 @@ Talk to the running ct. Worktrees are named "repo/name".
   feature list [--json]                 every feature, with its manager, worktrees and stacks
   feature drop <repo/feature>           forget a feature (its worktrees stay)
 
-"-" reads the text from stdin. Set CT_SOCKET to choose between several running ct instances.`
+"-" reads the text from stdin. Set YM_SOCKET to choose between several running ym instances.`
 
-// runCtl dispatches `ct ctl …` and returns the process exit code. It runs
+// runCtl dispatches `ym ctl …` and returns the process exit code. It runs
 // headless: parse, one socket round trip, print.
 func runCtl(args []string) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
@@ -44,18 +44,18 @@ func runCtl(args []string) int {
 	}
 	req, asJSON, err := parseCtlArgs(args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct ctl:", err)
+		fmt.Fprintln(os.Stderr, "ym ctl:", err)
 		fmt.Fprintln(os.Stderr, ctlUsage)
 		return 2
 	}
 	path, err := ctl.FindSocket()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct ctl:", err)
+		fmt.Fprintln(os.Stderr, "ym ctl:", err)
 		return 1
 	}
 	resp, err := ctl.Call(path, req)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "ct ctl:", err)
+		fmt.Fprintln(os.Stderr, "ym ctl:", err)
 		return 1
 	}
 	if asJSON {
@@ -202,7 +202,7 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 	return req, asJSON, nil
 }
 
-// parseFeatureArgs fills req for `ct ctl feature <sub> …`.
+// parseFeatureArgs fills req for `ym ctl feature <sub> …`.
 func parseFeatureArgs(req *ctl.Request, positional []string) error {
 	if len(positional) == 0 {
 		return fmt.Errorf("feature takes new, add, list or drop")

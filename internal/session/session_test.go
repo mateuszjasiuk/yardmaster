@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/agent"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/creack/pty"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 // waitForFileEquals polls path until its contents equal want, or fails. Used
@@ -99,7 +99,7 @@ func waitFor(t *testing.T, s *Session, want string) {
 func TestSessionRendersOutput(t *testing.T) {
 	dirty := make(chan struct{}, 16)
 	s, err := Start(Terminal, "term", t.TempDir(),
-		[]string{"sh", "-c", "echo ct-smoke-output; sleep 2"}, 80, 24,
+		[]string{"sh", "-c", "echo ym-smoke-output; sleep 2"}, 80, 24,
 		func(*Session) {
 			select {
 			case dirty <- struct{}{}:
@@ -111,7 +111,7 @@ func TestSessionRendersOutput(t *testing.T) {
 	}
 	defer s.Close()
 
-	waitFor(t, s, "ct-smoke-output")
+	waitFor(t, s, "ym-smoke-output")
 
 	// A repaint signal should have fired.
 	select {
@@ -568,17 +568,17 @@ func TestManagerSpawnAndCloseAgent(t *testing.T) {
 }
 
 func TestStartSpecPropagatesAgentMetadataAndEnvironment(t *testing.T) {
-	t.Setenv("CT_SESSION_REMOVE", "inherited")
+	t.Setenv("YM_SESSION_REMOVE", "inherited")
 	events := make(chan agent.Event)
 	companion := newTestCloser(nil)
 	spec := Spec{
 		Kind:      Agent,
 		Title:     "codex agent",
-		Argv:      []string{"sh", "-c", `printf '%s|%s|%s' "$CT_SESSION_SET" "${CT_SESSION_REMOVE-unset}" "$TERM"; sleep 5`},
+		Argv:      []string{"sh", "-c", `printf '%s|%s|%s' "$YM_SESSION_SET" "${YM_SESSION_REMOVE-unset}" "$TERM"; sleep 5`},
 		Provider:  agent.Codex,
 		SessionID: "opaque-thread-id",
-		Env:       []string{"CT_SESSION_SET=provider-value", "CT_SESSION_REMOVE=explicit-value"},
-		UnsetEnv:  []string{"CT_SESSION_REMOVE"},
+		Env:       []string{"YM_SESSION_SET=provider-value", "YM_SESSION_REMOVE=explicit-value"},
+		UnsetEnv:  []string{"YM_SESSION_REMOVE"},
 		Events:    events,
 		Companion: companion,
 	}
@@ -1126,7 +1126,7 @@ func TestCloseKillsAnEditorChildThatOutlivesIt(t *testing.T) {
 	}
 }
 
-// An agent's background processes are not ct's to stop.
+// An agent's background processes are not ym's to stop.
 func TestCloseLeavesAnAgentChildRunning(t *testing.T) {
 	s, child := startWithStuckChild(t, Agent)
 	s.Close()

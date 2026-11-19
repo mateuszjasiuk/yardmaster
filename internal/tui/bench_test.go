@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/config"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 // benchGit runs a git command in dir, failing the benchmark on error.
@@ -29,7 +29,7 @@ func benchGit(b *testing.B, dir string, args ...string) {
 }
 
 // benchRoot builds a repos root of nRepos git repositories with nWorktrees
-// linked worktrees each (plus main), approximating a real ct root.
+// linked worktrees each (plus main), approximating a real ym root.
 func benchRoot(b *testing.B, nRepos, nWorktrees int) string {
 	b.Helper()
 	root := b.TempDir()
@@ -125,7 +125,7 @@ func BenchmarkEnsureProjectTrusted(b *testing.B) {
 	}
 }
 
-// BenchmarkTranscriptExists measures the resume-eligibility check ct runs for
+// BenchmarkTranscriptExists measures the resume-eligibility check ym runs for
 // every persisted Claude agent when activating a workspace — the cost paid on
 // the UI goroutine, per restored agent, before the editor appears. It scans
 // ~/.claude/projects looking for the agent's <id>.jsonl transcript. The

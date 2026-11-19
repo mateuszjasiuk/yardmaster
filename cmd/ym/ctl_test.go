@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
 )
 
 func TestParseCtlArgs(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 func TestParseGitLog(t *testing.T) {
 	// Four NUL-fenced fields per line, bottom-first. Note the third commit carries
-	// two ct-stack-id trailers, which git concatenates with no separator (see the
+	// two ym-stack-id trailers, which git concatenates with no separator (see the
 	// parseGitLog doc comment) — a malformed value the reconciler flags later. The
 	// last line is blank (git's trailing newline) and must be skipped.
 	out := "aaaaaaa1111\x00aaaaaaa\x00first subject\x00\n" +
@@ -34,11 +34,11 @@ func TestParseGitLogEmpty(t *testing.T) {
 func TestParseRemoteBranches(t *testing.T) {
 	// short refname NUL object-name. The id is the last path segment, so it holds
 	// up even when the worktree name itself contains a slash.
-	out := "origin/ct/wt/abc12345\x00sha_abc\n" +
-		"origin/ct/team/api/def67890\x00sha_def\n" +
+	out := "origin/ym/wt/abc12345\x00sha_abc\n" +
+		"origin/ym/team/api/def67890\x00sha_def\n" +
 		"malformed-no-nul\n" +
 		"\x00only-sha\n" +
-		"origin/ct/wt/empty\x00\n"
+		"origin/ym/wt/empty\x00\n"
 	got := parseRemoteBranches(out)
 	want := map[string]string{
 		"abc12345": "sha_abc",

@@ -8,14 +8,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
-	"github.com/KCaverly/caretaker/internal/agent"
-	"github.com/KCaverly/caretaker/internal/ctl"
-	"github.com/KCaverly/caretaker/internal/repo"
-	"github.com/KCaverly/caretaker/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
-// The control socket lets `ct ctl` (and through it any agent ct started) act
-// on the running ct. Every request arrives on the UI goroutine as a
+// The control socket lets `ym ctl` (and through it any agent ym started) act
+// on the running ym. Every request arrives on the UI goroutine as a
 // ctlRequestMsg, so handlers read and change the model like a keypress would;
 // slow work (git, transcript reads) runs in a command and replies from there.
 
@@ -137,7 +137,7 @@ func (m Model) ctlKey(key string) string {
 	return key
 }
 
-// ctlInfo describes one worktree: the deck's git columns plus the agents ct
+// ctlInfo describes one worktree: the deck's git columns plus the agents ym
 // hosts for it and their live status.
 func (m Model) ctlInfo(it activeItem) ctl.WorktreeInfo {
 	key := wsKey(it.repo.Name, it.view.WT.Name)
@@ -190,9 +190,9 @@ func (m Model) ctlLookup(key string) (activeItem, error) {
 		return it, nil
 	}
 	if !m.groupsLoaded {
-		return activeItem{}, fmt.Errorf("ct is still scanning repos; try again")
+		return activeItem{}, fmt.Errorf("ym is still scanning repos; try again")
 	}
-	return activeItem{}, fmt.Errorf("no worktree %q (run `ct ctl list`)", key)
+	return activeItem{}, fmt.Errorf("no worktree %q (run `ym ctl list`)", key)
 }
 
 func (m Model) ctlSummary(p *ctl.Pending) (tea.Model, tea.Cmd) {
@@ -288,7 +288,7 @@ func (m Model) ctlSpawn(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		}
 	}
 	if r == nil {
-		p.Fail(fmt.Errorf("no repo %q (run `ct ctl list`)", req.Repo))
+		p.Fail(fmt.Errorf("no repo %q (run `ym ctl list`)", req.Repo))
 		return m, nil
 	}
 	if _, ok := m.mainNamed(req.Repo, req.Name); ok {
@@ -345,7 +345,7 @@ func (m Model) handleCtlSpawned(msg ctlSpawnedMsg) (tea.Model, tea.Cmd) {
 		reply += "; it is part of feature " + msg.feature
 	}
 	msg.p.Reply(ctl.Response{OK: true, Message: reply})
-	return mm, tea.Batch(cmd, mm.writeStateCmd(), mm.loadCmd(), mm.flashCmd("ct ctl opened "+key))
+	return mm, tea.Batch(cmd, mm.writeStateCmd(), mm.loadCmd(), mm.flashCmd("ym ctl opened "+key))
 }
 
 // openBackground starts sessions for key without switching the user's view,
@@ -467,7 +467,7 @@ func (m Model) ctlSend(p *ctl.Pending) (tea.Model, tea.Cmd) {
 			return mm, cmd
 		}
 		p.Reply(ctl.Response{OK: true, Message: "opened " + key + " and started its agent on the message"})
-		return mm, tea.Batch(cmd, mm.loadCmd(), mm.flashCmd("ct ctl opened "+key))
+		return mm, tea.Batch(cmd, mm.loadCmd(), mm.flashCmd("ym ctl opened "+key))
 	}
 	mm, cmd, now := m.enqueue(key, text)
 	if now {
@@ -589,7 +589,7 @@ func (m Model) ctlStop(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		m.state.ClearQueue(key)
 	}
 	p.Reply(ctl.Response{OK: true, Message: "stopped " + key + " (worktree and branch kept)"})
-	return m, tea.Batch(m.loadCmd(), m.writeStateCmd(), m.flashCmd("ct ctl stopped "+key))
+	return m, tea.Batch(m.loadCmd(), m.writeStateCmd(), m.flashCmd("ym ctl stopped "+key))
 }
 
 // ctlOpen starts a closed worktree's sessions in the background from its
@@ -612,7 +612,7 @@ func (m Model) ctlOpen(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	p.Reply(ctl.Response{OK: true, Message: "opened " + key})
-	return m, tea.Batch(cmd, m.loadCmd(), m.flashCmd("ct ctl opened "+key))
+	return m, tea.Batch(cmd, m.loadCmd(), m.flashCmd("ym ctl opened "+key))
 }
 
 // ctlReopen stops a worktree and opens it again: its agents restart on the
@@ -651,10 +651,10 @@ func (m Model) ctlReopen(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		cmd = tea.Batch(cmd, activate)
 	}
 	p.Reply(ctl.Response{OK: true, Message: "reopened " + key})
-	return m, tea.Batch(cmd, m.loadCmd(), m.flashCmd("ct ctl reopened "+key))
+	return m, tea.Batch(cmd, m.loadCmd(), m.flashCmd("ym ctl reopened "+key))
 }
 
-// ctlRemove never deletes on its own: it parks the request and raises ct's
+// ctlRemove never deletes on its own: it parks the request and raises ym's
 // usual remove-confirm panel in the deck, now or when the user next returns
 // there. The reply says so, and the caller sees the result in a later list.
 func (m Model) ctlRemove(p *ctl.Pending) (tea.Model, tea.Cmd) {
@@ -673,11 +673,11 @@ func (m Model) ctlRemove(p *ctl.Pending) (tea.Model, tea.Cmd) {
 	}
 	key := wsKey(it.repo.Name, it.view.WT.Name)
 	m.ctlRemoveKey = key
-	p.Reply(ctl.Response{OK: true, Message: "asked the user to confirm removing " + key + " in the deck; check `ct ctl list` later to see whether it is gone"})
+	p.Reply(ctl.Response{OK: true, Message: "asked the user to confirm removing " + key + " in the deck; check `ym ctl list` later to see whether it is gone"})
 	if m.screen == screenPicker && m.mode == modeNormal && !m.overlayOpen() {
 		return m.showCtlRemove(), nil
 	}
-	return m, m.flashCmd("ct ctl asks to remove " + key + " — confirm in the deck")
+	return m, m.flashCmd("ym ctl asks to remove " + key + " — confirm in the deck")
 }
 
 // showCtlRemove opens the remove-confirm panel for the parked request. It is
@@ -696,7 +696,7 @@ func (m Model) showCtlRemove() Model {
 		return m
 	}
 	m = m.beginRemove(it)
-	m.confirm.context = append(m.confirm.context, "requested through ct ctl")
+	m.confirm.context = append(m.confirm.context, "requested through ym ctl")
 	return m
 }
 

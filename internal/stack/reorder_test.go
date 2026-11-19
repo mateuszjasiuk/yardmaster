@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 func reorderCommits() []Commit {
@@ -27,8 +27,8 @@ func TestApplyReorderIntegration(t *testing.T) {
 		return strings.TrimSpace(out)
 	}
 	git("init", "-b", "main")
-	git("config", "user.name", "CT Test")
-	git("config", "user.email", "ct@example.test")
+	git("config", "user.name", "YM Test")
+	git("config", "user.email", "ym@example.test")
 	if err := os.WriteFile(dir+"/base", []byte("base\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

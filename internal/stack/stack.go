@@ -1,6 +1,6 @@
 // Package stack computes the read-only status of a stacked-PR workflow, where
 // each commit in a worktree branch becomes its own GitHub PR (identified by a
-// `ct-stack-id` commit trailer) and PRs are chained bottom-to-top. This package
+// `ym-stack-id` commit trailer) and PRs are chained bottom-to-top. This package
 // only *observes*: it gathers local git state, last-fetched remote refs, and
 // GitHub PR metadata, then reconciles them into a StackStatus. Nothing here
 // submits, restacks, or mutates anything.
@@ -17,11 +17,11 @@ package stack
 type State string
 
 const (
-	// StateUnsubmitted: the commit carries no ct-stack-id trailer, so it has
+	// StateUnsubmitted: the commit carries no ym-stack-id trailer, so it has
 	// never entered the stack workflow. A valid state, not an error.
 	StateUnsubmitted State = "unsubmitted"
 	// StateUnpushed: the commit has a trailer but no remote branch
-	// ct/<worktree>/<id> exists in the last-fetched refs.
+	// ym/<worktree>/<id> exists in the last-fetched refs.
 	StateUnpushed State = "unpushed"
 	// StateDiverged: the remote branch exists but its tip differs from the local
 	// commit SHA (the commit was amended/rebased after it was last pushed).
@@ -72,13 +72,13 @@ type Commit struct {
 	ShortSHA     string  `json:"short_sha"`
 	Subject      string  `json:"subject"`
 	StackID      *string `json:"stack_id"`      // trailer value, nil when absent
-	RemoteBranch *string `json:"remote_branch"` // ct/<wt>/<id>, nil when unpushed
+	RemoteBranch *string `json:"remote_branch"` // ym/<wt>/<id>, nil when unpushed
 	RemoteInSync bool    `json:"remote_in_sync"`
 	State        State   `json:"state"`
 	PR           *PR     `json:"pr"`
 }
 
-// Orphan is an open PR whose ct/<worktree>/ head branch matches no local commit
+// Orphan is an open PR whose ym/<worktree>/ head branch matches no local commit
 // — surfaced for the human but never acted on by the engine.
 type Orphan struct {
 	Number  int    `json:"number"`
@@ -114,7 +114,7 @@ type GitHub struct {
 type MergeHint struct {
 	Number  int    `json:"number"`
 	Subject string `json:"subject"`
-	Body    string `json:"body"` // commit message body, ct-stack-id trailer included
+	Body    string `json:"body"` // commit message body, ym-stack-id trailer included
 }
 
 // StackStatus is the top-level JSON contract (schema 1). Additive fields do not
@@ -138,7 +138,7 @@ type StackStatus struct {
 // caller (the CLI), so this package never has to re-discover it.
 type Params struct {
 	RepoName     string // repo directory name -> JSON "repo"
-	WorktreeName string // worktree leaf name -> ct/<name>/ prefix and JSON "worktree"
+	WorktreeName string // worktree leaf name -> ym/<name>/ prefix and JSON "worktree"
 	WorktreeDir  string // where git/gh run
 	Branch       string // worktree branch short name
 	MainBranch   string // primary worktree's branch

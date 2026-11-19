@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/agent"
+	"github.com/mateuszjasiuk/yardmaster/internal/agent"
 )
 
 // repaintWindow bounds how often WaitDirty releases the UI to re-render under
@@ -41,7 +41,7 @@ type Spec struct {
 	// Provider identifies the CLI that owns this agent conversation.
 	Provider agent.Provider
 	// SessionID is the provider-owned, opaque conversation ID recorded on the
-	// started Session so ct can persist and later resume it.
+	// started Session so ym can persist and later resume it.
 	SessionID string
 	// Env adds or replaces process environment entries in KEY=value form.
 	Env []string

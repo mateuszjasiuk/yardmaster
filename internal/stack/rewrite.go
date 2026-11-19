@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
-// idAssignment records a ct-stack-id newly minted for a previously-unsubmitted
+// idAssignment records a ym-stack-id newly minted for a previously-unsubmitted
 // commit, bottom-first, for reporting what a submit assigned.
 type idAssignment struct {
 	Position int
@@ -52,7 +52,7 @@ type commitMeta struct {
 	message     string // raw commit message, byte-exact
 }
 
-// injectTrailers ensures every commit in the stack carries a ct-stack-id
+// injectTrailers ensures every commit in the stack carries a ym-stack-id
 // trailer, rewriting history from the oldest commit that lacks one up to HEAD —
 // without touching the working tree or the index. It rebuilds that suffix of the
 // chain with plumbing (git commit-tree reusing each original tree), so the amend
@@ -168,11 +168,11 @@ func readCommitMeta(dir, sha string) (commitMeta, error) {
 	}, nil
 }
 
-// appendTrailer runs git interpret-trailers to add a ct-stack-id trailer to a
+// appendTrailer runs git interpret-trailers to add a ym-stack-id trailer to a
 // raw commit message, returning the new message. The message is passed via a
 // temp file so its exact bytes (blank lines, existing trailers) are preserved.
 func appendTrailer(dir, message, id string) (string, error) {
-	f, err := os.CreateTemp("", "ct-msg-*")
+	f, err := os.CreateTemp("", "ym-msg-*")
 	if err != nil {
 		return "", err
 	}
@@ -184,7 +184,7 @@ func appendTrailer(dir, message, id string) (string, error) {
 	if err := f.Close(); err != nil {
 		return "", err
 	}
-	out, err := repo.Git(dir, "interpret-trailers", "--trailer", "ct-stack-id: "+id, f.Name())
+	out, err := repo.Git(dir, "interpret-trailers", "--trailer", "ym-stack-id: "+id, f.Name())
 	if err != nil {
 		return "", err
 	}
@@ -196,7 +196,7 @@ func appendTrailer(dir, message, id string) (string, error) {
 // and message, letting git default the committer to the current user. The
 // message goes through a temp file (-F) so no shell quoting can corrupt it.
 func commitTree(dir string, meta commitMeta, parent, message string) (string, error) {
-	f, err := os.CreateTemp("", "ct-commit-*")
+	f, err := os.CreateTemp("", "ym-commit-*")
 	if err != nil {
 		return "", err
 	}

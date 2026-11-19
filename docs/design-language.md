@@ -1,8 +1,8 @@
-# ct design language
+# ym design language
 
-This document defines how `ct` should feel and behave. It is a product standard for future features, not a description of the code or a catalog of components.
+This document defines how `ym` should feel and behave. It is a product standard for future features, not a description of the code or a catalog of components.
 
-`ct` is a calm, keyboard-first control deck for active development work. It should make a large amount of state feel legible without making the user feel monitored, rushed, or buried in chrome. The interface is compact because its users are capable, not because clarity is optional.
+`ym` is a calm, keyboard-first control deck for active development work. It should make a large amount of state feel legible without making the user feel monitored, rushed, or buried in chrome. The interface is compact because its users are capable, not because clarity is optional.
 
 ## Product character
 
@@ -65,7 +65,7 @@ Keyboard-first must not mean memory-first.
 
 ### 5. Protect flow across embedded tools
 
-`ct` hosts editors, shells, and agents that already own most keys.
+`ym` hosts editors, shells, and agents that already own most keys.
 
 - Reserve as few global keys as possible and prefer configurable Alt chords or function keys.
 - Forward all unreserved input faithfully to the active session.
@@ -78,7 +78,7 @@ Keyboard-first must not mean memory-first.
 - Never perform a destructive action from an ambiguous selection or a transient status line.
 - Use a dedicated confirmation panel with a clear object identity and consequence.
 - Put the safe option first and focus it by default.
-- Use specific labels: `remove worktree, keep branch`, not `yes`; `quit ct`, not `confirm`.
+- Use specific labels: `remove worktree, keep branch`, not `yes`; `quit ym`, not `confirm`.
 - Show relevant evidence before the choice: branch divergence, uncommitted diffstat, busy work, or what will be interrupted.
 - Offer review in the same flow when review can change the decision. Returning from review restores the confirmation context.
 - Red is reserved for the destructive option and irreversible consequence, not the whole panel.
@@ -100,7 +100,7 @@ No important state may depend on color alone.
 Copy is concise, concrete, calm, and lowercase in working UI.
 
 - Use verb-first commands: `open`, `view diff`, `split terminal right`, `restart agent`.
-- Name the object when ambiguity is possible: `open caretaker/primary`.
+- Name the object when ambiguity is possible: `open yardmaster/primary`.
 - Use sentence fragments for status and hints; avoid terminal punctuation in compact UI.
 - Use an ellipsis (`…`) only when an action opens a flow or work is genuinely continuing.
 - Describe empty states as facts plus a next step when useful: `no workspaces yet — pick a repo above to create one`.

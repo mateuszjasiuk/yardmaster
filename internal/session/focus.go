@@ -9,7 +9,7 @@ import (
 
 // Focus reporting: a program that sends CSI ? 1004 h wants CSI I when its
 // session gains focus and CSI O when it loses it (Neovim's FocusGained and
-// FocusLost). ct tracks the mode itself, from the program's output, because
+// FocusLost). ym tracks the mode itself, from the program's output, because
 // the emulator keeps it in a map that is not safe to read while output is
 // being written.
 

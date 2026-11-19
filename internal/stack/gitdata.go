@@ -4,11 +4,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KCaverly/caretaker/internal/repo"
+	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 )
 
 // LocalCommit is one commit in <base>..HEAD as read from git, before any
-// reconciliation against remotes or PRs. StackID is the raw ct-stack-id trailer
+// reconciliation against remotes or PRs. StackID is the raw ym-stack-id trailer
 // value: "" when the commit has no such trailer, and possibly malformed (see
 // parseGitLog) when a commit carries more than one.
 type LocalCommit struct {
@@ -33,11 +33,11 @@ func localCommits(dir, mainBranch string) ([]LocalCommit, error) {
 		base = remoteBase
 	}
 	// Four NUL-fenced fields per commit: full SHA, short SHA, subject, and the
-	// ct-stack-id trailer value. A NUL beats any other separator because commit
+	// ym-stack-id trailer value. A NUL beats any other separator because commit
 	// subjects contain spaces (and almost anything else) freely — the same trick
 	// repo.parseBranchTips uses.
 	out, err := repo.Git(dir, "log", "--reverse",
-		"--format=%H%x00%h%x00%s%x00%(trailers:key=ct-stack-id,valueonly,separator=,)",
+		"--format=%H%x00%h%x00%s%x00%(trailers:key=ym-stack-id,valueonly,separator=,)",
 		base+"..HEAD")
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func localCommits(dir, mainBranch string) ([]LocalCommit, error) {
 //
 // Note on the trailer separator: git parses `separator=,` by consuming the
 // comma as the option delimiter, leaving an *empty* separator. A commit with two
-// ct-stack-id trailers therefore emits their values concatenated with no comma
+// ym-stack-id trailers therefore emits their values concatenated with no comma
 // (e.g. "aaaaaaaabbbbbbbb"), not "aaaaaaaa,bbbbbbbb". The reconciler treats any
 // value that isn't a single clean 8-hex id as malformed, which catches both that
 // concatenation and a literal comma, so the exact separator behaviour doesn't
@@ -80,10 +80,10 @@ func parseGitLog(out string) []LocalCommit {
 
 // remoteBranches reads the last-fetched stack branches for this worktree — no
 // network — returning a map of stack id -> branch tip SHA. The path prefix
-// restricts for-each-ref to refs/remotes/origin/ct/<worktree>/, so unrelated
+// restricts for-each-ref to refs/remotes/origin/ym/<worktree>/, so unrelated
 // remote branches never enter the map.
 func remoteBranches(dir, worktree string) (map[string]string, error) {
-	prefix := "refs/remotes/origin/ct/" + worktree + "/"
+	prefix := "refs/remotes/origin/ym/" + worktree + "/"
 	out, err := repo.Git(dir, "for-each-ref",
 		"--format=%(refname:short)%00%(objectname)", prefix)
 	if err != nil {
@@ -94,7 +94,7 @@ func remoteBranches(dir, worktree string) (map[string]string, error) {
 
 // parseRemoteBranches parses the NUL-fenced for-each-ref output (short refname,
 // object SHA) into a stack id -> SHA map. The id is the last path segment of the
-// short refname (origin/ct/<worktree>/<id>), so it survives worktree names that
+// short refname (origin/ym/<worktree>/<id>), so it survives worktree names that
 // themselves contain slashes. Malformed lines are skipped.
 func parseRemoteBranches(out string) map[string]string {
 	refs := make(map[string]string)
@@ -186,7 +186,7 @@ func gatherStatus(p Params) (StackStatus, []prRecord, error) {
 }
 
 // rawCommitBody returns a commit's message body (everything after the subject),
-// verbatim — including the ct-stack-id trailer. It differs from commitBody, which
+// verbatim — including the ym-stack-id trailer. It differs from commitBody, which
 // strips the trailer for a PR body; the merge hint keeps it so a squash merge's
 // message round-trips the trailer.
 func rawCommitBody(dir, sha string) (string, error) {

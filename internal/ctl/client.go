@@ -13,13 +13,13 @@ import (
 	"time"
 )
 
-// SocketEnv is the variable ct sets for every program it hosts, so `ct ctl`
-// run inside a session reaches the ct that started it.
-const SocketEnv = "CT_SOCKET"
+// SocketEnv is the variable ym sets for every program it hosts, so `ym ctl`
+// run inside a session reaches the ym that started it.
+const SocketEnv = "YM_SOCKET"
 
-// FindSocket resolves which running ct to talk to: CT_SOCKET when set,
+// FindSocket resolves which running ym to talk to: YM_SOCKET when set,
 // otherwise the live sockets in SocketDirs. With several live instances and
-// no CT_SOCKET it refuses rather than guess. Dead sockets are removed on the
+// no YM_SOCKET it refuses rather than guess. Dead sockets are removed on the
 // way.
 func FindSocket() (string, error) {
 	if p := os.Getenv(SocketEnv); p != "" {
@@ -31,7 +31,7 @@ func FindSocket() (string, error) {
 	}
 	var matches []string
 	for _, dir := range dirs {
-		found, _ := filepath.Glob(filepath.Join(dir, "ct-*.sock"))
+		found, _ := filepath.Glob(filepath.Join(dir, "ym-*.sock"))
 		matches = append(matches, found...)
 	}
 	sort.Strings(matches)
@@ -39,7 +39,7 @@ func FindSocket() (string, error) {
 	for _, p := range matches {
 		conn, err := net.DialTimeout("unix", p, time.Second)
 		if err != nil {
-			_ = os.Remove(p) // nobody is listening: a crashed ct left it
+			_ = os.Remove(p) // nobody is listening: a crashed ym left it
 			continue
 		}
 		_ = conn.Close()
@@ -47,21 +47,21 @@ func FindSocket() (string, error) {
 	}
 	switch len(live) {
 	case 0:
-		return "", errors.New("no running ct found (is ct open? set CT_SOCKET to pick one)")
+		return "", errors.New("no running ym found (is ym open? set YM_SOCKET to pick one)")
 	case 1:
 		return live[0], nil
 	default:
-		return "", fmt.Errorf("several ct instances are running; set %s to one of:\n  %s",
+		return "", fmt.Errorf("several ym instances are running; set %s to one of:\n  %s",
 			SocketEnv, strings.Join(live, "\n  "))
 	}
 }
 
-// Call sends one request to the ct at path and returns its response. A
+// Call sends one request to the ym at path and returns its response. A
 // response carrying Error is returned as a Go error.
 func Call(path string, req Request) (Response, error) {
 	conn, err := net.DialTimeout("unix", path, 2*time.Second)
 	if err != nil {
-		return Response{}, fmt.Errorf("connect to ct: %w", err)
+		return Response{}, fmt.Errorf("connect to ym: %w", err)
 	}
 	defer conn.Close()
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
@@ -70,11 +70,11 @@ func Call(path string, req Request) (Response, error) {
 	_ = conn.SetReadDeadline(time.Now().Add(replyTimeout + 10*time.Second))
 	var resp Response
 	if err := json.NewDecoder(bufio.NewReader(conn)).Decode(&resp); err != nil {
-		return Response{}, fmt.Errorf("read reply from ct: %w", err)
+		return Response{}, fmt.Errorf("read reply from ym: %w", err)
 	}
 	if !resp.OK {
 		if resp.Error == "" {
-			resp.Error = "ct refused the request"
+			resp.Error = "ym refused the request"
 		}
 		return resp, errors.New(resp.Error)
 	}
