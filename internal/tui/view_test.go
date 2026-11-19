@@ -397,6 +397,35 @@ func TestBoardRender(t *testing.T) {
 	}
 }
 
+// TestBoardShowsFlagColours checks that a flagged worktree's name takes its flag
+// colour in the board's headers, in search results, and on idle worktree rows.
+func TestBoardShowsFlagColours(t *testing.T) {
+	m := modelWithAgents(1)
+	m.active = []activeItem{
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "w", Path: "/r/w"}, Live: true}},
+		{repo: repo.Repo{Name: "r"}, view: WorktreeView{WT: repo.Worktree{Name: "idle", Path: "/r/idle"}, Live: true}},
+	}
+	m.highlightColors = highlightColors(config.DefaultHighlightColors())
+	m.highlighted = map[string]int{"r/w": 0, "r/idle": 1}
+	pink := "38;2;211;134;155m" // the first default flag colour
+	cyan := "38;2;79;214;224m"  // the second
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	m.width = 100
+
+	if out := m.renderBoard(30); !strings.Contains(out, pink+"r/w") {
+		t.Fatalf("the header of a flagged worktree should show its colour:\n%q", out)
+	}
+	m.boardInput.SetValue("r/")
+	out := m.renderBoard(30)
+	if !strings.Contains(out, pink+"r/w") {
+		t.Fatalf("an agent row should show its worktree's colour:\n%q", out)
+	}
+	if !strings.Contains(out, cyan+"r/idle") {
+		t.Fatalf("an idle worktree row should show its colour:\n%q", out)
+	}
+}
+
 func TestNewAgentFormIsWideWritingSurface(t *testing.T) {
 	m := modelWithAgents(1)
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})

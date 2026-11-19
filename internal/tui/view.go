@@ -760,7 +760,7 @@ func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) 
 			if i > 0 {
 				lines = append(lines, "")
 			}
-			left := dimStyle.Render("  " + r.key)
+			left := "  " + m.boardWorktreeStyle(r.key).Render(r.key)
 			if m.current != nil && r.key == m.current.key {
 				right := helpKeyStyle.Render("current")
 				gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
@@ -785,7 +785,7 @@ func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) [
 		var content string
 		switch rows[i].kind {
 		case rowWorktree:
-			content = boardWorktreeLine(rows[i], innerW)
+			content = boardWorktreeLine(rows[i], m.boardWorktreeStyle(rows[i].key), innerW)
 		case rowAgent:
 			content = m.boardAgentLine(rows[i], true, innerW)
 		}
@@ -797,10 +797,10 @@ func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) [
 	return lines
 }
 
-// boardWorktreeLine renders a worktree with no running agent, dimmed, lined up
-// with the agent rows' worktree column and tagged on the right.
-func boardWorktreeLine(r boardRow, innerW int) string {
-	left := dimStyle.Render("     " + r.key)
+// boardWorktreeLine renders a worktree with no running agent, its name in
+// nameSt, lined up with the agent rows' worktree column and tagged on the right.
+func boardWorktreeLine(r boardRow, nameSt lipgloss.Style, innerW int) string {
+	left := "     " + nameSt.Render(r.key)
 	right := dimStyle.Render(r.status)
 	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 	return left + strings.Repeat(" ", gap) + right
@@ -819,7 +819,7 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 	}
 	left := "   " + glyphSt.Render(glyph) + " "
 	if withWorktree {
-		left += dimStyle.Render(r.key + " · ")
+		left += m.boardWorktreeStyle(r.key).Render(r.key) + dimStyle.Render(" · ")
 	}
 	left += helpKeyStyle.Render(normalizedProvider(r.provider).String()) +
 		dimStyle.Render(" · ") + nameStyle.Render(r.label)
@@ -838,6 +838,17 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 	right := statusSt.Render(status)
 	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 	return left + strings.Repeat(" ", gap) + right
+}
+
+// boardWorktreeStyle is how the board shows a worktree's name: in its flag
+// colour when the highlight key flagged it, dim otherwise.
+func (m Model) boardWorktreeStyle(key string) lipgloss.Style {
+	i, flagged := m.highlighted[key]
+	if !flagged {
+		return dimStyle
+	}
+
+	return dimStyle.Foreground(m.highlightColors[i])
 }
 
 // renderBoardForm draws the new-agent form: the prompt input plus the
