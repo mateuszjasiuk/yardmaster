@@ -39,12 +39,17 @@ import (
 
 // barHeight is the number of rows the top chrome occupies: the status bar, a
 // blank row and the agent strip's row while it shows, and a light separator
-// line.
+// line unless the panes have boxes.
 func (m Model) barHeight() int {
+	h := 1
 	if m.stripShown() {
-		return stripRow + 2
+		h = stripRow + 1
 	}
-	return 2
+	if !m.paneBoxes {
+		h++
+	}
+
+	return h
 }
 
 // screen is the active view: the picker, one of the session views, or setup.
@@ -336,6 +341,9 @@ type Model struct {
 	// sideBySideDim is how the side without focus looks: config.DimFaint or
 	// config.DimGray.
 	sideBySideDim string
+	// paneBoxes draws nvim and the agent in boxes, without the line under the
+	// bar (display.pane_boxes).
+	paneBoxes bool
 	// sideBySideFocus is the editor or agent screen last used in each side by
 	// side worktree, so cycling back from the terminal returns to it.
 	sideBySideFocus map[string]screen
@@ -636,6 +644,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		keys:           ctrl.Keys(),
 		iconMode:       ctrl.DisplayIcons(),
 		sideBySideDim:  ctrl.SideBySideDim(),
+		paneBoxes:      ctrl.PaneBoxes(),
 		agentStrip:     ctrl.AgentStrip(),
 		usageThreshold: ctrl.UsageThreshold(),
 		plasma:         plasmaField, plasmaWidthPct: pc.Width,
@@ -1157,28 +1166,28 @@ func (m Model) sessionSize() (int, int) {
 }
 
 // sizesFor is the size each kind of session in workspace key gets. Terminal
-// panes fill the room for sessions; nvim and the agent fill the inside of a
-// box, and split the room while the worktree is side by side. Agents get their
+// panes fill the room for sessions; nvim and the agent fill it, or the inside
+// of their box, and split it while the worktree is side by side. Agents get their
 // half also before the first one starts, so it starts at the width it is shown
 // at. A worktree that isn't open yet is assumed to start with nvim and an
 // agent.
 func (m Model) sizesFor(key string) session.Sizes {
 	w, h := m.sessionSize()
-	sizes := session.SameSize(w, h)
-	inside := boxed(sessionPane{w: w, h: h})
-	sizes.Editor = session.Size{W: inside.w, H: inside.h}
-	sizes.Agent = sizes.Editor
+	room := sessionPane{w: w, h: h}
+	inside := m.framed(room)
+	sizes := session.SameSize(inside.w, inside.h)
+	sizes.Term = session.Size{W: w, H: h}
 	if !m.sideBySideFits() {
 		return sizes
 	}
 
-	left, right := sideBySideWidths(w)
+	editor, agent := m.sideBySideRects(room)
 	ws, open := m.mgr.Workspace(key)
 	if !open || m.sideBySideIn(ws) {
-		sizes.Editor.W = boxed(sessionPane{w: left, h: h}).w
+		sizes.Editor.W = editor.w
 	}
 	if !open || ws.Editor != nil {
-		sizes.Agent.W = boxed(sessionPane{w: right, h: h}).w
+		sizes.Agent.W = agent.w
 	}
 	return sizes
 }

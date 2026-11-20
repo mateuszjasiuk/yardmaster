@@ -102,6 +102,10 @@ type Display struct {
 	// SideBySideDim is how the side without focus looks side by side: faint
 	// keeps its colours darker, gray draws it in plain gray.
 	SideBySideDim string `toml:"side_by_side_dim"`
+	// PaneBoxes draws a rounded box around nvim and the agent, in place of
+	// the line under the bar and the divider between them side by side. On
+	// by default.
+	PaneBoxes bool `toml:"pane_boxes"`
 	// HighlightColors are the colours the highlight key gives flagged
 	// worktrees in the agent strip, in order, as "#RRGGBB".
 	HighlightColors []string `toml:"highlight_colors"`
@@ -349,7 +353,7 @@ func Default() Config {
 		},
 		Usage: Usage{Threshold: 50},
 		Display: Display{
-			Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint,
+			Icons: IconsNerd, AgentStrip: true, SideBySideDim: DimFaint, PaneBoxes: true,
 			HighlightColors: DefaultHighlightColors(),
 		},
 		Plasma: Plasma{

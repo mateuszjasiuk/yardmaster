@@ -45,7 +45,8 @@ func TestSideBySideSplitsTheWidthAndIsSaved(t *testing.T) {
 		t.Fatal("the choice should be kept in the state")
 	}
 	w, h := m.sessionSize()
-	left, right := sideBySideWidths(w)
+	editor, agent := m.sideBySideRects(sessionPane{w: w, h: h})
+	left, right := editor.w+2, agent.w+2 // the boxes, borders included
 	if left+right != 150 || left < minSessionWidth || right < minSessionWidth {
 		t.Fatalf("boxes %d+%d should fill 150 columns, each at least %d", left, right, minSessionWidth)
 	}
@@ -255,8 +256,9 @@ func TestClickFocusesTerminalPanes(t *testing.T) {
 func TestSideBySideFollowsTheFirstAndLastAgent(t *testing.T) {
 	m := pressSideBySide(t, sideBySideModel(t, 150))
 	ws := m.current.ws
-	w, _ := m.sessionSize()
-	left, right := sideBySideWidths(w)
+	w, h := m.sessionSize()
+	editor, agent := m.sideBySideRects(sessionPane{w: w, h: h})
+	left, right := editor.w+2, agent.w+2 // the boxes, borders included
 
 	for len(ws.Agents) > 0 {
 		agent := ws.Agents[0]

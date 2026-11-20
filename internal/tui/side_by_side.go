@@ -4,15 +4,16 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/config"
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
-// sideBySideMinWidth is the narrowest room for sessions that fits the boxes
-// of nvim and the agent next to each other.
-const sideBySideMinWidth = 2 * minSessionWidth
+// sideBySideMinWidth is the narrowest room for sessions that fits nvim and the
+// agent next to each other, with the divider between them or in two boxes.
+const sideBySideMinWidth = 2*minSessionWidth + 1
 
 // toggleSideBySide shows nvim and the agent next to each other, or one at a
 // time again, resizes them, and remembers the choice.
@@ -85,25 +86,33 @@ func (m Model) rememberSideBySideFocus() Model {
 	return m
 }
 
-// sideBySideWidths splits w columns into the widths of nvim's box and the
-// agent's, borders included.
-func sideBySideWidths(w int) (left, right int) {
-	left = w / 2
-	return left, w - left
+// sideBySideRects splits the room for sessions into where nvim and the agent
+// draw: inside two boxes next to each other, or in two panes with a divider
+// column between them.
+func (m Model) sideBySideRects(room sessionPane) (editor, agent sessionPane) {
+	divider := 1
+	if m.paneBoxes {
+		divider = 0
+	}
+
+	left := (room.w - divider) / 2
+	editor = m.framed(sessionPane{x: room.x, y: room.y, w: left, h: room.h})
+	agent = m.framed(sessionPane{x: room.x + left + divider, y: room.y, w: room.w - divider - left, h: room.h})
+	return editor, agent
 }
 
-// renderSideBySide draws nvim and the agent in boxes next to each other, the
-// one without focus in gray with a gray border.
+// renderSideBySide draws nvim and the agent next to each other, the one
+// without focus in gray. In boxes, the focused one's border is lit; else the
+// divider always borders the focused pane, so it is lit, as between two
+// terminal panes.
 func (m Model) renderSideBySide() string {
 	panes := m.sessionPanes()
-	left := splitLines(m.sideBySideBox(panes[0]))
-	right := splitLines(m.sideBySideBox(panes[1]))
-
-	rows := make([]string, len(left))
-	for i := range rows {
-		rows[i] = left[i] + right[i]
+	if !m.paneBoxes {
+		left, right := panes[0], panes[1]
+		return joinVerticalSplit(m.sideBySidePane(left), m.sideBySidePane(right), cAccent, left.h, left.w)
 	}
-	return strings.Join(rows, "\n")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, m.sideBySideBox(panes[0]), m.sideBySideBox(panes[1]))
 }
 
 // sideBySideBox is a pane's screen in its box, the border lit when the pane
@@ -113,7 +122,7 @@ func (m Model) sideBySideBox(p sessionPane) string {
 	if p.s == m.activeSession() {
 		border = accentStyle
 	}
-	return renderPaneBox(m.sideBySidePane(p), m.paneTitle(p.s), p.w, p.h, border)
+	return m.paneFrame(m.sideBySidePane(p), p, border)
 }
 
 // sideBySidePane is a pane's screen, dimmed when it doesn't have focus: faint

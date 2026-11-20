@@ -20,6 +20,7 @@ func sidePanelModel(t *testing.T, width int) (Model, *Controller, *session.Manag
 	t.Helper()
 	ctrl := &Controller{cfg: config.Config{
 		Editor: "cat", Agent: "cat", Shell: "sh", Keys: config.Default().Keys,
+		Display: config.Display{PaneBoxes: true},
 	}}
 	mgr := session.NewManager()
 	t.Cleanup(mgr.CloseAll)

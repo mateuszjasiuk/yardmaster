@@ -271,6 +271,9 @@ func (c *Controller) DisplayIcons() string {
 	return c.cfg.Display.Icons
 }
 
+// PaneBoxes reports whether nvim and the agent are drawn in boxes.
+func (c *Controller) PaneBoxes() bool { return c.cfg.Display.PaneBoxes }
+
 // SideBySideDim is how the side without focus looks side by side.
 func (c *Controller) SideBySideDim() string {
 	if c.cfg.Display.SideBySideDim == "" {

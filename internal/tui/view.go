@@ -144,8 +144,9 @@ func (m Model) View() tea.View {
 		body = m.appendSessionFooter(m.renderSideBySide())
 		cursor = m.sessionCursor()
 	default:
-		if p, ok := m.paneOf(m.activeSession()); ok {
-			body = m.appendSessionFooter(renderPaneBox(p.s.Render(), m.paneTitle(p.s), p.w, p.h, accentStyle))
+		s := m.activeSession()
+		if p, ok := m.paneOf(s); ok {
+			body = m.appendSessionFooter(m.paneFrame(p.s.Render(), p, accentStyle))
 			cursor = m.sessionCursor()
 		}
 	}
@@ -235,7 +236,8 @@ const (
 )
 
 // renderBar draws the pinned status bar, the agent strip's row while it shows,
-// and a light separator line (barHeight rows total). The four left icons
+// and a light separator line unless the panes have boxes (barHeight rows
+// total). The four left icons
 // (yardmaster, nvim, claude, term) are bold Nerd Font glyphs evenly spaced: the yardmaster is a
 // stable seedling, lit yellow while the deck is active and dim once you drop
 // into a session; the session icons glow in their own colour when active and
@@ -250,12 +252,15 @@ func (m Model) renderBar() string {
 	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right))
 	bar := ansi.Truncate(left+strings.Repeat(" ", gap)+right, m.width, "")
 
-	sep := barSep.Render(strings.Repeat("─", max(1, m.width)))
-	if !m.stripShown() {
-		return bar + "\n" + sep
+	if m.stripShown() {
+		strip, _ := m.agentStripLayout()
+		bar += "\n\n" + strip
 	}
-	strip, _ := m.agentStripLayout()
-	return bar + "\n\n" + strip + "\n" + sep
+	if !m.paneBoxes {
+		bar += "\n" + barSep.Render(strings.Repeat("─", max(1, m.width)))
+	}
+
+	return bar
 }
 
 func (m Model) renderBarLeft() string {

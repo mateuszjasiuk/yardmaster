@@ -58,7 +58,7 @@ func TestPaneBoxNamesTheAgentSideBySide(t *testing.T) {
 	right := m.sessionPanes()[1]
 
 	top := []rune(ansi.Strip(strings.Split(m.View().Content, "\n")[m.barHeight()]))
-	want := "╭─" + m.paneTitle(agent) + "─"
+	want := "╭─" + paneTitle(agent) + "─"
 	if got := string(top[right.x-1 : right.x-1+len([]rune(want))]); got != want {
 		t.Fatalf("the agent's top border should name it, got %q, want %q", got, want)
 	}
@@ -68,5 +68,51 @@ func TestRenderPaneBoxCutsALongTitle(t *testing.T) {
 	top := ansi.Strip(strings.Split(renderPaneBox("", "a-very-long-name", 8, 1, barSep), "\n")[0])
 	if top != "╭─a-ver…─╮" {
 		t.Fatalf("a long title should be cut to fit, got %q", top)
+	}
+}
+
+func TestPaneBoxTakesThePlaceOfTheLineUnderTheBar(t *testing.T) {
+	m, _, _ := sidePanelModel(t, 120)
+	m.screen = screenEditor
+
+	lines := strings.Split(m.View().Content, "\n")
+	if m.barHeight() != 1 {
+		t.Fatalf("without the line the bar should be one row, got %d", m.barHeight())
+	}
+	if !strings.HasPrefix(ansi.Strip(lines[1]), "╭─nvim") {
+		t.Fatalf("nvim's box should start right under the bar, got %q", ansi.Strip(lines[1]))
+	}
+}
+
+func TestPaneBoxesOffKeepsTheLineAndTheDivider(t *testing.T) {
+	m, _, _ := sidePanelModel(t, 150)
+	m.paneBoxes = false
+	m.screen = screenEditor
+	m.resizeSessions()
+	w, h := m.sessionSize()
+
+	if m.barHeight() != 2 {
+		t.Fatalf("the bar should keep its line, got %d rows", m.barHeight())
+	}
+	if p := m.sessionPanes()[0]; p.x != 0 || p.y != 2 || p.w != w || p.h != h {
+		t.Fatalf("nvim should fill the room, got %+v", p)
+	}
+	lines := strings.Split(m.View().Content, "\n")
+	if !strings.HasPrefix(ansi.Strip(lines[1]), "───") || strings.Contains(ansi.Strip(lines[2]), "╭") {
+		t.Fatalf("the line under the bar should be back and no box drawn:\n%q\n%q", ansi.Strip(lines[1]), ansi.Strip(lines[2]))
+	}
+
+	m = pressSideBySide(t, m)
+	panes := m.sessionPanes()
+	left, right := panes[0], panes[1]
+	if left.w+1+right.w != w || right.x != left.x+left.w+1 {
+		t.Fatalf("nvim and the agent should share the room around a divider, got %+v %+v", left, right)
+	}
+	if got := sizeOf(left.s); got.W != left.w || got.H != h {
+		t.Fatalf("nvim is %+v, want %dx%d", got, left.w, h)
+	}
+	row := []rune(ansi.Strip(strings.Split(m.View().Content, "\n")[m.barHeight()]))
+	if row[left.w] != '│' {
+		t.Fatalf("the divider should be at column %d: %q", left.w, string(row))
 	}
 }

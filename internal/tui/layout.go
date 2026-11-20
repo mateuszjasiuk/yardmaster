@@ -20,8 +20,8 @@ func (p sessionPane) contains(x, y int) bool {
 
 // sessionPanes lists the sessions drawn on a session screen with their
 // rectangles: nvim and the agent side by side, every pane of an unzoomed
-// terminal split, else the active session alone. nvim and the agent sit in a
-// box, and their rectangle is the part inside its border. The cursor and the
+// terminal split, else the active session alone. When nvim and the agent sit
+// in a box, their rectangle is the part inside its border. The cursor and the
 // mouse read it, so they agree on where each session is. Empty when no session
 // is on screen.
 func (m Model) sessionPanes() []sessionPane {
@@ -31,14 +31,13 @@ func (m Model) sessionPanes() []sessionPane {
 	}
 	x, y := m.sidePanelW(), m.barHeight()
 	w, h := m.sessionSize()
+	room := sessionPane{s: s, x: x, y: y, w: w, h: h}
 
 	if m.sideBySideShown() {
 		ws := m.current.ws
-		left, right := sideBySideWidths(w)
-		return []sessionPane{
-			boxed(sessionPane{s: ws.Editor, x: x, y: y, w: left, h: h}),
-			boxed(sessionPane{s: ws.ActiveAgentSession(), x: x + left, y: y, w: right, h: h}),
-		}
+		editor, agent := m.sideBySideRects(room)
+		editor.s, agent.s = ws.Editor, ws.ActiveAgentSession()
+		return []sessionPane{editor, agent}
 	}
 	if m.screen == screenTerminal {
 		ws := m.current.ws
@@ -51,9 +50,9 @@ func (m Model) sessionPanes() []sessionPane {
 			}
 			return panes
 		}
-		return []sessionPane{{s: s, x: x, y: y, w: w, h: h}}
+		return []sessionPane{room}
 	}
-	return []sessionPane{boxed(sessionPane{s: s, x: x, y: y, w: w, h: h})}
+	return []sessionPane{m.framed(room)}
 }
 
 // paneAt returns the pane under screen cell (x, y), if any.
