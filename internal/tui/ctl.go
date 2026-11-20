@@ -339,7 +339,7 @@ func (m Model) handleCtlSpawned(msg ctlSpawnedMsg) (tea.Model, tea.Cmd) {
 		msg.p.Fail(fmt.Errorf("worktree created at %s but its sessions failed to start: %w", msg.wt.Path, err))
 		return mm, tea.Batch(cmd, mm.loadCmd())
 	}
-	reply := fmt.Sprintf("created %s at %s and started a %s agent", key, msg.wt.Path, providerName(msg.provider))
+	reply := fmt.Sprintf("created %s at %s and started a %s agent named %s", key, msg.wt.Path, providerName(msg.provider), mm.promptedAgentName(key))
 	if msg.warn != "" {
 		reply += "; some worktree files were not copied: " + msg.warn
 	}
@@ -359,7 +359,7 @@ func (m Model) handleCtlSpawned(msg ctlSpawnedMsg) (tea.Model, tea.Cmd) {
 // that was focused (or to a fresh one when nothing is saved).
 func (m Model) openBackground(key, dir string, provider agent.Provider, prompt string) (Model, tea.Cmd, error) {
 	if m.mgr.Has(key) {
-		spec, err := m.ctrl.NewProviderAgentSpec(provider, randomAgentTitle(), prompt)
+		spec, err := m.ctrl.NewProviderAgentSpec(provider, m.newAgentName(), prompt)
 		if err != nil {
 			return m, nil, err
 		}
@@ -411,7 +411,7 @@ func (m Model) workspaceSpecsWithPrompt(key string, provider agent.Provider, pro
 	specs := []session.Spec{m.ctrl.EditorSpec()}
 	saved, active := m.savedAgents(key)
 	if len(saved) == 0 {
-		spec, err := m.ctrl.NewProviderAgentSpec(provider, randomAgentTitle(), prompt)
+		spec, err := m.ctrl.NewProviderAgentSpec(provider, m.newAgentName(), prompt)
 		if err != nil {
 			return nil, err
 		}
@@ -471,7 +471,7 @@ func (m Model) ctlSend(p *ctl.Pending) (tea.Model, tea.Cmd) {
 			p.Fail(fmt.Errorf("open %s: %w", key, err))
 			return mm, cmd
 		}
-		p.Reply(ctl.Response{OK: true, Message: "opened " + key + " and started its agent on the message"})
+		p.Reply(ctl.Response{OK: true, Message: "opened " + key + " and started its agent " + mm.promptedAgentName(key) + " on the message"})
 		return mm, tea.Batch(cmd, mm.loadCmd(), mm.flashCmd("ym ctl opened "+key))
 	}
 	mm, cmd, now := m.enqueue(key, text)
@@ -808,4 +808,19 @@ func (m Model) openWorkspaceBackground(key, dir string) (Model, tea.Cmd, error) 
 		return m, nil, err
 	}
 	return m.activateBackground(key, dir, specs)
+}
+
+// promptedAgentName is the name of the agent openBackground gave the prompt
+// to; openBackground leaves that agent focused.
+func (m Model) promptedAgentName(key string) string {
+	ws, ok := m.mgr.Workspace(key)
+	if !ok {
+		return ""
+	}
+	s := ws.ActiveAgentSession()
+	if s == nil {
+		return ""
+	}
+
+	return s.Title
 }

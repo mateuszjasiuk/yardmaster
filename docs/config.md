@@ -27,6 +27,13 @@ branch_name   = "{name}"
 # background while the deck is shown.
 restore_sessions = false
 
+# Names for new agent sessions. Each new session gets a random name from the
+# list that no open session, and no saved session of an existing worktree,
+# uses. When all are taken, a number is added ("Pikachu 2"). Leave it out for
+# the 151 first-generation Pokémon; set it to [] for random adjective-noun names
+# ("amber-fox").
+agent_names = ["Ada", "Grace", "Linus"]
+
 # Run a command in the background whenever a session's folder gains focus
 # (switching to it, or ym's window getting focus back). The folder is added as
 # the last argument. Empty is off.

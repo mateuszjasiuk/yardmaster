@@ -130,6 +130,9 @@ prompt supports several lines: `ctrl+enter` launches, `enter` adds a line. When 
 provider is enabled, the form adds a Claude/Codex selector, starting on `agents.default`. Board
 and bar labels include the provider.
 
+Every new agent gets a name no other session uses, by default a first-generation Pokémon
+(`agent_names` in [config.md](config.md)). Claude gets it as its session name (`claude -n`).
+
 ## Command palette, help and usage
 
 ![The searchable ym command palette with live keyboard shortcuts](screenshots/command-palette.png)

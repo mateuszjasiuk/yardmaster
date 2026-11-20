@@ -22,6 +22,8 @@ ym ctl stage "in review" --worktree myrepo/fix-login  # the same for a worktree'
   never land in the middle of a turn or on a permission prompt. A `send` to a worktree that is not
   open opens it in the background with the message as the first prompt.
 - `spawn` creates the worktree and starts an agent on the prompt without switching your view.
+  The reply says the agent's name (`… started a claude agent named Squirtle`), picked from
+  `agent_names` (see [config.md](config.md)).
 - `remove` never deletes on its own: it raises ym's usual remove panel the next time you are on
   the deck.
 - `ym ctl` cannot answer an agent's permission prompt or question. The `!` badge and the attention

@@ -3363,6 +3363,69 @@ func randomAgentTitle() string {
 	return adj + "-" + noun
 }
 
+// newAgentName picks the name for a new agent from the configured list, so no
+// other session in ym has it.
+func (m Model) newAgentName() string {
+	return pickAgentName(m.ctrl.cfg.AgentNames, m.usedAgentNames())
+}
+
+// usedAgentNames are the names of every open agent, and of every saved agent
+// whose worktree is still on the deck. Saved pools of deleted worktrees stay
+// in state, so they must not block names forever.
+func (m Model) usedAgentNames() map[string]bool {
+	used := map[string]bool{}
+	for _, key := range m.mgr.Keys() {
+		ws, ok := m.mgr.Workspace(key)
+		if !ok {
+			continue
+		}
+		for _, s := range ws.Agents {
+			used[s.Title] = true
+		}
+	}
+	if m.state == nil {
+		return used
+	}
+
+	for _, g := range m.groups {
+		for _, wv := range g.Worktrees {
+			saved, _ := m.state.Agents(wsKey(g.Repo.Name, wv.WT.Name))
+			for _, a := range saved {
+				used[a.Label] = true
+			}
+		}
+	}
+
+	return used
+}
+
+// pickAgentName returns a random name from names that is not in used. When
+// every name is taken it adds the lowest free number to a random one
+// ("Pikachu 2"). With no names it falls back to randomAgentTitle.
+func pickAgentName(names []string, used map[string]bool) string {
+	if len(names) == 0 {
+		return randomAgentTitle()
+	}
+
+	var free []string
+	for _, name := range names {
+		if !used[name] {
+			free = append(free, name)
+		}
+	}
+	if len(free) > 0 {
+		return free[rand.Intn(len(free))]
+	}
+
+	base := names[rand.Intn(len(names))]
+	for n := 2; ; n++ {
+		name := fmt.Sprintf("%s %d", base, n)
+		if !used[name] {
+			return name
+		}
+	}
+}
+
 // activate ensures the workspace's sessions are running and switches to the
 // last screen used in that worktree (editor on first open). A brand-new worktree
 // starts one fresh claude session; reopening resumes the agent pool.
@@ -4218,9 +4281,8 @@ func (m Model) rotateWorktree(delta int) (tea.Model, tea.Cmd) {
 // selected location (active/home worktree).
 func (m Model) launchAgent() (tea.Model, tea.Cmd) {
 	prompt := strings.TrimSpace(m.promptInput.Value())
-	// The form no longer takes a label; every agent gets an auto-generated
-	// placeholder title until a future change summarises it.
-	label := randomAgentTitle()
+	// The form takes no label; the name comes from the configured list.
+	label := m.newAgentName()
 	m = m.closeBoard()
 	m.promptInput.Blur()
 	var restoredWatches tea.Cmd
