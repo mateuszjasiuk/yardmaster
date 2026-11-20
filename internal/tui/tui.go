@@ -3399,6 +3399,28 @@ func (m Model) usedAgentNames() map[string]bool {
 	return used
 }
 
+// worktreeAgentNames are the names of key's agents, the active one first: its
+// open agents while ym hosts the worktree, otherwise its saved pool.
+func (m Model) worktreeAgentNames(key string) []string {
+	if m.mgr != nil {
+		if ws, ok := m.mgr.Workspace(key); ok {
+			names := make([]string, 0, len(ws.Agents))
+			for _, s := range ws.Agents {
+				names = append(names, s.Title)
+			}
+			return activeFirst(names, ws.ActiveAgent)
+		}
+	}
+
+	saved, active := m.savedAgents(key)
+	names := make([]string, 0, len(saved))
+	for _, a := range saved {
+		names = append(names, a.Label)
+	}
+
+	return activeFirst(names, active)
+}
+
 // pickAgentName returns a random name from names that is not in used. When
 // every name is taken it adds the lowest free number to a random one
 // ("Pikachu 2"). With no names it falls back to randomAgentTitle.
@@ -5985,4 +6007,19 @@ func clamp(v, lo, hi int) int {
 		return hi
 	}
 	return v
+}
+
+// activeFirst moves names[active] to the front and drops empty names.
+func activeFirst(names []string, active int) []string {
+	var out []string
+	if active >= 0 && active < len(names) && names[active] != "" {
+		out = append(out, names[active])
+	}
+	for i, n := range names {
+		if i != active && n != "" {
+			out = append(out, n)
+		}
+	}
+
+	return out
 }
