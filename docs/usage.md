@@ -70,7 +70,8 @@ them, and they last for ym's lifetime.
   has to report `ctrl+|` as its own key (the kitty keyboard protocol); without it the key arrives
   as `ctrl+\`, so pick another `side_by_side` key.
 - **Session list:** `ctrl+\` opens the bar's open worktrees on the left, in the same order, under
-  their repo and gh stack. Each agent session is a box: its sign (`!` waiting, `✓` done, `●`
+  their repo, and under their feature (`⚑ name`, see [ctl.md](ctl.md)) or gh stack. A feature's
+  manager comes first, marked `★`. Each agent session is a box: its sign (`!` waiting, `✓` done, `●`
   working) and name in the top border, its worktree inside. A box with a sign has its border in
   the sign's colour. The session you'd come back to (the current worktree's active agent) has a
   heavy border and an accent bar on its left, in the accent colour when it has no sign. A stage the
@@ -90,6 +91,10 @@ The bar lists every open worktree after its icons, in a fixed order, coloured by
 are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you, and
 dim when idle. White means "look at this": a finished agent you have looked at turns white ("your
 turn" in the board) until it works again. The current worktree is underlined.
+
+In each repo, the main checkout comes first, unless it belongs to a feature. Then come the
+worktrees of a feature (the manager, then the members, a gh stack's members in stack order), then
+the repo's other worktrees by name. Inside a feature, a gh stack is neither grouped nor folded.
 
 - Click a name to jump there, or press `ctrl+h` / `ctrl+l` to move left / right like tabs
   (wrapping). ym takes these two keys from the programs inside it, such as nvim and the shell.

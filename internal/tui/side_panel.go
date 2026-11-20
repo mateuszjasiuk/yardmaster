@@ -259,31 +259,54 @@ func (m Model) sidePanelBlocks() []sidePanelBlock {
 }
 
 // sidePanelLeadRows are the rows above the first box of groups[i]: a blank row
-// that ends the gh stack you're in when a box of the same repo follows, as
-// nothing else shows where it ends; the repo's header for a new repo; the
-// stack's header where that stack starts. showsRepo reports whether they hold
-// the repo's header.
+// that ends a feature or the gh stack you're in when a box of the same repo
+// follows, as nothing else shows where it ends; the repo's header for a new
+// repo; the feature's or the stack's header where it starts. showsRepo reports
+// whether they hold the repo's header.
 func (m Model) sidePanelLeadRows(groups []agentGroup, i int) (lead []sidePanelRow, showsRepo bool) {
 	g := groups[i]
+	var prev agentGroup
+	if i > 0 {
+		prev = groups[i-1]
+	}
 	inStack := inGhStack(g)
-	continuesStack := i > 0 && inStack && sameGhStack(groups[i-1], g)
-	stackEnded := i > 0 && inGhStack(groups[i-1]) && !continuesStack
-	newRepo := i == 0 || groups[i-1].repo != g.repo || groups[i-1].account != g.account
+	continuesStack := i > 0 && inStack && sameGhStack(prev, g)
+	startsFeature := g.feature != "" && prev.feature != g.feature
+	stackEnded := i > 0 && inGhStack(prev) && !continuesStack
+	featureEnded := prev.feature != "" && prev.feature != g.feature
+	newRepo := i == 0 || prev.repo != g.repo || prev.account != g.account
 	showsRepo = newRepo && g.key != m.homeWSKey
 
-	if stackEnded && !newRepo {
+	if (stackEnded || featureEnded || startsFeature) && !newRepo {
 		lead = append(lead, sidePanelBlank)
 	}
 	if showsRepo {
 		lead = append(lead, sidePanelRow{text: sidePanelRepo(g, sidePanelWidth)})
 	}
+	if startsFeature {
+		_, name, _ := strings.Cut(g.feature, "/")
+		lead = append(lead, sidePanelGroupHeader(featureIcon+" "+name))
+	}
 	if inStack && !continuesStack {
-		name := " " + dimStyle.Render(truncateTo(ghStackIcon+" "+g.stack.Name(), sidePanelWidth-1))
-		lead = append(lead, sidePanelRow{text: padLine(name, sidePanelWidth)})
+		lead = append(lead, sidePanelGroupHeader(ghStackIcon+" "+g.stack.Name()))
 	}
 
 	return lead, showsRepo
 }
+
+// sidePanelGroupHeader is the dim header row above a feature's or a gh stack's
+// boxes.
+func sidePanelGroupHeader(name string) sidePanelRow {
+	text := " " + dimStyle.Render(truncateTo(name, sidePanelWidth-1))
+
+	return sidePanelRow{text: padLine(text, sidePanelWidth)}
+}
+
+// featureIcon marks a feature's header in the session list.
+const featureIcon = "⚑"
+
+// managerIcon marks the sessions of a feature's manager (its coordinator).
+const managerIcon = "★"
 
 // stackBox is a collapsed gh stack's box: the stack's sign and name in the top
 // border, and how many worktrees it holds inside.
@@ -299,7 +322,7 @@ func (m Model) stackBox(g *agentGroup) sidePanelBlock {
 
 // sessionBoxes are a worktree's boxes, one per session: the session's sign and
 // name in the top border and the worktree inside. The active session has a
-// heavy border.
+// heavy border; a feature's manager has its mark before the name.
 func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 	worktree := g.worktree
 	if g.key == m.homeWSKey {
@@ -313,11 +336,15 @@ func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 	var blocks []sidePanelBlock
 	for i := range g.agents {
 		a := &g.agents[i]
+		title := a.label
+		if g.manager {
+			title = managerIcon + " " + a.label
+		}
 		active := m.isActiveSession(*a)
 		sign, signSt := attnSign(a.attn, a.busy, panelIdleStyle)
 		blocks = append(blocks, sidePanelBlock{
 			look:  sidePanelBoxLook{heavy: active, sign: sign, signSt: signSt, bodySt: worktreeSt},
-			title: a.label, body: worktree, stage: a.stage, target: sidePanelRow{agent: a},
+			title: title, body: worktree, stage: a.stage, target: sidePanelRow{agent: a},
 			attn: a.attn, active: active,
 		})
 	}

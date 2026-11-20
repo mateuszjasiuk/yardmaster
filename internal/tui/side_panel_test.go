@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/config"
+	"github.com/mateuszjasiuk/yardmaster/internal/ghstack"
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
@@ -322,6 +324,63 @@ func TestSidePanelShowsTheStageInTheBottomBorder(t *testing.T) {
 	}
 	if w := ansi.StringWidth(m.sidePanelRows()[4].text); w != sidePanelWidth {
 		t.Fatalf("the row should stay %d wide, got %d", sidePanelWidth, w)
+	}
+}
+
+func TestMainThenFeaturesComeFirstWithTheManagerLeading(t *testing.T) {
+	stacked := func(index int) ghstack.Position { return ghstack.Position{Bottom: "s1", Index: index} }
+	groups := []agentGroup{
+		{repo: "r", worktree: "a-plain"},
+		{repo: "r", worktree: "b-member", feature: "r/f"},
+		{repo: "r", worktree: "c-top", feature: "r/f", stack: stacked(2)},
+		{repo: "r", worktree: "d-bottom", feature: "r/f", stack: stacked(1)},
+		{repo: "r", worktree: "e-lead", feature: "r/f", manager: true},
+		{repo: "r", worktree: "f-plain"},
+		{repo: "r", worktree: "(main)", main: true},
+		{repo: "s", worktree: "a-other"},
+		{repo: "s", worktree: "(main)", main: true, feature: "s/g"},
+		{repo: "s", worktree: "b-member", feature: "s/g", manager: true},
+	}
+
+	var got []string
+	for _, g := range featuresFirst(groups) {
+		got = append(got, g.worktree)
+		if g.feature != "" && g.stack.Index != 0 {
+			t.Errorf("%s should leave its gh stack inside the feature", g.worktree)
+		}
+	}
+	// A main checkout inside a feature stays with its feature.
+	want := []string{"(main)", "e-lead", "b-member", "d-bottom", "c-top", "a-plain", "f-plain",
+		"b-member", "(main)", "a-other"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+func TestSidePanelGroupsAFeatureUnderItsName(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	m := stripModel(t, 140, "a-other", "lead", "m1") // m1 is current
+	m.sidePanel = true
+	if err := m.state.NewFeature("repo/sch-1", "repo/lead", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.state.AddToFeature("repo/sch-1", "repo/m1"); err != nil {
+		t.Fatal(err)
+	}
+
+	want := panelLines("", "  repo", " ⚑ sch-1", boxRows("★ claude", "lead"), activeBoxRows("claude", "m1"),
+		"", boxRows("claude", "a-other"))
+	if got := firstPanelRows(m, want); got != want {
+		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
+	}
+
+	// The strip and ctrl+] follow the same order.
+	var keys []string
+	for _, g := range m.stripEntries() {
+		keys = append(keys, g.worktree)
+	}
+	if want := []string{"lead", "m1", "a-other"}; !slices.Equal(keys, want) {
+		t.Fatalf("strip order = %v, want %v", keys, want)
 	}
 }
 
