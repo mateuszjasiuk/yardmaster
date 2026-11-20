@@ -663,3 +663,27 @@ func TestUsedAgentNamesSkipsDeletedWorktrees(t *testing.T) {
 		t.Errorf("a saved name of a deleted worktree should be free: %v", used)
 	}
 }
+
+func TestCtlSpawnNamesTheAgentFromTheList(t *testing.T) {
+	m := ctlModel(t)
+	m.ctrl = &Controller{cfg: config.Config{Editor: "cat", Agent: "cat", Shell: "sh", Keys: config.Default().Keys, AgentNames: []string{"Abra", "Mew"}}}
+	if _, err := m.mgr.Activate("r/b", t.TempDir(), []session.Spec{
+		{Kind: session.Agent, Title: "Abra", SessionID: "open", Argv: []string{"cat"}},
+	}, session.SameSize(80, 24)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.mgr.CloseAll)
+
+	p, ch := pending(ctl.Request{Op: ctl.OpSpawn, Repo: "r", Name: "c"})
+	wt := repo.Worktree{Repo: "r", Name: "c", Path: t.TempDir(), Branch: "c"}
+	mm, _ := m.handleCtlSpawned(ctlSpawnedMsg{p: p, repo: m.groups[0].Repo, name: "c", wt: wt, provider: m.defaultAgentProvider})
+	m = mm.(Model)
+
+	if resp := <-ch; !resp.OK || !strings.Contains(resp.Message, "agent named Mew") {
+		t.Fatalf("the reply should name the free agent Mew: %+v", resp)
+	}
+	ws, _ := m.mgr.Workspace("r/c")
+	if got := ws.ActiveAgentSession().Title; got != "Mew" {
+		t.Fatalf("the new agent should be Mew, got %q", got)
+	}
+}
