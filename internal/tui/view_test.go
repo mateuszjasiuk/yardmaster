@@ -87,7 +87,7 @@ func TestSelectionBarFillsWidth(t *testing.T) {
 	m := sampleModel()
 	m.focus = focusActive
 	innerW := m.width - 4
-	bar := m.activeRow(m.active[0], true, innerW, 0)
+	bar := m.activeRow(m.active[0], nil, true, innerW, 0)
 	if w := lipgloss.Width(bar); w != innerW {
 		t.Fatalf("selected row width = %d, want %d", w, innerW)
 	}
@@ -140,8 +140,8 @@ func TestActiveRowStateCluster(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			it := activeItem{repo: repo.Repo{Name: "r"}, view: tc.view}
-			row := m.activeRow(it, false, innerW, 0)
-			sel := m.activeRow(it, true, innerW, 0)
+			row := m.activeRow(it, nil, false, innerW, 0)
+			sel := m.activeRow(it, nil, true, innerW, 0)
 			for _, want := range tc.wants {
 				if !strings.Contains(row, want) {
 					t.Errorf("row missing cluster %q:\n%s", want, row)
@@ -161,7 +161,7 @@ func TestActiveRowStateCluster(t *testing.T) {
 
 	// A diverged row must not also show the — placeholder.
 	it := activeItem{repo: repo.Repo{Name: "r"}, view: cases[2].view}
-	if row := m.activeRow(it, false, innerW, 0); strings.Contains(row, "—") {
+	if row := m.activeRow(it, nil, false, innerW, 0); strings.Contains(row, "—") {
 		t.Errorf("diverged row should not show the — placeholder:\n%s", row)
 	}
 }
@@ -176,13 +176,13 @@ func TestActiveRowNarrowWidth(t *testing.T) {
 		Subject: "A long subject line that cannot possibly fit", CommitTime: 1,
 	}}
 	for _, innerW := range []int{1, 5, 10, 18, 24, 40} {
-		_ = m.activeRow(it, false, innerW, 0)
-		_ = m.activeRow(it, true, innerW, 0)
+		_ = m.activeRow(it, nil, false, innerW, 0)
+		_ = m.activeRow(it, nil, true, innerW, 0)
 		_ = activeDetail(it.view, "", "", innerW)
 	}
 	// At a comfortable width the long name still yields a full-width row with
 	// the cluster present.
-	row := m.activeRow(it, false, 40, 0)
+	row := m.activeRow(it, nil, false, 40, 0)
 	if !strings.Contains(row, "↑12") || !strings.Contains(row, "↓34") {
 		t.Errorf("narrowed row lost its cluster:\n%s", row)
 	}
@@ -600,12 +600,12 @@ func TestActiveRowAgentNames(t *testing.T) {
 		t.Errorf("selected row width = %d, want %d", w, innerW)
 	}
 
-	if w := m.agentNamesColW(activeRowPrefixW + activeRowMinNameW + 3); w != 0 {
+	if w := agentNamesColW([][]string{{"Squirtle"}}, activeRowPrefixW+activeRowMinNameW+3); w != 0 {
 		t.Errorf("a box too narrow for the column should drop it, got width %d", w)
 	}
 	m.state = nil
 	m.mgr.CloseAll()
-	if w := m.agentNamesColW(innerW); w != 0 {
+	if w := agentNamesColW([][]string{nil, {""}}, innerW); w != 0 {
 		t.Errorf("no named agents should mean no column, got width %d", w)
 	}
 }
