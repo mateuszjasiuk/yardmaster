@@ -582,6 +582,7 @@ func TestActiveRowAgentNames(t *testing.T) {
 		t.Errorf("closed worktree should show its saved agent:\n%s", rows["bugfix"])
 	}
 	nameCol := func(row, wt string) int { return lipgloss.Width(row[:strings.Index(row, wt)]) }
+	// Squirtle is the widest label, so it sets the column.
 	want := activeRowPrefixW + len("Squirtle") + 1
 	for _, wt := range []string{"feat-login", "bugfix", "spike"} {
 		if got := nameCol(rows[wt], wt); got != want {
@@ -592,19 +593,21 @@ func TestActiveRowAgentNames(t *testing.T) {
 	m.focus = focusActive
 	m.selectActiveByKey("yardmaster/feat-login")
 	display, rowItem := m.activeDisplay(innerW)
-	row := slices.Index(rowItem, m.activeCursor)
-	if detail := ansi.Strip(display[row+1]); !strings.Contains(detail, "└ Mew, Abra") {
+	selLine := slices.Index(rowItem, m.activeCursor)
+	if selLine < 0 {
+		t.Fatal("feat-login should be on the deck")
+	}
+	if detail := ansi.Strip(display[selLine+1]); !strings.Contains(detail, "└ Mew, Abra") {
 		t.Errorf("the └ line should list every agent, active first:\n%s", detail)
 	}
-	if w := lipgloss.Width(display[row]); w != innerW {
+	if w := lipgloss.Width(display[selLine]); w != innerW {
 		t.Errorf("selected row width = %d, want %d", w, innerW)
 	}
 
-	if w := agentNamesColW([][]string{{"Squirtle"}}, activeRowPrefixW+activeRowMinNameW+3); w != 0 {
+	tooNarrow := activeRowPrefixW + activeRowMinNameW + agentNamesMinW // one column short
+	if w := agentNamesColW([][]string{{"Squirtle"}}, tooNarrow); w != 0 {
 		t.Errorf("a box too narrow for the column should drop it, got width %d", w)
 	}
-	m.state = nil
-	m.mgr.CloseAll()
 	if w := agentNamesColW([][]string{nil, {""}}, innerW); w != 0 {
 		t.Errorf("no named agents should mean no column, got width %d", w)
 	}

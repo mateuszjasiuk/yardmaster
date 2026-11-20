@@ -3403,7 +3403,7 @@ func (m Model) usedAgentNames() map[string]bool {
 // open agents while ym hosts the worktree, otherwise its saved pool.
 func (m Model) worktreeAgentNames(key string) []string {
 	if ws, open := m.openWorkspace(key); open {
-		return activeFirst(agentTitles(ws.Agents), ws.ActiveAgent)
+		return activeFirst(agentNames(ws.Agents), ws.ActiveAgent)
 	}
 
 	saved, active := m.savedAgents(key)
@@ -6012,8 +6012,8 @@ func (m Model) openWorkspace(key string) (*session.Workspace, bool) {
 	return m.mgr.Workspace(key)
 }
 
-// agentTitles are the agents' names, in pool order.
-func agentTitles(agents []*session.Session) []string {
+// agentNames are the agents' names, in pool order.
+func agentNames(agents []*session.Session) []string {
 	titles := make([]string, 0, len(agents))
 	for _, a := range agents {
 		titles = append(titles, a.Title)
