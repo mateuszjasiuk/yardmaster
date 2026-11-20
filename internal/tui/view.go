@@ -1512,11 +1512,12 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 		}
 	}
 
-	namesW := m.agentNamesColW(innerW)
-	namePad := activeRowPrefixW
-	if namesW > 0 {
-		namePad += namesW + 1
+	names := make([][]string, len(m.active))
+	for i, it := range m.active {
+		names[i] = m.worktreeAgentNames(wsKey(it.repo.Name, it.view.WT.Name))
 	}
+	namesW := agentNamesColW(names, innerW)
+
 	lastStack := ""
 	for i, it := range m.active {
 		if it.repo.Name != lastRepo {
@@ -1530,21 +1531,16 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 		}
 		pos, inStack := m.ghStackPosition(it.repo.Name, it.view.WT.Branch)
 		if inStack && pos.Bottom != lastStack {
-			lines = append(lines, strings.Repeat(" ", namePad)+groupStyle.Render(ghStackIcon+" "+pos.Name()))
+			lines = append(lines, strings.Repeat(" ", activeRowLeftW(namesW))+groupStyle.Render(ghStackIcon+" "+pos.Name()))
 			rowItem = append(rowItem, -1)
 		}
 		lastStack = pos.Bottom
 		selected := i == m.activeCursor && m.focus == focusActive
-		lines = append(lines, m.activeRow(it, selected, innerW, namesW))
+		lines = append(lines, m.activeRow(it, names[i], selected, innerW, namesW))
 		rowItem = append(rowItem, i)
 		if selected {
-			key := wsKey(it.repo.Name, it.view.WT.Name)
-			stackSeg := m.stackDetailSeg(key)
-			// The row shows one name and a count; the detail line lists them all.
-			agentsSeg := ""
-			if names := m.worktreeAgentNames(key); len(names) > 1 {
-				agentsSeg = strings.Join(names, ", ")
-			}
+			stackSeg := m.stackDetailSeg(wsKey(it.repo.Name, it.view.WT.Name))
+			agentsSeg := agentsDetailSeg(names[i])
 			if detail := activeDetail(it.view, agentsSeg, stackSeg, innerW); detail != "" {
 				lines = append(lines, detail)
 				rowItem = append(rowItem, -1)
@@ -1635,37 +1631,44 @@ const activeRowPrefixW = 12
 const (
 	// agentNamesMaxW caps the names column; "Kangaskhan +1" fits.
 	agentNamesMaxW = 14
+	// agentNamesMinW is the narrowest names column worth drawing; below it
+	// the names would be cut to one or two letters.
+	agentNamesMinW = 4
 	// activeRowMinNameW is the room the worktree name and the right cluster
 	// keep before the names column narrows.
 	activeRowMinNameW = 16
 )
 
-// agentNamesColW is the width of the ACTIVE names column: the widest row's
-// label, capped, and narrowed so the worktree names keep room. 0 means no
-// column, when no worktree has a named agent or the box is too narrow.
-func (m Model) agentNamesColW(innerW int) int {
+// agentNamesColW is the width of the ACTIVE names column, given each row's
+// names: the widest row's label, capped, and narrowed so the worktree names
+// keep room. 0 means no column, when no worktree has a named agent or the box
+// is too narrow.
+func agentNamesColW(names [][]string, innerW int) int {
 	widest := 0
-	for _, it := range m.active {
-		names := m.worktreeAgentNames(wsKey(it.repo.Name, it.view.WT.Name))
-		widest = max(widest, lipgloss.Width(agentNamesLabel(names)))
+	for _, n := range names {
+		first, more := agentNamesParts(n)
+		widest = max(widest, lipgloss.Width(first+more))
 	}
-	w := min(widest, agentNamesMaxW, innerW-activeRowPrefixW-activeRowMinNameW-1)
-	if w < 4 {
+	room := innerW - activeRowPrefixW - activeRowMinNameW - 1
+	w := min(widest, agentNamesMaxW, room)
+	if w < agentNamesMinW {
 		return 0
 	}
 
 	return w
 }
 
-// agentNamesLabel is a row's names text: the active agent and a "+N" count
-// for the others.
-func agentNamesLabel(names []string) string {
-	first, more := agentNamesParts(names)
+// activeRowLeftW is the column where a row's worktree name starts: the fixed
+// prefix plus the names column and its gap, when there is one.
+func activeRowLeftW(namesW int) int {
+	if namesW == 0 {
+		return activeRowPrefixW
+	}
 
-	return first + more
+	return activeRowPrefixW + namesW + 1
 }
 
-func (m Model) activeRow(it activeItem, highlight bool, innerW, namesW int) string {
+func (m Model) activeRow(it activeItem, names []string, highlight bool, innerW, namesW int) string {
 	key := wsKey(it.repo.Name, it.view.WT.Name)
 
 	// Live/dead indicator: filled circle when sessions are running, hollow otherwise.
@@ -1720,15 +1723,16 @@ func (m Model) activeRow(it activeItem, highlight bool, innerW, namesW int) stri
 		cluster = dimStyle.Render(label) + " " + cluster
 		clusterW += lipgloss.Width(label) + 1
 	}
-	// On the focused row, identity outranks optional right-side facts. Drop the
-	// cluster before truncating the selected worktree name.
-	prefixW := activeRowPrefixW
+	prefixW := activeRowLeftW(namesW)
 	namesCol := ""
 	if namesW > 0 {
-		prefixW += namesW + 1
-		namesCol = agentNamesCell(m.worktreeAgentNames(key), namesW, highlight) + " "
+		namesCol = agentNamesCell(names, namesW, highlight) + " "
 	}
-	if highlight && lipgloss.Width(indent+it.view.WT.Name) > innerW-prefixW-clusterW-1 {
+
+	// On the focused row, identity outranks optional right-side facts. Drop the
+	// cluster before truncating the selected worktree name.
+	nameW := lipgloss.Width(indent + it.view.WT.Name)
+	if highlight && nameW > innerW-prefixW-clusterW-1 {
 		cluster, clusterW = "", 0
 	}
 	nameMax := max(1, innerW-prefixW-len(indent)-clusterW-1)
@@ -1758,12 +1762,21 @@ func (m Model) activeRow(it activeItem, highlight bool, innerW, namesW int) stri
 func agentNamesCell(names []string, w int, highlight bool) string {
 	first, more := agentNamesParts(names)
 	first = truncateTo(first, w-lipgloss.Width(more))
-	pad := strings.Repeat(" ", max(0, w-lipgloss.Width(first+more)))
 	if highlight {
-		return first + more + pad
+		return padLine(first+more, w)
 	}
 
-	return accentStyle.Render(first) + dimStyle.Render(more) + pad
+	return padLine(accentStyle.Render(first)+dimStyle.Render(more), w)
+}
+
+// agentsDetailSeg is the └ line's names segment: every agent, active first.
+// Empty with one agent or none, since the row already shows that name.
+func agentsDetailSeg(names []string) string {
+	if len(names) < 2 {
+		return ""
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // agentNamesParts splits a row's names text into the active agent's name and
@@ -1809,8 +1822,8 @@ func stateCluster(v WorktreeView) (string, int) {
 // activeDetail builds the dim "└" line shown directly beneath the focused
 // worktree row. Branch divergence already lives in the row's compact ↑N/↓N
 // cluster, so the detail line only reveals new context: all agent names (the
-// row shows only the first), uncommitted diffstat,
-// the last-commit subject (in quotes), its age, and stack state. Each segment is
+// row shows only the first), uncommitted diffstat, the last-commit subject (in
+// quotes), its age, and stack state. Each segment is
 // omitted when it doesn't apply and joined by " · ". The subject is the segment
 // that flexes: it is truncated so the whole line fits innerW. Returns "" when
 // every segment is empty, so activeDisplay drops the line entirely.
