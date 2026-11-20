@@ -69,9 +69,11 @@ them, and they last for ym's lifetime.
   needs 121 columns; without an agent nvim fills the width. ym remembers the choice. Your terminal
   has to report `ctrl+|` as its own key (the kitty keyboard protocol); without it the key arrives
   as `ctrl+\`, so pick another `side_by_side` key.
-- **Session list:** `ctrl+\` opens the bar's open worktrees on the left, under their repo and gh
-  stack, with the same signs (`!` waiting, `✓` done, `●` working) and order. Click a row to open
-  it. The list pushes the session to the right (28 columns) instead of covering it, and the bar
+- **Session list:** `ctrl+\` opens the bar's open worktrees on the left, in the same order, under
+  their repo and gh stack. Each agent session is a box: its sign (`!` waiting, `✓` done, `●`
+  working) and name in the top border, its worktree inside. A box with a sign has its border in
+  the sign's colour. The session you'd come back to (the current worktree's active agent) has a
+  heavy border, in the accent colour when it has no sign. Click a box to open that session. The list pushes the session to the right (28 columns) instead of covering it, and the bar
   hides its strip while it shows. It hides in terminals under 89 columns (under 150 while side by
   side is on) and on the deck. ym remembers whether it is open. When the bar's strip runs out of
   room, its `+N` opens the list too.

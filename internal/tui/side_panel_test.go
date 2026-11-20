@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/config"
@@ -51,7 +52,7 @@ func TestSidePanelNarrowsSessionsAndIsSaved(t *testing.T) {
 		t.Fatalf("terminal width = %d, want it resized to %d", cols, 120-sidePanelWidth-1)
 	}
 	lines := strings.Split(m.View().Content, "\n")
-	if row := ansi.Strip(lines[m.barHeight()+1]); !strings.HasPrefix(row, " repo ") || ansi.StringWidth(row) > 120 {
+	if row := ansi.Strip(lines[m.barHeight()+1]); !strings.HasPrefix(row, "  repo ") || ansi.StringWidth(row) > 120 {
 		t.Fatalf("the second body row should start with the panel and fit the screen: %q", row)
 	}
 
@@ -103,6 +104,30 @@ func panelRows(m Model) []string {
 	return rows
 }
 
+// boxRows is a box as plain text: the title in the top border, then each row.
+func boxRows(title string, rows ...string) string {
+	w := sidePanelWidth - 1
+	out := []string{" ╭─" + title + strings.Repeat("─", w-3-ansi.StringWidth(title)) + "╮"}
+	for _, r := range rows {
+		out = append(out, " │"+r+strings.Repeat(" ", w-2-ansi.StringWidth(r))+"│")
+	}
+	out = append(out, " ╰"+strings.Repeat("─", w-2)+"╯")
+	return strings.Join(out, "\n")
+}
+
+// activeBoxRows is boxRows with the heavy border of the active session.
+func activeBoxRows(title string, rows ...string) string {
+	return strings.NewReplacer("╭", "┏", "╮", "┓", "╰", "┗", "╯", "┛", "─", "━", "│", "┃").Replace(boxRows(title, rows...))
+}
+
+// panelLines joins rows of the panel, as plain text, into one string.
+func panelLines(parts ...string) string { return strings.Join(parts, "\n") }
+
+// firstPanelRows is the panel's first rows as plain text, as many as want has.
+func firstPanelRows(m Model, want string) string {
+	return panelLines(panelRows(m)[:strings.Count(want, "\n")+1]...)
+}
+
 func TestSidePanelListsSessionsUnderTheirRepo(t *testing.T) {
 	m := stripModelKeys(t, 140, "api/zeta", "api/alpha", "web/main")
 	m.sidePanel = true
@@ -112,10 +137,14 @@ func TestSidePanelListsSessionsUnderTheirRepo(t *testing.T) {
 	}
 	m.agentStatus = map[int]AgentStatus{ws.Agents[0].Pid(): {Status: "waiting"}}
 
-	got := strings.Join(panelRows(m)[:6], "\n")
-	want := strings.Join([]string{"", " api", "   alpha", " ! zeta", " web", "   main"}, "\n")
+	want := panelLines("", "  api", boxRows("claude", "alpha"), boxRows("! claude", "zeta"), "  web", activeBoxRows("claude", "main"))
+	got := firstPanelRows(m, want)
 	if got != want {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
+	}
+	rows := m.sidePanelRows(m.height - m.barHeight())
+	if red := " " + lipgloss.NewStyle().Foreground(cRed).Render("╭─"); !strings.HasPrefix(rows[5].text, red) {
+		t.Fatalf("a waiting session's border should be red: %q", rows[5].text)
 	}
 	for _, r := range m.sidePanelRows(m.height - m.barHeight()) {
 		if w := ansi.StringWidth(r.text); w != sidePanelWidth {
@@ -128,15 +157,16 @@ func TestSidePanelFollowsTheStackToggle(t *testing.T) {
 	m := stackStripModel(t)
 	m.sidePanel = true
 
-	got := strings.Join(panelRows(m)[:5], "\n")
-	want := strings.Join([]string{"", " repo", "   ⛁ #4", "   beta", "   zed"}, "\n")
+	want := panelLines("", "  repo", boxRows("⛁ #4", "4 worktrees"), activeBoxRows("claude", "beta"), boxRows("claude", "zed"))
+	got := firstPanelRows(m, want)
 	if got != want {
-		t.Fatalf("a stack you're not in should be one row:\n%s\nwant:\n%s", got, want)
+		t.Fatalf("a stack you're not in should be one box:\n%s\nwant:\n%s", got, want)
 	}
 
 	m = pressCtrl(t, m, 'y')
-	got = strings.Join(panelRows(m)[:9], "\n")
-	want = strings.Join([]string{"", " repo", "   ⛁ #4", "     a", "     b", "     c", "     d", "   beta", "   zed"}, "\n")
+	want = panelLines("", "  repo", " ⛁ #4", boxRows("claude", "a"), boxRows("claude", "b"), boxRows("claude", "c"), boxRows("claude", "d"),
+		"", activeBoxRows("claude", "beta"))
+	got = firstPanelRows(m, want)
 	if got != want {
 		t.Fatalf("ctrl+y should show the stack in full:\n%s\nwant:\n%s", got, want)
 	}
@@ -154,9 +184,10 @@ func TestSidePanelSaysHowManySessionsDontFit(t *testing.T) {
 	if len(rows) != m.height-m.barHeight() {
 		t.Fatalf("the panel should fill the height: %d rows, want %d", len(rows), m.height-m.barHeight())
 	}
-	// A blank row, the repo, 19 sessions, then "+11 more".
-	if last := rows[len(rows)-1]; last != " +11 more" {
-		t.Fatalf("last row = %q, want \" +11 more\"", last)
+	// A blank row, the repo, 6 boxes of 3 rows, then " +24 more": the 7th box
+	// would be cut, so it isn't shown.
+	if more := rows[2+6*3]; more != " +24 more" {
+		t.Fatalf("row after the boxes = %q, want \" +24 more\"", more)
 	}
 }
 
@@ -179,6 +210,37 @@ func TestSidePanelClickOpensTheSession(t *testing.T) {
 	m.helpOpen = true
 	if m = click(m, 3); m.current.worktree != "alpha" {
 		t.Fatalf("the panel isn't drawn under help, so a click should do nothing, current = %q", m.current.worktree)
+	}
+}
+
+func TestSidePanelBoxOpensItsSession(t *testing.T) {
+	m := stripModel(t, 140, "alpha", "beta") // beta is current, on the editor
+	m.sidePanel = true
+
+	// Rows: blank, "repo", then the top border and the body of alpha's box.
+	mm, _ := m.handleMouseClick(tea.MouseClickMsg{X: 4, Y: m.barHeight() + 3, Button: tea.MouseLeft})
+	m = mm.(Model)
+	if m.current.worktree != "alpha" || m.screen != screenAgent {
+		t.Fatalf("a click inside a session's box should open that session, got %q on screen %v", m.current.worktree, m.screen)
+	}
+}
+
+func TestSidePanelGivesEachSessionABoxAndMarksTheActiveOne(t *testing.T) {
+	m := stripModel(t, 140, "alpha") // alpha is current
+	m.sidePanel = true
+	if _, err := m.mgr.SpawnAgent("repo/alpha", t.TempDir(), session.Spec{Kind: session.Agent, Title: "second", Argv: []string{"cat"}}, 10, 10); err != nil {
+		t.Fatal(err)
+	}
+	m.current.ws.ActiveAgent = 0
+
+	want := panelLines("", "  repo", activeBoxRows("claude", "alpha"), boxRows("second", "alpha"))
+	if got := firstPanelRows(m, want); got != want {
+		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
+	}
+	rows := m.sidePanelRows(m.height - m.barHeight())
+	accent := " " + accentStyle.Render("┏━")
+	if !strings.HasPrefix(rows[2].text, accent) || strings.HasPrefix(rows[5].text, accent) {
+		t.Fatalf("only the active session's box should have the heavy accent border:\n%q\n%q", rows[2].text, rows[5].text)
 	}
 }
 
@@ -247,6 +309,8 @@ func TestSidePanelInATinyTerminalDoesNotCrash(t *testing.T) {
 func TestSidePanelNamesTheAccountInsteadOfABackground(t *testing.T) {
 	m := stackStripModel(t)
 	m.sidePanel = true
+	m.height = 40 // room for every box
+
 	mm, _ := m.activate("repo", "c", m.active[2].view.WT.Path) // inside the stack
 	m = mm.(Model)
 	var zedPath string
@@ -259,8 +323,9 @@ func TestSidePanelNamesTheAccountInsteadOfABackground(t *testing.T) {
 		"private": {ConfigDir: t.TempDir(), Folders: []string{zedPath}},
 	}
 
-	got := strings.Join(panelRows(m)[:10], "\n")
-	want := strings.Join([]string{"", " repo", "   ⛁ #4", "     a", "     b", "     c", "     d", "   beta", " repo · private", "   zed"}, "\n")
+	want := panelLines("", "  repo", " ⛁ #4", boxRows("claude", "a"), boxRows("claude", "b"), activeBoxRows("claude", "c"), boxRows("claude", "d"),
+		"", boxRows("claude", "beta"), "  repo · private", boxRows("claude", "zed"))
+	got := firstPanelRows(m, want)
 	if got != want {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
 	}

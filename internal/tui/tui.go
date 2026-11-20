@@ -252,6 +252,7 @@ type boardRow struct {
 	provider agent.Provider
 	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
+	busy     bool      // the agent is working
 }
 
 // Focus order of the new-agent form's fields.
@@ -2172,16 +2173,17 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	for i, a := range ws.Agents {
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
+		busy := m.agentStatus[pid].Status == "busy"
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: m.boardStatus(pid, attn), attn: attn,
+			status: m.boardStatus(pid, attn), attn: attn, busy: busy,
 		})
 		if attn > g.attn {
 			g.attn = attn
 		}
-		if m.agentStatus[pid].Status == "busy" {
+		if busy {
 			g.busy = true
 		}
 	}

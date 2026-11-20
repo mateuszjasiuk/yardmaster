@@ -2615,24 +2615,16 @@ func (m Model) openStripGroup(g agentGroup) (tea.Model, tea.Cmd) {
 	return m.activate(g.repo, g.worktree, g.path)
 }
 
-// stripLook is how the strip and the side panel show a worktree's agents: the
-// sign ("!" waiting, "✓" done, "●" working, "" otherwise), the sign's style, and
-// the name's style, which is underlined for the current worktree: in its flag
-// colour when that shows, else in the accent colour. idle is the style of a
-// worktree with nothing to show.
+// stripLook is how the agent strip shows a worktree's agents (and the side
+// panel a collapsed gh stack's): the sign and its style from attnSign, with a
+// flagged worktree without a sign in its flag colour, and the name's style,
+// which is underlined for the current worktree: in its flag colour when that
+// shows, else in the accent colour. idle is the style of a worktree with
+// nothing to show.
 func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt, nameSt lipgloss.Style) {
-	sign, signSt = "", idle
-	switch {
-	case g.attn == attnWaiting:
-		sign, signSt = "!", boldRed
-	case g.attn == attnDone:
-		sign, signSt = "✓", boldGreen
-	case g.busy:
-		sign, signSt = "●", dirtyStyle
-	case g.flag != nil:
+	sign, signSt = attnSign(g.attn, g.busy, idle)
+	if sign == "" && g.flag != nil {
 		signSt = idle.Foreground(g.flag)
-	case g.attn == attnSeen:
-		signSt = nameStyle
 	}
 
 	nameSt = signSt
@@ -2643,6 +2635,23 @@ func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt
 		}
 	}
 	return sign, signSt, nameSt
+}
+
+// attnSign is the sign of an agent's state and its style: "!" waiting, "✓" done,
+// "●" working, else no sign, in the seen or the idle style.
+func attnSign(attn attnLevel, busy bool, idle lipgloss.Style) (string, lipgloss.Style) {
+	switch {
+	case attn == attnWaiting:
+		return "!", boldRed
+	case attn == attnDone:
+		return "✓", boldGreen
+	case busy:
+		return "●", dirtyStyle
+	case attn == attnSeen:
+		return "", nameStyle
+	}
+
+	return "", idle
 }
 
 // stackNameStyle names a gh stack in the strip: brighter than its worktrees,
