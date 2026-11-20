@@ -15,6 +15,7 @@ import (
 	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
 	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/state"
 )
 
 func TestClaudeProjectName(t *testing.T) {
@@ -227,6 +228,114 @@ func TestCtlOpenLeavesAnOpenWorkspaceAlone(t *testing.T) {
 		if resp := <-ch; resp.OK {
 			t.Fatalf("%s on an unknown worktree should fail: %+v", op, resp)
 		}
+	}
+}
+
+func TestCheckStage(t *testing.T) {
+	cases := []struct {
+		text    string
+		clear   bool
+		want    string
+		wantErr bool
+	}{
+		{text: "  step 2 ", want: "step 2"},
+		{text: "sixteen-chars-ok", want: "sixteen-chars-ok"},
+		{text: "seventeen-chars!!", wantErr: true},
+		{text: "", wantErr: true},
+		{text: "   ", wantErr: true},
+		{text: "two\nlines", wantErr: true},
+		{text: "tab\there", wantErr: true},
+		{clear: true, want: ""},
+		{text: "review", clear: true, wantErr: true},
+	}
+	for _, tc := range cases {
+		got, err := checkStage(tc.text, tc.clear)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("checkStage(%q, %v) = %q, %v; want %q, err %v", tc.text, tc.clear, got, err, tc.want, tc.wantErr)
+		}
+	}
+}
+
+// stageModel has worktree r/a open with two agent sessions, the first active,
+// and a helper that sends one stage request and returns the reply.
+func stageModel(t *testing.T) (*session.Workspace, func(ctl.Request) ctl.Response, Model) {
+	t.Helper()
+	m := ctlModel(t)
+	ws, err := m.mgr.Activate("r/a", t.TempDir(), []session.Spec{
+		{Kind: session.Agent, SessionID: "first", Argv: []string{"cat"}},
+		{Kind: session.Agent, SessionID: "second", Argv: []string{"cat"}},
+	}, session.SameSize(80, 24))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.mgr.CloseAll)
+	ws.ActiveAgent = 0
+	stage := func(req ctl.Request) ctl.Response {
+		req.Op = ctl.OpStage
+		p, ch := pending(req)
+		m.handleCtl(p)
+		return <-ch
+	}
+
+	return ws, stage, m
+}
+
+func TestCtlStageSetsAndSavesASessionsStage(t *testing.T) {
+	ws, stage, m := stageModel(t)
+
+	if resp := stage(ctl.Request{Worktree: "r/a", Text: "in review"}); !resp.OK {
+		t.Fatalf("a worktree's stage should go to its active session: %+v", resp)
+	}
+	if resp := stage(ctl.Request{AgentToken: ws.Agents[1].Token, Text: "step 2"}); !resp.OK {
+		t.Fatalf("a session should set its own stage by its token: %+v", resp)
+	}
+	if ws.Agents[0].Stage != "in review" || ws.Agents[1].Stage != "step 2" {
+		t.Fatalf("stages = %q, %q; want \"in review\", \"step 2\"", ws.Agents[0].Stage, ws.Agents[1].Stage)
+	}
+	saved, _ := m.savedAgents("r/a")
+	if len(saved) != 2 || saved[0].Stage != "in review" || saved[1].Stage != "step 2" {
+		t.Fatalf("the stages should be saved with the sessions: %+v", saved)
+	}
+}
+
+func TestCtlStageRefusesBadInput(t *testing.T) {
+	ws, stage, _ := stageModel(t)
+	stage(ctl.Request{Worktree: "r/a", Text: "in review"})
+
+	// ym refuses bad input itself, whatever the client checked.
+	for _, req := range []ctl.Request{
+		{Worktree: "r/a", Text: "far too long for the box"},
+		{Worktree: "r/a", Text: ""},
+		{AgentToken: "no-such-token", Text: "review"},
+		{Worktree: "r/b", Text: "review"},
+	} {
+		if resp := stage(req); resp.OK {
+			t.Errorf("%+v should be refused: %+v", req, resp)
+		}
+	}
+	if ws.Agents[0].Stage != "in review" {
+		t.Fatalf("a refused request should leave the stage alone, got %q", ws.Agents[0].Stage)
+	}
+}
+
+func TestCtlStageClears(t *testing.T) {
+	ws, stage, _ := stageModel(t)
+	stage(ctl.Request{Worktree: "r/a", Text: "in review"})
+
+	if resp := stage(ctl.Request{Worktree: "r/a", Clear: true}); !resp.OK || ws.Agents[0].Stage != "" {
+		t.Fatalf("--clear should remove the stage: resp %+v, stage %q", resp, ws.Agents[0].Stage)
+	}
+}
+
+func TestRestoredAgentKeepsItsStage(t *testing.T) {
+	m := ctlModel(t)
+	m.ctrl = &Controller{cfg: config.Config{Agent: "cat"}}
+	spec, err := m.restoreAgentSpec(state.AgentState{Provider: agent.Claude, SessionID: "s1", Label: "x", Stage: "QA"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Stage != "QA" {
+		t.Fatalf("stage = %q, want the saved one", spec.Stage)
 	}
 }
 

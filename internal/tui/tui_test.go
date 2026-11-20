@@ -543,6 +543,34 @@ func TestStaleLoadDropped(t *testing.T) {
 	}
 }
 
+func TestSwitchingWorktreesReloadsGitOnlyForAnUnloadedOne(t *testing.T) {
+	m := stripModel(t, 140)
+	a, b := t.TempDir(), t.TempDir()
+	m.groups = []Group{{Repo: repo.Repo{Name: "repo"}, Worktrees: []WorktreeView{
+		{WT: repo.Worktree{Name: "a", Path: a}},
+		{WT: repo.Worktree{Name: "b", Path: b}},
+	}}}
+	m.recomputeActive()
+	before := m.ctrl.loadSeq.Load()
+
+	mm, _ := m.activate("repo", "a", a)
+	mm, _ = mm.(Model).activate("repo", "b", b)
+	m = mm.(Model)
+	if m.ctrl.loadSeq.Load() != before {
+		t.Fatal("a switch between loaded worktrees should not reload git")
+	}
+	for _, it := range m.active {
+		if !it.view.Live {
+			t.Fatalf("%s should be marked open on the deck without a reload", it.view.WT.Name)
+		}
+	}
+
+	mm, _ = m.activate("repo", "new", t.TempDir())
+	if mm.(Model).ctrl.loadSeq.Load() != before+1 {
+		t.Fatal("a worktree the deck hasn't loaded should reload git")
+	}
+}
+
 func TestRotateAgentWraps(t *testing.T) {
 	m := modelWithAgents(3)
 

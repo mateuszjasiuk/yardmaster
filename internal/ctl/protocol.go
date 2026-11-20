@@ -17,6 +17,7 @@ const (
 	OpOpen      Op = "open"
 	OpReopen    Op = "reopen"
 	OpRemove    Op = "remove"
+	OpStage     Op = "stage"
 
 	OpFeatureNew  Op = "feature-new"
 	OpFeatureAdd  Op = "feature-add"
@@ -37,8 +38,14 @@ type Request struct {
 	Base     string `json:"base,omitempty"`
 	Provider string `json:"provider,omitempty"`
 
-	// Text is the prompt for spawn and the message for send.
+	// Text is the prompt for spawn, the message for send and the stage for
+	// stage.
 	Text string `json:"text,omitempty"`
+	// AgentToken is the token of the agent session a stage request comes from
+	// (its YM_AGENT); set instead of Worktree when a session sets its own stage.
+	AgentToken string `json:"agent_token,omitempty"`
+	// Clear removes the stage instead of setting it.
+	Clear bool `json:"clear,omitempty"`
 	// Lines caps how many commits a summary lists (0 = default).
 	Lines int `json:"lines,omitempty"`
 	// Force lets stop and reopen close a workspace whose agent is still busy.
@@ -125,6 +132,8 @@ type AgentInfo struct {
 	Status     string `json:"status,omitempty"`
 	WaitingFor string `json:"waiting_for,omitempty"`
 	Active     bool   `json:"active"`
+	// Stage is what the session says it is at, set with `ym ctl stage`.
+	Stage string `json:"stage,omitempty"`
 }
 
 // Summary is the cheap view of one worktree's work: what git knows, plus the

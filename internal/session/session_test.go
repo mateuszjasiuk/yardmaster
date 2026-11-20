@@ -606,6 +606,32 @@ func TestStartSpecPropagatesAgentMetadataAndEnvironment(t *testing.T) {
 	}
 }
 
+func TestStartSpecNamesAnAgentSessionAndKeepsItsStage(t *testing.T) {
+	spec := Spec{Kind: Agent, Stage: "review", Argv: []string{"sh", "-c", `printf 'token=%s' "$YM_AGENT"; sleep 5`}}
+	s, err := StartSpec(spec, t.TempDir(), 80, 24, func(*Session) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if s.Token == "" {
+		t.Fatal("an agent session should get a token")
+	}
+	waitFor(t, s, "token="+s.Token)
+	if s.Stage != "review" {
+		t.Fatalf("stage = %q, want the spec's", s.Stage)
+	}
+
+	shell, err := StartSpec(Spec{Kind: Terminal, Argv: []string{"sh", "-c", "sleep 5"}}, t.TempDir(), 80, 24, func(*Session) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shell.Close()
+	if shell.Token != "" {
+		t.Fatalf("only agent sessions get a token, a terminal got %q", shell.Token)
+	}
+}
+
 func TestStartSpecClosesCompanionWhenPTYStartupFails(t *testing.T) {
 	companion := newTestCloser(nil)
 	missing := filepath.Join(t.TempDir(), "definitely-missing-command")

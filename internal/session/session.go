@@ -5,6 +5,7 @@
 package session
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +34,10 @@ const (
 	Terminal
 )
 
+// AgentTokenEnv is the environment variable that holds an agent session's
+// Token.
+const AgentTokenEnv = "YM_AGENT"
+
 // Session is one program running on a pty with a terminal emulator mirroring its
 // screen.
 type Session struct {
@@ -45,6 +50,13 @@ type Session struct {
 	// runs under. It lets ym resume the same conversation across runs; empty for
 	// non-agent sessions and conversations whose provider has not supplied an ID.
 	SessionID string
+	// Stage is what the agent session says it is at ("step 2", "review"); it
+	// sets it with `ym ctl stage`. Empty until then.
+	Stage string
+	// Token names an agent session to `ym ctl`: the agent finds it in its
+	// AgentTokenEnv environment variable, so a command it runs can say which
+	// session it comes from. Empty for other sessions.
+	Token string
 	// Events carries lifecycle notifications from the provider integration.
 	Events <-chan agent.Event
 
@@ -172,6 +184,11 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 	cmd := exec.Command(spec.Argv[0], spec.Argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = buildEnv(spec.Env, spec.UnsetEnv)
+	token := ""
+	if spec.Kind == Agent {
+		token = rand.Text()
+		cmd.Env = upsertEnv(cmd.Env, AgentTokenEnv+"="+token)
+	}
 	if dir != "" {
 		// PWD would otherwise name the folder ym was started in, and programs
 		// that trust it (ranger, shells) would start there, not in the worktree.
@@ -192,6 +209,8 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 		Title:     spec.Title,
 		Provider:  spec.Provider,
 		SessionID: spec.SessionID,
+		Stage:     spec.Stage,
+		Token:     token,
 		Events:    spec.Events,
 		cmd:       cmd,
 		pty:       f,

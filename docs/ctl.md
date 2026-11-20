@@ -14,6 +14,8 @@ ym ctl stop myrepo/fix-login               # close its sessions, keep the worktr
 ym ctl open myrepo/fix-login               # start them again, resuming its agents
 ym ctl reopen myrepo/fix-login             # stop and open: restart its agents on the same conversations
 ym ctl remove myrepo/fix-login             # asks you to confirm in the deck
+ym ctl stage "step 2"                      # from an agent: say what this session is at
+ym ctl stage "in review" --worktree myrepo/fix-login  # the same for a worktree's active session
 ```
 
 - Messages sent with `send` are queued and delivered when the worktree's agent is idle, so they
@@ -26,6 +28,11 @@ ym ctl remove myrepo/fix-login             # asks you to confirm in the deck
   key show which worktree is waiting; you answer there.
 - A repo's main checkout is `<repo>/main` (`ym ctl open <repo>/main`). `ym ctl` refuses to spawn
   or remove it.
+- `stage` sets a short word for what a session is at (`plan`, `step 2`, `review`), at most 16
+  characters, shown in the session list's box and in `ym ctl list`. Run from an agent, it is for
+  that agent's own session: ym gives each agent it starts a `YM_AGENT` token. With `--worktree`,
+  it is for that worktree's active session. `--clear` removes it. ym keeps it with the session, so it
+  is back after a restart.
 
 Each ym instance has its own socket under `~/.local/state/ym/` (or a short per-user directory under
 `/tmp` when that path is too long for a socket). Programs started by ym get its path in

@@ -252,6 +252,8 @@ type boardRow struct {
 	provider agent.Provider
 	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
+	busy     bool      // the agent is working
+	stage    string    // what the session says it is at
 }
 
 // Focus order of the new-agent form's fields.
@@ -324,6 +326,11 @@ type Model struct {
 	stacksExpanded bool
 	// sidePanel is true while the session list on the left is open.
 	sidePanel bool
+	// panelTop is the first box the session list shows; panelTopSession is the
+	// active session it last moved for. When the active session changes, the
+	// list moves to show it.
+	panelTop        int
+	panelTopSession string
 	// sideBySide is true while nvim and the agent share the screen.
 	sideBySide bool
 	// sideBySideDim is how the side without focus looks: config.DimFaint or
@@ -1276,6 +1283,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if model, ok := mm.(Model); ok {
 		model.syncVisible()
 		model.syncFocus()
+		model.syncSidePanel()
 		// Arm the plasma tick whenever the deck panel (re)appears; the tick
 		// disarms itself when it fires off-deck, keeping at most one pending.
 		if !model.plasmaTicking && model.plasmaShown() && model.plasma.Animated() {
@@ -1868,6 +1876,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen == screenPicker {
 			return m.deckWheel(msg)
 		}
+		if mm, ok := m.sidePanelWheel(msg); ok {
+			return mm, nil
+		}
 		m.forwardMouse(msg)
 		return m, nil
 	case tea.MouseMotionMsg:
@@ -2149,6 +2160,9 @@ type agentGroup struct {
 	opened                    int64
 	account                   string           // Claude account; set by stripGroups only
 	stack                     ghstack.Position // set by stripGroups only; zero outside a gh stack
+	feature                   string           // set by stripGroups only; the feature's "repo/name", "" outside one
+	manager                   bool             // set by stripGroups only; the worktree leads its feature
+	main                      bool             // set by stripGroups only; the repo's main checkout
 	members                   []agentGroup     // the worktrees of a collapsed gh stack
 }
 
@@ -2172,16 +2186,17 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	for i, a := range ws.Agents {
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
+		busy := m.agentStatus[pid].Status == "busy"
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: m.boardStatus(pid, attn), attn: attn,
+			status: m.boardStatus(pid, attn), attn: attn, busy: busy, stage: a.Stage,
 		})
 		if attn > g.attn {
 			g.attn = attn
 		}
-		if m.agentStatus[pid].Status == "busy" {
+		if busy {
 			g.busy = true
 		}
 	}
@@ -2191,8 +2206,9 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 // stripGroups lists every open workspace for the bar's agent strip. Unlike the
 // board and the deck, the order is fixed (repos in deck order, worktrees by
 // name, then the home workspace) so items don't move when you switch worktrees
-// or an agent's status changes; only their colour does. A gh stack's worktrees
-// stay together, in stack order. Workspaces of extra Claude accounts follow the default account's, one account at a time, so
+// or an agent's status changes; only their colour does. In each repo the
+// features come first (featuresFirst). A gh stack's worktrees stay together,
+// in stack order. Workspaces of extra Claude accounts follow the default account's, one account at a time, so
 // each account reads as one block.
 func (m Model) stripGroups() []agentGroup {
 	active := slices.Clone(m.active)
@@ -2211,7 +2227,7 @@ func (m Model) stripGroups() []agentGroup {
 
 	seen := map[string]bool{}
 	var groups []agentGroup
-	add := func(key, repoName, wtName, path, branch string) {
+	add := func(key, repoName, wtName, path, branch string, isMain bool) {
 		if key == "" || seen[key] {
 			return
 		}
@@ -2219,21 +2235,75 @@ func (m Model) stripGroups() []agentGroup {
 		if g, ok := m.agentGroup(key, repoName, wtName, path); ok && len(g.agents) > 0 {
 			g.account, _ = m.claudeAccountFor(path)
 			g.stack, _ = m.ghStackPosition(repoName, branch)
+			g.main = isMain
+			if m.state != nil {
+				if feature, ok := m.state.FeatureOf(key); ok {
+					g.feature, g.manager = feature, m.state.Features[feature].Manager == key
+				}
+			}
 			groups = append(groups, g)
 		}
 	}
 	for _, it := range active {
-		add(wsKey(it.repo.Name, it.view.WT.Name), it.repo.Name, it.view.WT.Name, it.view.WT.Path, it.view.WT.Branch)
+		add(wsKey(it.repo.Name, it.view.WT.Name), it.repo.Name, it.view.WT.Name, it.view.WT.Path, it.view.WT.Branch, it.view.WT.IsMain)
 	}
 	if m.current != nil {
-		add(m.current.key, m.current.repo, m.current.worktree, m.current.path, "")
+		add(m.current.key, m.current.repo, m.current.worktree, m.current.path, "", false)
 	}
 	if m.homeWSKey != "" {
-		add(m.homeWSKey, "~", "config", m.homeWSPath, "")
+		add(m.homeWSKey, "~", "config", m.homeWSPath, "", false)
 	}
-	groups = groupStripStacks(groups)
+	groups = groupStripStacks(featuresFirst(groups))
 	sort.SliceStable(groups, func(i, j int) bool { return groups[i].account < groups[j].account })
 	return groups
+}
+
+// featuresFirst puts, in each run of one repo's worktrees, the main checkout
+// first (unless it belongs to a feature), then the features: by feature name, the manager first, then the members by name, the members of
+// one gh stack together in stack order. The rest keep their order after them.
+// A feature is the group, so its members leave their gh stack: the strip and
+// the session list neither group nor fold a stack inside a feature.
+func featuresFirst(groups []agentGroup) []agentGroup {
+	for start := 0; start < len(groups); {
+		end := start + 1
+		for end < len(groups) && groups[end].repo == groups[start].repo {
+			end++
+		}
+		sort.SliceStable(groups[start:end], func(i, j int) bool {
+			return featureOrderLess(groups[start+i], groups[start+j])
+		})
+		start = end
+	}
+
+	for i := range groups {
+		if groups[i].feature != "" {
+			groups[i].stack = ghstack.Position{}
+		}
+	}
+
+	return groups
+}
+
+// featureOrderLess orders two worktrees of one repo for featuresFirst. Worktrees
+// outside a feature are equal, so a stable sort keeps their order.
+func featureOrderLess(a, b agentGroup) bool {
+	aMain, bMain := a.main && a.feature == "", b.main && b.feature == ""
+	switch {
+	case aMain || bMain:
+		return aMain && !bMain
+	case a.feature == "" || b.feature == "":
+		return a.feature != "" && b.feature == ""
+	case a.feature != b.feature:
+		return a.feature < b.feature
+	case a.manager != b.manager:
+		return a.manager
+	case a.stack.Bottom != b.stack.Bottom:
+		return a.stack.Bottom < b.stack.Bottom
+	case a.stack.Index != b.stack.Index:
+		return a.stack.Index < b.stack.Index
+	}
+
+	return a.worktree < b.worktree
 }
 
 // buildBoard constructs the agent board: every agent of every open workspace,
@@ -3357,7 +3427,25 @@ func (m Model) activateWithoutHistory(repoName, wtName, dir string) (tea.Model, 
 	if !wasActive {
 		watches = m.watchWorkspaceAgents(ws)
 	}
-	return m, tea.Batch(m.loadCmd(), save, watches)
+	reload := m.refreshAfterSwitch(key)
+
+	return m, tea.Batch(reload, save, watches)
+}
+
+// refreshAfterSwitch updates the deck's order and open marks after a switch
+// from what is already loaded. Only a worktree the deck hasn't loaded yet, such
+// as one just created, reloads git: a reload runs git in every worktree, which
+// takes seconds with many repos, and the deck reloads anyway when it opens.
+func (m *Model) refreshAfterSwitch(key string) tea.Cmd {
+	_, loaded := m.worktreePath(key)
+	if !loaded && key != homeKey {
+		return m.loadCmd()
+	}
+
+	m.recomputeActive()
+	m.computeRecentRanks()
+
+	return nil
 }
 
 // workspaceSpecs builds the session set for activating key: nvim and a shell
@@ -3388,7 +3476,14 @@ func (m Model) workspaceSpecs(key string, addDefault bool) ([]session.Spec, erro
 
 // restoreAgentSpec rebuilds one saved agent, handing it prompt.
 func (m Model) restoreAgentSpec(a state.AgentState, prompt string) (session.Spec, error) {
-	return m.ctrl.RestoreProviderAgentSpec(normalizedProvider(a.Provider), a.SessionID, a.Label, prompt)
+	spec, err := m.ctrl.RestoreProviderAgentSpec(normalizedProvider(a.Provider), a.SessionID, a.Label, prompt)
+	if err != nil {
+		return spec, err
+	}
+
+	spec.Stage = a.Stage
+
+	return spec, nil
 }
 
 // prepareWorkspaceSpecs starts provider companions before their interactive
@@ -3502,7 +3597,7 @@ func (m *Model) persistAgents(key string) {
 			continue // not a ym-managed claude session; nothing to resume
 		}
 		agents = append(agents, state.AgentState{
-			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title,
+			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title, Stage: s.Stage,
 		})
 	}
 	m.state.SetAgents(key, agents, ws.ActiveAgent)
