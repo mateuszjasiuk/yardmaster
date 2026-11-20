@@ -325,6 +325,11 @@ type Model struct {
 	stacksExpanded bool
 	// sidePanel is true while the session list on the left is open.
 	sidePanel bool
+	// panelTop is the first box the session list shows; panelTopSession is the
+	// active session it last moved for. When the active session changes, the
+	// list moves to show it.
+	panelTop        int
+	panelTopSession string
 	// sideBySide is true while nvim and the agent share the screen.
 	sideBySide bool
 	// sideBySideDim is how the side without focus looks: config.DimFaint or
@@ -1277,6 +1282,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if model, ok := mm.(Model); ok {
 		model.syncVisible()
 		model.syncFocus()
+		model.syncSidePanel()
 		// Arm the plasma tick whenever the deck panel (re)appears; the tick
 		// disarms itself when it fires off-deck, keeping at most one pending.
 		if !model.plasmaTicking && model.plasmaShown() && model.plasma.Animated() {
@@ -1868,6 +1874,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.screen == screenPicker {
 			return m.deckWheel(msg)
+		}
+		if mm, ok := m.sidePanelWheel(msg); ok {
+			return mm, nil
 		}
 		m.forwardMouse(msg)
 		return m, nil

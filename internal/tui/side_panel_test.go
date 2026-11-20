@@ -98,7 +98,7 @@ func TestSidePanelShiftsClicksIntoPanes(t *testing.T) {
 // panelRows is the panel's rows as plain text, without the padding.
 func panelRows(m Model) []string {
 	var rows []string
-	for _, r := range m.sidePanelRows(m.height - m.barHeight()) {
+	for _, r := range m.sidePanelRows() {
 		rows = append(rows, strings.TrimRight(ansi.Strip(r.text), " "))
 	}
 	return rows
@@ -149,11 +149,11 @@ func TestSidePanelListsSessionsUnderTheirRepo(t *testing.T) {
 	if got != want {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
 	}
-	rows := m.sidePanelRows(m.height - m.barHeight())
+	rows := m.sidePanelRows()
 	if red := " " + lipgloss.NewStyle().Foreground(cRed).Render("╭─"); !strings.HasPrefix(rows[5].text, red) {
 		t.Fatalf("a waiting session's border should be red: %q", rows[5].text)
 	}
-	for _, r := range m.sidePanelRows(m.height - m.barHeight()) {
+	for _, r := range m.sidePanelRows() {
 		if w := ansi.StringWidth(r.text); w != sidePanelWidth {
 			t.Fatalf("every row should be %d wide, got %d: %q", sidePanelWidth, w, r.text)
 		}
@@ -179,22 +179,79 @@ func TestSidePanelFollowsTheStackToggle(t *testing.T) {
 	}
 }
 
-func TestSidePanelSaysHowManySessionsDontFit(t *testing.T) {
+// longPanelModel has 30 worktrees with one session each; wt29, the last, is
+// current. 22 panel rows fit the top row and 7 boxes.
+func longPanelModel(t *testing.T) Model {
+	t.Helper()
 	var names []string
 	for i := range 30 {
 		names = append(names, fmt.Sprintf("wt%02d", i))
 	}
 	m := stripModel(t, 140, names...)
-	m.sidePanel = true
+	// Open the panel with its key, through Update, as the app does.
+	mm, _ := m.Update(tea.KeyPressMsg{Code: '\\', Mod: tea.ModCtrl})
+
+	return mm.(Model)
+}
+
+// wheel turns the mouse wheel once over the side panel.
+func wheel(t *testing.T, m Model, button tea.MouseButton) Model {
+	t.Helper()
+	mm, _ := m.Update(tea.MouseWheelMsg{X: 4, Y: m.barHeight() + 5, Button: button})
+
+	return mm.(Model)
+}
+
+func TestSidePanelScrollsToTheActiveSession(t *testing.T) {
+	m := longPanelModel(t)
 
 	rows := panelRows(m)
 	if len(rows) != m.height-m.barHeight() {
 		t.Fatalf("the panel should fill the height: %d rows, want %d", len(rows), m.height-m.barHeight())
 	}
-	// A blank row, the repo, 6 boxes of 3 rows, then " +24 more": the 7th box
-	// would be cut, so it isn't shown.
-	if more := rows[2+6*3]; more != " +24 more" {
-		t.Fatalf("row after the boxes = %q, want \" +24 more\"", more)
+	// The repo's header is above the window, so its name stays on the top row.
+	if want := "  repo             ↑ 23 more"; rows[0] != want {
+		t.Fatalf("top row = %q, want %q", rows[0], want)
+	}
+	if want := activeBoxRows("claude", "wt29"); panelLines(rows[19:22]...) != want {
+		t.Fatalf("the active session's box should be the last one shown:\n%s", panelLines(rows...))
+	}
+}
+
+func TestSidePanelWheelScrollsUntilTheActiveSessionChanges(t *testing.T) {
+	m := longPanelModel(t)
+
+	m = wheel(t, m, tea.MouseWheelUp)
+	rows := panelRows(m)
+	if rows[1] != " ╭─claude──────────────────╮" || rows[2] != " │wt22                     │" {
+		t.Fatalf("one wheel turn up should show one box more above:\n%s", panelLines(rows...))
+	}
+	// The "↓" row takes a row, so wt28 and wt29 are below now.
+	if rows[19] != "  ↓ 2 more" {
+		t.Fatalf("the boxes below the window should be counted:\n%s", panelLines(rows...))
+	}
+
+	// A click on "↓ 2 more" scrolls a page down, here back to the end.
+	mm, _ := m.handleMouseClick(tea.MouseClickMsg{X: 4, Y: m.barHeight() + 19, Button: tea.MouseLeft})
+	if got := panelRows(mm.(Model))[0]; !strings.HasSuffix(got, "↑ 23 more") {
+		t.Fatalf("a click on the ↓ row should scroll down, top row = %q", got)
+	}
+
+	// A status change redraws the panel; it stays where you scrolled.
+	ws, _ := m.mgr.Workspace("repo/wt05")
+	m.agentStatus = map[int]AgentStatus{ws.Agents[0].Pid(): {Status: "waiting"}}
+	if got := panelRows(m); got[2] != rows[2] {
+		t.Fatalf("a redraw should keep the scroll, got:\n%s", panelLines(got...))
+	}
+	if got := panelRows(m)[0]; !strings.HasSuffix(got, "↑ 22 more !1") {
+		t.Fatalf("a hidden waiting session should be counted on the top row: %q", got)
+	}
+
+	// Switching sessions brings the new active one into view.
+	mm, _ = m.Update(tea.KeyPressMsg{Code: 'h', Mod: tea.ModCtrl}) // previous worktree
+	m = mm.(Model)
+	if !strings.Contains(panelLines(panelRows(m)...), "▌┃wt28") {
+		t.Fatalf("the panel should follow the active session:\n%s", panelLines(panelRows(m)...))
 	}
 }
 
@@ -244,7 +301,7 @@ func TestSidePanelGivesEachSessionABoxAndMarksTheActiveOne(t *testing.T) {
 	if got := firstPanelRows(m, want); got != want {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
 	}
-	rows := m.sidePanelRows(m.height - m.barHeight())
+	rows := m.sidePanelRows()
 	accent := accentStyle.Render("▌") + accentStyle.Render("┏━")
 	if !strings.HasPrefix(rows[2].text, accent) || strings.HasPrefix(rows[5].text, accent) {
 		t.Fatalf("only the active session's box should have the accent bar and heavy border:\n%q\n%q", rows[2].text, rows[5].text)
@@ -336,7 +393,7 @@ func TestSidePanelNamesTheAccountInsteadOfABackground(t *testing.T) {
 	if got != want {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
 	}
-	for _, r := range m.sidePanelRows(m.height - m.barHeight()) {
+	for _, r := range m.sidePanelRows() {
 		if strings.Contains(r.text, "48;2;") {
 			t.Fatalf("panel rows should have no background: %q", r.text)
 		}

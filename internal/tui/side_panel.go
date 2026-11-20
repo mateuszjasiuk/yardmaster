@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -52,8 +53,7 @@ func (m Model) toggleSidePanel() (tea.Model, tea.Cmd) {
 
 // withSidePanel draws the side panel to the left of a session body.
 func (m Model) withSidePanel(body string) string {
-	h := m.height - m.barHeight()
-	rows := m.sidePanelRows(h)
+	rows := m.sidePanelRows()
 	lines := splitLines(body)
 	out := make([]string, len(rows))
 	for i, r := range rows {
@@ -69,13 +69,14 @@ func (m Model) withSidePanel(body string) string {
 
 // sidePanelClick handles a left click on the side panel: a click on a box opens
 // its session, and on a collapsed gh stack's box opens the stack like a click
-// on the agent strip. Other rows do nothing.
+// on the agent strip. A click on "↑ N more" or "↓ N more" scrolls a page.
+// Other rows do nothing.
 func (m Model) sidePanelClick(x, y int) (tea.Model, tea.Cmd, bool) {
-	if x >= m.sidePanelW() || y < m.barHeight() || !m.sidePanelShown() {
+	if !m.overSidePanel(x, y) {
 		return m, nil, false
 	}
 
-	rows := m.sidePanelRows(m.height - m.barHeight())
+	rows := m.sidePanelRows()
 	i := y - m.barHeight()
 	if i >= len(rows) {
 		return m, nil, true
@@ -88,9 +89,64 @@ func (m Model) sidePanelClick(x, y int) (tea.Model, tea.Cmd, bool) {
 	case r.group != nil:
 		mm, cmd := m.openStripGroup(*r.group)
 		return mm, cmd, true
+	case r.scroll != 0:
+		return m.scrollSidePanel(r.scroll), nil, true
 	}
 
 	return m, nil, true
+}
+
+// sidePanelWheel scrolls the side panel by one box when the wheel turns over
+// it. It reports false when the wheel is elsewhere.
+func (m Model) sidePanelWheel(msg tea.MouseWheelMsg) (Model, bool) {
+	mo := msg.Mouse()
+	if !m.overSidePanel(mo.X, mo.Y) {
+		return m, false
+	}
+
+	switch mo.Button {
+	case tea.MouseWheelUp:
+		return m.scrollSidePanel(-1), true
+	case tea.MouseWheelDown:
+		return m.scrollSidePanel(1), true
+	}
+
+	return m, true
+}
+
+// overSidePanel reports whether the point (x, y) is on the side panel while it
+// is drawn.
+func (m Model) overSidePanel(x, y int) bool {
+	return x < m.sidePanelW() && y >= m.barHeight() && m.sidePanelShown()
+}
+
+// sidePanelH is how many rows the side panel has: all of them under the bar.
+func (m Model) sidePanelH() int {
+	return m.height - m.barHeight()
+}
+
+// scrollSidePanel moves the panel's window by delta boxes. It stays there until
+// the active session changes.
+func (m Model) scrollSidePanel(delta int) Model {
+	blocks := m.sidePanelBlocks()
+	m.panelTop = clampPanelTop(blocks, m.panelTop+delta, m.sidePanelH())
+
+	return m
+}
+
+// syncSidePanel moves the panel's window just enough to show the active
+// session's box when the active session has changed since the window last
+// moved. Update runs it after every message, so every way of switching
+// sessions is covered.
+func (m *Model) syncSidePanel() {
+	session := m.activeSessionID()
+	if session == m.panelTopSession || !m.sidePanelShown() {
+		return
+	}
+
+	blocks := m.sidePanelBlocks()
+	m.panelTop = followActiveBlock(blocks, m.panelTop, m.sidePanelH())
+	m.panelTopSession = session
 }
 
 // sidePanelShown reports whether the side panel is on screen: open, with room,
@@ -100,97 +156,150 @@ func (m Model) sidePanelShown() bool {
 		!m.overlayOpen() && !m.confirmActive() && m.activeSession() != nil
 }
 
-// sidePanelRows lays out the panel's h rows, each sidePanelWidth wide: a blank
-// row under the bar, then the boxes, with "+N more" when they don't fit. A box
-// is never cut: one that doesn't fit counts in "+N more" whole.
-func (m Model) sidePanelRows(h int) []sidePanelRow {
+// sidePanelRows lays out the panel's rows, each sidePanelWidth wide: the top
+// row, then the boxes that fit in the window, then "↓ N more" when some are
+// below it. The top row holds "↑ N more" when boxes are above the window, and
+// the repo's name when its header is above it. A box is never cut, and a
+// header always shows with its first box. Only the boxes in the window are
+// drawn.
+func (m Model) sidePanelRows() []sidePanelRow {
+	h := m.sidePanelH()
 	if h < 2 {
 		return nil
 	}
 
-	layout := m.sidePanelLayout()
+	blocks := m.sidePanelBlocks()
+	top := clampPanelTop(blocks, m.panelTop, h)
+	end := panelWindowEnd(blocks, top, h)
+	page := max(1, end-top)
 
-	if room := h - 1; len(layout) > room {
-		cut := room - 1
-		for cut > 0 && layout[cut].inBox {
-			cut--
-		}
-		hidden := 0
-		for _, r := range layout[cut:] {
-			if !r.inBox && (r.agent != nil || r.group != nil) {
-				hidden++
-			}
-		}
-		more := sidePanelRow{text: padLine(dimStyle.Render(fmt.Sprintf(" +%d more", hidden)), sidePanelWidth)}
-		layout = append(layout[:cut], more)
+	rows := []sidePanelRow{sidePanelTopRow(blocks, top, page)}
+	for _, b := range blocks[top:end] {
+		rows = append(rows, b.rows()...)
 	}
-
-	rows := append([]sidePanelRow{sidePanelBlank}, layout...)
+	if end < len(blocks) {
+		rows = append(rows, sidePanelMoreRow("↓", blocks[end:], page))
+	}
 	for len(rows) < h {
 		rows = append(rows, sidePanelBlank)
-	}
-	return rows[:h]
-}
-
-// sidePanelRow is one row of the side panel. On a box's rows, agent is the
-// session the box opens, or group the collapsed gh stack; both are nil on other
-// rows. inBox marks a box's rows under its top border.
-type sidePanelRow struct {
-	text  string
-	group *agentGroup
-	agent *boardRow
-	inBox bool
-}
-
-// sidePanelLayout lists the panel's rows: the agent strip's entries in the
-// same order, a box per session, each repo under its name, and the worktrees
-// of the gh stack you're in under the stack's name. A blank row ends that
-// stack when a box of the same repo follows, as nothing else shows where it
-// ends.
-func (m Model) sidePanelLayout() []sidePanelRow {
-	groups := m.stripEntries()
-	var rows []sidePanelRow
-	for i, g := range groups {
-		inStack := inGhStack(g)
-		continuesStack := i > 0 && inStack && sameGhStack(groups[i-1], g)
-		startsStack := inStack && !continuesStack
-		stackEnded := i > 0 && inGhStack(groups[i-1]) && !continuesStack
-		newRepo := i == 0 || groups[i-1].repo != g.repo || groups[i-1].account != g.account
-
-		if stackEnded && !newRepo {
-			rows = append(rows, sidePanelBlank)
-		}
-		if newRepo && g.key != m.homeWSKey {
-			rows = append(rows, sidePanelRow{text: sidePanelRepo(g)})
-		}
-		if startsStack {
-			name := " " + dimStyle.Render(truncateTo(ghStackIcon+" "+g.stack.Name(), sidePanelWidth-1))
-			rows = append(rows, sidePanelRow{text: padLine(name, sidePanelWidth)})
-		}
-
-		if g.members != nil {
-			rows = append(rows, m.stackBox(&groups[i])...)
-		} else {
-			rows = append(rows, m.sessionBoxes(&groups[i])...)
-		}
 	}
 
 	return rows
 }
 
+// sidePanelRow is one row of the side panel. On a box's rows, agent is the
+// session the box opens, or group the collapsed gh stack; both are nil on other
+// rows. scroll is how many boxes a click on the row scrolls: a page back on
+// "↑ N more", a page on "↓ N more", 0 elsewhere.
+type sidePanelRow struct {
+	text   string
+	group  *agentGroup
+	agent  *boardRow
+	scroll int
+}
+
+// sidePanelBlock is one box of the side panel with the rows above it that
+// belong to it (a blank row that ends a stack, the repo's or the stack's
+// header), so they scroll and fit together. The box is drawn only when it is
+// in the window.
+type sidePanelBlock struct {
+	lead        []sidePanelRow
+	look        sidePanelBoxLook
+	title, body string
+	target      sidePanelRow
+	// repoAbove is the worktree whose repo header is above this box, out of
+	// its own rows; nil when the box holds the header or has none (home).
+	repoAbove *agentGroup
+	attn      attnLevel
+	active    bool
+}
+
+// height is how many rows the block takes: its lead rows and the box's three.
+func (b sidePanelBlock) height() int {
+	return len(b.lead) + 3
+}
+
+// rows draws the block: its lead rows, then the box.
+func (b sidePanelBlock) rows() []sidePanelRow {
+	return append(slices.Clone(b.lead), b.look.render(b.title, b.body, b.target)...)
+}
+
+// sidePanelBlocks lists the panel's boxes as blocks: the agent strip's entries
+// in the same order, a box per session, each repo under its name, and the
+// worktrees of the gh stack you're in under the stack's name.
+func (m Model) sidePanelBlocks() []sidePanelBlock {
+	groups := m.stripEntries()
+	var blocks []sidePanelBlock
+	for i := range groups {
+		g := &groups[i]
+		lead, showsRepo := m.sidePanelLeadRows(groups, i)
+
+		var boxes []sidePanelBlock
+		if g.members != nil {
+			boxes = []sidePanelBlock{m.stackBox(g)}
+		} else {
+			boxes = m.sessionBoxes(g)
+		}
+		for j := range boxes {
+			if g.key != m.homeWSKey {
+				boxes[j].repoAbove = g
+			}
+		}
+		if len(boxes) > 0 {
+			boxes[0].lead = lead
+			if showsRepo {
+				boxes[0].repoAbove = nil
+			}
+		}
+		blocks = append(blocks, boxes...)
+	}
+
+	return blocks
+}
+
+// sidePanelLeadRows are the rows above the first box of groups[i]: a blank row
+// that ends the gh stack you're in when a box of the same repo follows, as
+// nothing else shows where it ends; the repo's header for a new repo; the
+// stack's header where that stack starts. showsRepo reports whether they hold
+// the repo's header.
+func (m Model) sidePanelLeadRows(groups []agentGroup, i int) (lead []sidePanelRow, showsRepo bool) {
+	g := groups[i]
+	inStack := inGhStack(g)
+	continuesStack := i > 0 && inStack && sameGhStack(groups[i-1], g)
+	stackEnded := i > 0 && inGhStack(groups[i-1]) && !continuesStack
+	newRepo := i == 0 || groups[i-1].repo != g.repo || groups[i-1].account != g.account
+	showsRepo = newRepo && g.key != m.homeWSKey
+
+	if stackEnded && !newRepo {
+		lead = append(lead, sidePanelBlank)
+	}
+	if showsRepo {
+		lead = append(lead, sidePanelRow{text: sidePanelRepo(g, sidePanelWidth)})
+	}
+	if inStack && !continuesStack {
+		name := " " + dimStyle.Render(truncateTo(ghStackIcon+" "+g.stack.Name(), sidePanelWidth-1))
+		lead = append(lead, sidePanelRow{text: padLine(name, sidePanelWidth)})
+	}
+
+	return lead, showsRepo
+}
+
 // stackBox is a collapsed gh stack's box: the stack's sign and name in the top
 // border, and how many worktrees it holds inside.
-func (m Model) stackBox(g *agentGroup) []sidePanelRow {
+func (m Model) stackBox(g *agentGroup) sidePanelBlock {
 	sign, signSt, _ := m.stripLook(*g, panelIdleStyle)
-	box := sidePanelBoxLook{sign: sign, signSt: signSt, bodySt: dimStyle}
 
-	return box.render(ghStackIcon+" "+g.worktree, fmt.Sprintf("%d worktrees", len(g.members)), sidePanelRow{group: g})
+	return sidePanelBlock{
+		look:  sidePanelBoxLook{sign: sign, signSt: signSt, bodySt: dimStyle},
+		title: ghStackIcon + " " + g.worktree, body: fmt.Sprintf("%d worktrees", len(g.members)),
+		target: sidePanelRow{group: g}, attn: g.attn,
+	}
 }
 
 // sessionBoxes are a worktree's boxes, one per session: the session's sign and
 // name in the top border and the worktree inside. The active session has a
 // heavy border.
-func (m Model) sessionBoxes(g *agentGroup) []sidePanelRow {
+func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 	worktree := g.worktree
 	if g.key == m.homeWSKey {
 		worktree = "~"
@@ -200,15 +309,134 @@ func (m Model) sessionBoxes(g *agentGroup) []sidePanelRow {
 		worktreeSt = worktreeSt.Foreground(g.flag)
 	}
 
-	var rows []sidePanelRow
+	var blocks []sidePanelBlock
 	for i := range g.agents {
 		a := &g.agents[i]
+		active := m.isActiveSession(*a)
 		sign, signSt := attnSign(a.attn, a.busy, panelIdleStyle)
-		box := sidePanelBoxLook{heavy: m.isActiveSession(*a), sign: sign, signSt: signSt, bodySt: worktreeSt}
-		rows = append(rows, box.render(a.label, worktree, sidePanelRow{agent: a})...)
+		blocks = append(blocks, sidePanelBlock{
+			look:  sidePanelBoxLook{heavy: active, sign: sign, signSt: signSt, bodySt: worktreeSt},
+			title: a.label, body: worktree, target: sidePanelRow{agent: a}, attn: a.attn, active: active,
+		})
 	}
 
-	return rows
+	return blocks
+}
+
+// activeSessionID names the session you'd come back to, so the panel can tell
+// when it changes: the current worktree and its active agent.
+func (m Model) activeSessionID() string {
+	if m.current == nil || m.current.ws == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%s#%d", m.current.key, m.current.ws.ActiveAgent)
+}
+
+// followActiveBlock moves top just enough that the active block fits in the
+// window. Without an active block it leaves top as it is.
+func followActiveBlock(blocks []sidePanelBlock, top, h int) int {
+	active := slices.IndexFunc(blocks, func(b sidePanelBlock) bool { return b.active })
+	if active < 0 {
+		return clampPanelTop(blocks, top, h)
+	}
+
+	top = clampPanelTop(blocks, top, h)
+	if active < top {
+		return active
+	}
+	for top < active && panelWindowEnd(blocks, top, h) <= active {
+		top++
+	}
+
+	return top
+}
+
+// clampPanelTop keeps top inside the list, and no lower than needed to show
+// the last block, so the window never ends in empty rows while boxes are
+// above it.
+func clampPanelTop(blocks []sidePanelBlock, top, h int) int {
+	lowestTop := len(blocks)
+	used := 0
+	for lowestTop > 0 && used+blocks[lowestTop-1].height() <= h-1 {
+		used += blocks[lowestTop-1].height()
+		lowestTop--
+	}
+
+	return clamp(top, 0, lowestTop)
+}
+
+// panelWindowEnd is the end of the window that starts at top in h rows: one
+// row goes to the top row, and one to "↓ N more" when blocks are left below.
+func panelWindowEnd(blocks []sidePanelBlock, top, h int) int {
+	end := fitBlocks(blocks, top, h-1)
+	if end == len(blocks) {
+		return end
+	}
+
+	return fitBlocks(blocks, top, h-2)
+}
+
+// fitBlocks is the end of the run of whole blocks from top that fits in room
+// rows.
+func fitBlocks(blocks []sidePanelBlock, top, room int) int {
+	end := top
+	for end < len(blocks) && blocks[end].height() <= room {
+		room -= blocks[end].height()
+		end++
+	}
+
+	return end
+}
+
+// sidePanelTopRow is the panel's first row: the repo's name when its header is
+// above the window, and "↑ N more" when boxes are.
+func sidePanelTopRow(blocks []sidePanelBlock, top, page int) sidePanelRow {
+	if top == 0 {
+		return sidePanelBlank
+	}
+
+	more := sidePanelMoreRow("↑", blocks[:top], -page)
+	firstShown := blocks[min(top, len(blocks)-1)]
+	if firstShown.repoAbove == nil {
+		return more
+	}
+
+	count := moreCount("↑", blocks[:top])
+	more.text = sidePanelRepo(*firstShown.repoAbove, sidePanelWidth-lipgloss.Width(count)-1) + " " + count
+
+	return more
+}
+
+// sidePanelMoreRow is the "↑ N more" or "↓ N more" row for the hidden boxes. A
+// click on it scrolls by scroll boxes.
+func sidePanelMoreRow(arrow string, hidden []sidePanelBlock, scroll int) sidePanelRow {
+	return sidePanelRow{text: padLine("  "+moreCount(arrow, hidden), sidePanelWidth), scroll: scroll}
+}
+
+// moreCount says how many boxes are hidden on one side of the window, with how
+// many of them wait for you ("!") or are done ("✓"), so a session that needs
+// you never hides.
+func moreCount(arrow string, hidden []sidePanelBlock) string {
+	waiting, done := 0, 0
+	for _, b := range hidden {
+		switch b.attn {
+		case attnWaiting:
+			waiting++
+		case attnDone:
+			done++
+		}
+	}
+
+	text := dimStyle.Render(fmt.Sprintf("%s %d more", arrow, len(hidden)))
+	if waiting > 0 {
+		text += " " + boldRed.Render(fmt.Sprintf("!%d", waiting))
+	}
+	if done > 0 {
+		text += " " + boldGreen.Render(fmt.Sprintf("✓%d", done))
+	}
+
+	return text
 }
 
 // isActiveSession reports whether a is the session you'd come back to: the
@@ -264,15 +492,16 @@ func (b sidePanelBoxLook) render(title, body string, target sidePanelRow) []side
 	rows[0].text = margin + border.Render(edge.TopLeft+edge.Top) + head + border.Render(fill+edge.TopRight)
 	rows[1].text = margin + border.Render(edge.Left) + body + border.Render(edge.Right)
 	rows[2].text = margin + border.Render(edge.BottomLeft+strings.Repeat(edge.Bottom, boxW-2)+edge.BottomRight)
-	rows[1].inBox, rows[2].inBox = true, true
 
 	return rows
 }
 
-// sidePanelRepo renders a repo's header row. An extra Claude account's block
-// names the account after the repo, as the panel has no background to mark it.
-func sidePanelRepo(g agentGroup) string {
+// sidePanelRepo renders a repo's header, w columns wide. An extra Claude
+// account's block names the account after the repo, as the panel has no
+// background to mark it.
+func sidePanelRepo(g agentGroup, w int) string {
 	tag := accountTag(g)
-	repo := truncateTo(g.repo, sidePanelWidth-2-lipgloss.Width(tag))
-	return padLine("  "+repoHdrStyle.Render(repo)+dimStyle.Render(tag), sidePanelWidth)
+	repo := truncateTo(g.repo, w-2-lipgloss.Width(tag))
+
+	return padLine("  "+repoHdrStyle.Render(repo)+dimStyle.Render(tag), w)
 }
