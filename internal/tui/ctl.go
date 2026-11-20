@@ -359,7 +359,7 @@ func (m Model) handleCtlSpawned(msg ctlSpawnedMsg) (tea.Model, tea.Cmd) {
 // that was focused (or to a fresh one when nothing is saved).
 func (m Model) openBackground(key, dir string, provider agent.Provider, prompt string) (Model, tea.Cmd, error) {
 	if m.mgr.Has(key) {
-		spec, err := m.ctrl.NewProviderAgentSpec(provider, randomAgentTitle(), prompt)
+		spec, err := m.ctrl.NewProviderAgentSpec(provider, m.newAgentName(), prompt)
 		if err != nil {
 			return m, nil, err
 		}
@@ -411,7 +411,7 @@ func (m Model) workspaceSpecsWithPrompt(key string, provider agent.Provider, pro
 	specs := []session.Spec{m.ctrl.EditorSpec()}
 	saved, active := m.savedAgents(key)
 	if len(saved) == 0 {
-		spec, err := m.ctrl.NewProviderAgentSpec(provider, randomAgentTitle(), prompt)
+		spec, err := m.ctrl.NewProviderAgentSpec(provider, m.newAgentName(), prompt)
 		if err != nil {
 			return nil, err
 		}

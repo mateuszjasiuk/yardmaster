@@ -642,3 +642,24 @@ func TestDeckCursorStaysOnWorktreeWhenStacksChange(t *testing.T) {
 		t.Fatalf("the cursor should stay on a, got %+v", it)
 	}
 }
+
+func TestUsedAgentNamesSkipsDeletedWorktrees(t *testing.T) {
+	m := ctlModel(t)
+	if _, err := m.mgr.Activate("r/b", t.TempDir(), []session.Spec{
+		{Kind: session.Agent, Title: "Abra", SessionID: "open", Argv: []string{"cat"}},
+	}, session.SameSize(80, 24)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.mgr.CloseAll)
+	m.state.SetAgents("r/a", []state.AgentState{{SessionID: "saved", Label: "Mew"}}, 0)
+	m.state.SetAgents("r/gone", []state.AgentState{{SessionID: "old", Label: "Onix"}}, 0)
+
+	used := m.usedAgentNames()
+
+	if !used["Abra"] || !used["Mew"] {
+		t.Errorf("open and saved names on the deck should be used: %v", used)
+	}
+	if used["Onix"] {
+		t.Errorf("a saved name of a deleted worktree should be free: %v", used)
+	}
+}
