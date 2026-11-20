@@ -96,6 +96,9 @@ agent_strip = true
 # faint keeps its colours darker, gray draws it in plain gray (for terminals
 # that don't show faint text).
 side_by_side_dim = "faint" # faint | gray
+# A rounded box around nvim and the agent, named in its top border. Off brings
+# back the line under the bar and the divider between them side by side.
+pane_boxes = true
 # The colours ctrl+q gives flagged worktrees in the bar, in order ("#RRGGBB").
 highlight_colors = ["#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"]
 

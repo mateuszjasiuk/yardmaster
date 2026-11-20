@@ -332,6 +332,15 @@ func TestDisplaySideBySideDim(t *testing.T) {
 	}
 }
 
+func TestDisplayPaneBoxes(t *testing.T) {
+	if d := Default(); !d.Display.PaneBoxes {
+		t.Fatal("pane_boxes should be on by default")
+	}
+	if cfg := loadTOML(t, "[display]\npane_boxes = false\n"); cfg.Display.PaneBoxes {
+		t.Fatal("pane_boxes = false should turn the boxes off")
+	}
+}
+
 func TestDisplayHighlightColors(t *testing.T) {
 	if d := Default(); !slices.Equal(d.Display.HighlightColors, DefaultHighlightColors()) {
 		t.Fatalf("default highlight_colors = %v", d.Display.HighlightColors)

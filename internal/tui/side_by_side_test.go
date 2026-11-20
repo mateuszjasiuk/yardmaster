@@ -45,15 +45,16 @@ func TestSideBySideSplitsTheWidthAndIsSaved(t *testing.T) {
 		t.Fatal("the choice should be kept in the state")
 	}
 	w, h := m.sessionSize()
-	left, right := sideBySideWidths(w)
-	if left+1+right != 150 || left < minSessionWidth || right < minSessionWidth {
-		t.Fatalf("widths %d+1+%d should fill 150 columns, each at least %d", left, right, minSessionWidth)
+	editor, agent := m.sideBySideRects(sessionPane{w: w, h: h})
+	left, right := editor.w+2, agent.w+2 // the boxes, borders included
+	if left+right != 150 || left < minSessionWidth || right < minSessionWidth {
+		t.Fatalf("boxes %d+%d should fill 150 columns, each at least %d", left, right, minSessionWidth)
 	}
-	if got := sizeOf(ws.Editor); got != (session.Size{W: left, H: h}) {
-		t.Fatalf("nvim is %+v, want %dx%d", got, left, h)
+	if got := sizeOf(ws.Editor); got != (session.Size{W: left - 2, H: h - 2}) {
+		t.Fatalf("nvim is %+v, want the inside of its box, %dx%d", got, left-2, h-2)
 	}
-	if got := sizeOf(ws.ActiveAgentSession()); got != (session.Size{W: right, H: h}) {
-		t.Fatalf("the agent is %+v, want %dx%d", got, right, h)
+	if got := sizeOf(ws.ActiveAgentSession()); got != (session.Size{W: right - 2, H: h - 2}) {
+		t.Fatalf("the agent is %+v, want the inside of its box, %dx%d", got, right-2, h-2)
 	}
 	if got := sizeOf(ws.Terms[0]); got.W != 150 {
 		t.Fatalf("the terminal should keep the full width, got %d", got.W)
@@ -63,16 +64,16 @@ func TestSideBySideSplitsTheWidthAndIsSaved(t *testing.T) {
 		t.Fatalf("nvim and the agent should both be visible, got %v", vis)
 	}
 	lines := strings.Split(m.View().Content, "\n")
-	if row := []rune(ansi.Strip(lines[m.barHeight()])); len(row) <= left || row[left] != '│' {
-		t.Fatalf("the divider should be at column %d: %q", left, string(row))
+	if row := []rune(ansi.Strip(lines[m.barHeight()])); len(row) <= left || row[0] != '╭' || row[left-1] != '╮' || row[left] != '╭' {
+		t.Fatalf("the two boxes should meet at column %d: %q", left, string(row))
 	}
 	if c := m.View().Cursor; c != nil && c.X >= left {
 		t.Fatalf("nvim has focus, so its cursor should be on the left, got x=%d", c.X)
 	}
 
 	m = pressSideBySide(t, m)
-	if got := sizeOf(ws.Editor); got.W != 150 {
-		t.Fatalf("turning it off should give nvim the full width, got %d", got.W)
+	if got := sizeOf(ws.Editor); got.W != 148 {
+		t.Fatalf("turning it off should give nvim the full width inside its box, got %d", got.W)
 	}
 	if vis := m.visibleSessions(); len(vis) != 1 {
 		t.Fatalf("only nvim should be visible again, got %d sessions", len(vis))
@@ -118,7 +119,7 @@ func TestSideBySideInANarrowTerminal(t *testing.T) {
 			t.Errorf("%d columns: side by side shown = %v, want %v", c.width, got, c.joined)
 		}
 		w, _ := m.sessionSize()
-		if got := sizeOf(m.current.ws.Editor).W; c.joined && got >= w || !c.joined && got != w {
+		if got := sizeOf(m.current.ws.Editor).W; c.joined && got >= w-2 || !c.joined && got != w-2 {
 			t.Errorf("%d columns: nvim is %d wide in %d columns of room", c.width, got, w)
 		}
 		if !m.sideBySide || !m.sidePanel {
@@ -138,8 +139,8 @@ func TestSideBySideWithoutAnAgent(t *testing.T) {
 	if m.sideBySideShown() {
 		t.Fatal("with no agent nvim should be alone")
 	}
-	if got := sizeOf(m.current.ws.Editor).W; got != 150 {
-		t.Fatalf("nvim alone should get the full width, got %d", got)
+	if got := sizeOf(m.current.ws.Editor).W; got != 148 {
+		t.Fatalf("nvim alone should get the full width inside its box, got %d", got)
 	}
 }
 
@@ -199,9 +200,9 @@ func TestSideBySideClickMovesFocus(t *testing.T) {
 		mm, _ := m.handleMouseClick(tea.MouseClickMsg{X: x, Y: left.y + 1, Button: tea.MouseLeft})
 		m = mm.(Model)
 	}
-	click(left.x + left.w) // the divider
+	click(left.x + left.w) // nvim's right border
 	if m.screen != screenEditor {
-		t.Fatalf("a click on the divider should not move focus, got %v", m.screen)
+		t.Fatalf("a click on a border should not move focus, got %v", m.screen)
 	}
 	if m.attention[agent.Pid()].level != attnDone {
 		t.Fatal("the agent's news is unread while only nvim has had focus")
@@ -255,28 +256,29 @@ func TestClickFocusesTerminalPanes(t *testing.T) {
 func TestSideBySideFollowsTheFirstAndLastAgent(t *testing.T) {
 	m := pressSideBySide(t, sideBySideModel(t, 150))
 	ws := m.current.ws
-	w, _ := m.sessionSize()
-	left, right := sideBySideWidths(w)
+	w, h := m.sessionSize()
+	editor, agent := m.sideBySideRects(sessionPane{w: w, h: h})
+	left, right := editor.w+2, agent.w+2 // the boxes, borders included
 
 	for len(ws.Agents) > 0 {
 		agent := ws.Agents[0]
 		mm, _ := m.closeBoardAgent(boardRow{kind: rowAgent, key: m.current.key, agentIdx: 0, pid: agent.Pid()})
 		m = mm.(Model)
 	}
-	if got := sizeOf(ws.Editor).W; got != w {
-		t.Fatalf("with its last agent closed, nvim should get the full width, got %d", got)
+	if got := sizeOf(ws.Editor).W; got != w-2 {
+		t.Fatalf("with its last agent closed, nvim should get the full width inside its box, got %d", got)
 	}
 
 	sz := m.sizesFor(m.current.key).Agent
-	if sz.W != right {
-		t.Fatalf("the first agent should start at its half, %d, got %d", right, sz.W)
+	if sz.W != right-2 {
+		t.Fatalf("the first agent should start inside its half, %d, got %d", right-2, sz.W)
 	}
 	if _, err := m.mgr.SpawnAgent(m.current.key, t.TempDir(), session.Spec{Kind: session.Agent, Argv: []string{"cat"}}, sz.W, sz.H); err != nil {
 		t.Fatal(err)
 	}
 	m.resizeSessions()
-	if got := sizeOf(ws.Editor).W; got != left || !m.sideBySideShown() {
-		t.Fatalf("once an agent runs, nvim should be back on the left at %d, got %d", left, got)
+	if got := sizeOf(ws.Editor).W; got != left-2 || !m.sideBySideShown() {
+		t.Fatalf("once an agent runs, nvim should be back on the left at %d, got %d", left-2, got)
 	}
 }
 
