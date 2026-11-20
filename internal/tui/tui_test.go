@@ -3978,3 +3978,31 @@ func TestClaudeRenameShowsAndIsSavedOnce(t *testing.T) {
 		t.Fatalf("the finder should match the new name, got %+v", rows)
 	}
 }
+
+func TestPickAgentNameSkipsUsedNames(t *testing.T) {
+	names := []string{"Bulbasaur", "Ivysaur", "Venusaur"}
+	used := map[string]bool{"Bulbasaur": true, "Venusaur": true}
+
+	for range 20 {
+		if got := pickAgentName(names, used); got != "Ivysaur" {
+			t.Fatalf("want the only free name Ivysaur, got %q", got)
+		}
+	}
+}
+
+func TestPickAgentNameAddsNumberWhenAllTaken(t *testing.T) {
+	names := []string{"Mew"}
+	used := map[string]bool{"Mew": true, "Mew 2": true}
+
+	if got := pickAgentName(names, used); got != "Mew 3" {
+		t.Errorf("want the lowest free number Mew 3, got %q", got)
+	}
+}
+
+func TestPickAgentNameWithoutNamesUsesAdjectiveNoun(t *testing.T) {
+	got := pickAgentName(nil, nil)
+
+	if !strings.Contains(got, "-") {
+		t.Errorf("want an adjective-noun name, got %q", got)
+	}
+}

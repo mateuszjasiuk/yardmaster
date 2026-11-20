@@ -3363,6 +3363,33 @@ func randomAgentTitle() string {
 	return adj + "-" + noun
 }
 
+// pickAgentName returns a random name from names that is not in used. When
+// every name is taken it adds the lowest free number to a random one
+// ("Pikachu 2"). With no names it falls back to randomAgentTitle.
+func pickAgentName(names []string, used map[string]bool) string {
+	if len(names) == 0 {
+		return randomAgentTitle()
+	}
+
+	var free []string
+	for _, name := range names {
+		if !used[name] {
+			free = append(free, name)
+		}
+	}
+	if len(free) > 0 {
+		return free[rand.Intn(len(free))]
+	}
+
+	base := names[rand.Intn(len(names))]
+	for n := 2; ; n++ {
+		name := fmt.Sprintf("%s %d", base, n)
+		if !used[name] {
+			return name
+		}
+	}
+}
+
 // activate ensures the workspace's sessions are running and switches to the
 // last screen used in that worktree (editor on first open). A brand-new worktree
 // starts one fresh claude session; reopening resumes the agent pool.

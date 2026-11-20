@@ -31,6 +31,9 @@ type Config struct {
 	Agent string `toml:"agent"`
 	// Agents configures the available agent providers and their commands.
 	Agents Agents `toml:"agents"`
+	// AgentNames are the names ym gives new agent sessions, each one picked so
+	// no other session uses it. Empty means random adjective-noun names.
+	AgentNames []string `toml:"agent_names"`
 	// Shell is the command launched for a terminal session.
 	Shell string `toml:"shell"`
 	// WorktreePath is the path template for new worktrees, relative to the repo.
@@ -323,6 +326,7 @@ func Default() Config {
 			Claude:  AgentProvider{Command: "claude"},
 			Codex:   AgentProvider{Command: "codex"},
 		},
+		AgentNames:   DefaultAgentNames(),
 		Shell:        shell,
 		WorktreePath: ".worktrees/{name}",
 		BranchName:   "{name}",
@@ -593,6 +597,11 @@ func (c *Config) validate() error {
 	for _, pattern := range c.Diff.Exclude {
 		if pattern == "" {
 			return fmt.Errorf("config `diff.exclude` entries must not be empty")
+		}
+	}
+	for _, name := range c.AgentNames {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("config `agent_names` entries must not be empty")
 		}
 	}
 	if err := validateWorktreeFiles("worktree_files", c.WorktreeFiles); err != nil {

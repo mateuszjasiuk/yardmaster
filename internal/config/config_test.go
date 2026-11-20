@@ -655,3 +655,33 @@ func TestLoadRejectsBadClaudeAccounts(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadAgentNames(t *testing.T) {
+	if got := loadTOML(t, ""); !reflect.DeepEqual(got.AgentNames, DefaultAgentNames()) {
+		t.Errorf("no agent_names should give the Gen I list, got %d names", len(got.AgentNames))
+	}
+	if got := loadTOML(t, `agent_names = ["Ada", "Grace"]`); !reflect.DeepEqual(got.AgentNames, []string{"Ada", "Grace"}) {
+		t.Errorf("a set list should replace the default, got %v", got.AgentNames)
+	}
+	if got := loadTOML(t, `agent_names = []`); len(got.AgentNames) != 0 {
+		t.Errorf("an empty list should stay empty, got %d names", len(got.AgentNames))
+	}
+	if n := len(DefaultAgentNames()); n != 151 {
+		t.Errorf("want 151 Gen I names, got %d", n)
+	}
+}
+
+func TestLoadRejectsBlankAgentName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	content := "root = " + strconv.Quote(dir) + "\nagent_names = [\"Ada\", \" \"]\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("YM_CONFIG", path)
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "agent_names") {
+		t.Errorf("want an error naming agent_names, got %v", err)
+	}
+}
