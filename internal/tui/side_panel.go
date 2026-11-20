@@ -229,7 +229,9 @@ type sidePanelBoxLook struct {
 
 // render draws the box one column in from the panel's edge: the corner, the
 // sign (if any) and the title, the border to the right edge, then one row of
-// body and the bottom border. Every row opens what target opens.
+// body and the bottom border. A heavy box has an accent bar in that first
+// column, which a status colour on its border can't hide. Every row opens
+// what target opens.
 func (b sidePanelBoxLook) render(title, body string, target sidePanelRow) []sidePanelRow {
 	const boxW = sidePanelWidth - 1
 	edge := lipgloss.RoundedBorder()
@@ -253,11 +255,15 @@ func (b sidePanelBoxLook) render(title, body string, target sidePanelRow) []side
 	head += titleSt.Render(truncateTo(title, boxW-4-lipgloss.Width(head)))
 	fill := strings.Repeat(edge.Top, boxW-3-lipgloss.Width(head))
 	body = padLine(b.bodySt.Render(truncateTo(body, boxW-2)), boxW-2)
+	margin := " "
+	if b.heavy {
+		margin = accentStyle.Render("▌")
+	}
 
 	rows := []sidePanelRow{target, target, target}
-	rows[0].text = " " + border.Render(edge.TopLeft+edge.Top) + head + border.Render(fill+edge.TopRight)
-	rows[1].text = " " + border.Render(edge.Left) + body + border.Render(edge.Right)
-	rows[2].text = " " + border.Render(edge.BottomLeft+strings.Repeat(edge.Bottom, boxW-2)+edge.BottomRight)
+	rows[0].text = margin + border.Render(edge.TopLeft+edge.Top) + head + border.Render(fill+edge.TopRight)
+	rows[1].text = margin + border.Render(edge.Left) + body + border.Render(edge.Right)
+	rows[2].text = margin + border.Render(edge.BottomLeft+strings.Repeat(edge.Bottom, boxW-2)+edge.BottomRight)
 	rows[1].inBox, rows[2].inBox = true, true
 
 	return rows

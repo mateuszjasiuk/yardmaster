@@ -115,9 +115,16 @@ func boxRows(title string, rows ...string) string {
 	return strings.Join(out, "\n")
 }
 
-// activeBoxRows is boxRows with the heavy border of the active session.
+// activeBoxRows is boxRows with the heavy border and the accent bar of the
+// active session.
 func activeBoxRows(title string, rows ...string) string {
-	return strings.NewReplacer("╭", "┏", "╮", "┓", "╰", "┗", "╯", "┛", "─", "━", "│", "┃").Replace(boxRows(title, rows...))
+	heavy := strings.NewReplacer("╭", "┏", "╮", "┓", "╰", "┗", "╯", "┛", "─", "━", "│", "┃").Replace(boxRows(title, rows...))
+	lines := strings.Split(heavy, "\n")
+	for i, l := range lines {
+		lines[i] = "▌" + strings.TrimPrefix(l, " ")
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // panelLines joins rows of the panel, as plain text, into one string.
@@ -238,9 +245,9 @@ func TestSidePanelGivesEachSessionABoxAndMarksTheActiveOne(t *testing.T) {
 		t.Fatalf("panel rows:\n%s\nwant:\n%s", got, want)
 	}
 	rows := m.sidePanelRows(m.height - m.barHeight())
-	accent := " " + accentStyle.Render("┏━")
+	accent := accentStyle.Render("▌") + accentStyle.Render("┏━")
 	if !strings.HasPrefix(rows[2].text, accent) || strings.HasPrefix(rows[5].text, accent) {
-		t.Fatalf("only the active session's box should have the heavy accent border:\n%q\n%q", rows[2].text, rows[5].text)
+		t.Fatalf("only the active session's box should have the accent bar and heavy border:\n%q\n%q", rows[2].text, rows[5].text)
 	}
 }
 
