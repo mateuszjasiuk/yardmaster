@@ -64,6 +64,40 @@ func TestParseCtlArgs(t *testing.T) {
 	}
 }
 
+func TestParseCtlArgsStage(t *testing.T) {
+	t.Setenv("YM_AGENT", "tok")
+	cases := []struct {
+		args    []string
+		want    ctl.Request
+		wantErr bool
+	}{
+		{args: []string{"stage", "review"}, want: ctl.Request{Op: ctl.OpStage, AgentToken: "tok", Text: "review"}},
+		{args: []string{"stage", "step", "2"}, want: ctl.Request{Op: ctl.OpStage, AgentToken: "tok", Text: "step 2"}},
+		{args: []string{"stage", "2/3", "done"}, want: ctl.Request{Op: ctl.OpStage, AgentToken: "tok", Text: "2/3 done"}},
+		{args: []string{"stage", "in", "review", "--worktree", "r/a"}, want: ctl.Request{Op: ctl.OpStage, Worktree: "r/a", Text: "in review"}},
+		{args: []string{"stage", "--clear"}, want: ctl.Request{Op: ctl.OpStage, AgentToken: "tok", Clear: true}},
+		{args: []string{"stage", "--clear", "--worktree", "r/a"}, want: ctl.Request{Op: ctl.OpStage, Worktree: "r/a", Clear: true}},
+		{args: []string{"stage"}, wantErr: true},
+		{args: []string{"stage", "review", "--worktree", "a"}, wantErr: true},
+		{args: []string{"send", "r/a", "hi", "--worktree", "r/b"}, wantErr: true},
+	}
+	for _, tc := range cases {
+		got, _, err := parseCtlArgs(tc.args)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%v: err = %v, wantErr %v", tc.args, err, tc.wantErr)
+			continue
+		}
+		if !tc.wantErr && got != tc.want {
+			t.Errorf("%v: got %+v, want %+v", tc.args, got, tc.want)
+		}
+	}
+
+	t.Setenv("YM_AGENT", "")
+	if _, _, err := parseCtlArgs([]string{"stage", "review"}); err == nil {
+		t.Error("outside an agent session, stage without --worktree should fail")
+	}
+}
+
 // TestParseCtlArgsStdin checks that both "-" and "--prompt -" read the text
 // from stdin, not take "-" as the text.
 func TestParseCtlArgsStdin(t *testing.T) {

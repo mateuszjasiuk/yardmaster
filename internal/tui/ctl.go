@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/agent"
@@ -94,6 +97,8 @@ func (m Model) handleCtl(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		mm, cmd = m.ctlReopen(p)
 	case ctl.OpRemove:
 		mm, cmd = m.ctlRemove(p)
+	case ctl.OpStage:
+		mm, cmd = m.ctlStage(p)
 	case ctl.OpFeatureNew:
 		mm, cmd = m.ctlFeatureNew(p)
 	case ctl.OpFeatureAdd:
@@ -174,7 +179,7 @@ func (m Model) ctlAgents(key string) (open bool, agents []ctl.AgentInfo) {
 		agents = append(agents, ctl.AgentInfo{
 			Provider: providerName(normalizedProvider(s.Provider)), Label: s.Title,
 			SessionID: s.SessionID, Pid: pid, Status: st.Status, WaitingFor: st.WaitingFor,
-			Active: i == ws.ActiveAgent,
+			Active: i == ws.ActiveAgent, Stage: s.Stage,
 		})
 	}
 	return true, agents
@@ -549,19 +554,114 @@ func (m Model) handleCtlEnter(msg ctlEnterMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) ctlInterrupt(p *ctl.Pending) (tea.Model, tea.Cmd) {
-	key := p.Req.Worktree
-	if _, err := m.ctlTarget(key); err != nil {
+// ctlStage sets or clears what an agent session says it is at: the session the
+// request comes from (its token), or a worktree's active session. It saves the
+// stage with the session, so it is back after a restart.
+func (m Model) ctlStage(p *ctl.Pending) (tea.Model, tea.Cmd) {
+	stage, err := checkStage(p.Req.Text, p.Req.Clear)
+	if err != nil {
 		p.Fail(err)
 		return m, nil
 	}
-	ws, ok := m.mgr.Workspace(key)
-	if !ok {
-		p.Fail(fmt.Errorf("%s is not open", key))
+
+	key, s, err := m.ctlStageTarget(p.Req)
+	if err != nil {
+		p.Fail(err)
 		return m, nil
 	}
+
+	s.Stage = stage
+	save := m.saveAgents(key)
+
+	msg := fmt.Sprintf("%s's stage is %q", key, stage)
+	if stage == "" {
+		msg = "cleared " + key + "'s stage"
+	}
+	p.Reply(ctl.Response{OK: true, Message: msg})
+
+	return m, save
+}
+
+// ctlStageTarget finds the agent session a stage request is for: the one whose
+// token it carries, else the active agent of the worktree it names.
+func (m Model) ctlStageTarget(req ctl.Request) (key string, s *session.Session, err error) {
+	if req.AgentToken == "" {
+		s, err = m.ctlActiveAgent(req.Worktree)
+		return req.Worktree, s, err
+	}
+
+	key, s, found := m.agentByToken(req.AgentToken)
+	if !found {
+		return "", nil, fmt.Errorf("this ym hosts no agent session %s (is YM_SOCKET another ym's?)", req.AgentToken)
+	}
+
+	return key, s, nil
+}
+
+// agentByToken finds the agent session ym gave token to, and its worktree.
+func (m Model) agentByToken(token string) (key string, s *session.Session, found bool) {
+	for _, key := range m.mgr.Keys() {
+		ws, _ := m.mgr.Workspace(key)
+		i := slices.IndexFunc(ws.Agents, func(a *session.Session) bool { return a.Token == token })
+		if i >= 0 {
+			return key, ws.Agents[i], true
+		}
+	}
+
+	return "", nil, false
+}
+
+// ctlActiveAgent is the active agent session of the worktree key names, which
+// must be known and open.
+func (m Model) ctlActiveAgent(key string) (*session.Session, error) {
+	if _, err := m.ctlTarget(key); err != nil {
+		return nil, err
+	}
+	ws, ok := m.mgr.Workspace(key)
+	if !ok {
+		return nil, fmt.Errorf("%s is not open", key)
+	}
+
 	s := ws.ActiveAgentSession()
-	if s == nil || !s.Alive() {
+	if s == nil {
+		return nil, fmt.Errorf("%s has no agent session", key)
+	}
+
+	return s, nil
+}
+
+// maxStageWidth is how wide a stage may be: it sits in a box's bottom border in
+// the session list, which has room for this much.
+const maxStageWidth = 16
+
+// checkStage is the stage to keep for text: trimmed, one line and at most
+// maxStageWidth columns wide. clear asks for no stage; text must then be empty.
+func checkStage(text string, clear bool) (string, error) {
+	stage := strings.TrimSpace(text)
+	switch {
+	case clear && stage != "":
+		return "", fmt.Errorf("a stage takes text or --clear, not both")
+	case clear:
+		return "", nil
+	case stage == "":
+		return "", fmt.Errorf("a stage needs text, or --clear to remove it")
+	case strings.ContainsFunc(stage, unicode.IsControl):
+		return "", fmt.Errorf("a stage is one line of text")
+	case lipgloss.Width(stage) > maxStageWidth:
+		return "", fmt.Errorf("a stage is at most %d characters, %q has %d", maxStageWidth, stage, lipgloss.Width(stage))
+	}
+
+	return stage, nil
+}
+
+func (m Model) ctlInterrupt(p *ctl.Pending) (tea.Model, tea.Cmd) {
+	key := p.Req.Worktree
+	s, err := m.ctlActiveAgent(key)
+	if err != nil {
+		p.Fail(err)
+		return m, nil
+	}
+	if !s.Alive() {
 		p.Fail(fmt.Errorf("%s has no running agent", key))
 		return m, nil
 	}

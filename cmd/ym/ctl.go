@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/ctl"
+	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
 const ctlUsage = `usage: ym ctl <command> [flags]
@@ -25,6 +26,9 @@ Talk to the running ym. Worktrees are named "repo/name".
   open <repo/name>                      start a closed worktree's sessions, resuming its agents
   reopen <repo/name> [--force]          stop and open again (restarts its agents on the same conversations)
   remove <repo/name>                    ask the user to confirm removing the worktree
+  stage TEXT | --clear [--worktree repo/name]
+                                        say what a session is at ("step 2", "review"), up to 16
+                                        characters: your own, or the worktree's active session
 
   feature new <repo> <name> --manager <repo/name> [--notes PATH]
                                         start a feature, led by the manager's session
@@ -75,6 +79,7 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 	var positional []string
 	var text *string
 	readStdin := false
+	worktreeFlag := ""
 	for i := 0; i < len(rest); i++ {
 		a := rest[i]
 		next := func(flag string) (string, error) {
@@ -89,6 +94,12 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 			asJSON = true
 		case "--force":
 			req.Force = true
+		case "--clear":
+			req.Clear = true
+		case "--worktree":
+			if worktreeFlag, err = next(a); err != nil {
+				return req, false, err
+			}
 		case "--base":
 			if req.Base, err = next(a); err != nil {
 				return req, false, err
@@ -161,22 +172,14 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 			return req, false, fmt.Errorf("spawn takes a repo and a worktree name")
 		}
 		req.Repo, req.Name = positional[0], positional[1]
-		if text != nil {
-			req.Text = *text
-		} else {
-			req.Text = strings.Join(positional[2:], " ")
-		}
+		req.Text = textArg(text, positional[2:])
 	case "send":
 		req.Op = ctl.OpSend
 		if len(positional) < 1 {
 			return req, false, fmt.Errorf("send takes a worktree and the text")
 		}
 		req.Worktree = positional[0]
-		if text != nil {
-			req.Text = *text
-		} else {
-			req.Text = strings.Join(positional[1:], " ")
-		}
+		req.Text = textArg(text, positional[1:])
 		if strings.TrimSpace(req.Text) == "" {
 			return req, false, fmt.Errorf("send needs text (as arguments, or - for stdin)")
 		}
@@ -186,12 +189,19 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 			return req, false, fmt.Errorf("%s takes one worktree", cmd)
 		}
 		req.Worktree = positional[0]
+	case "stage":
+		if err := parseStageArgs(&req, worktreeFlag, textArg(text, positional)); err != nil {
+			return req, false, err
+		}
 	case "feature":
 		if err := parseFeatureArgs(&req, positional); err != nil {
 			return req, false, err
 		}
 	default:
 		return req, false, fmt.Errorf("unknown command %q", cmd)
+	}
+	if worktreeFlag != "" && req.Op != ctl.OpStage {
+		return req, false, fmt.Errorf("--worktree is only for stage")
 	}
 	if req.Feature != "" && req.Op != ctl.OpSpawn && !strings.Contains(req.Feature, "/") {
 		return req, false, fmt.Errorf("feature %q should be written as repo/name", req.Feature)
@@ -200,6 +210,34 @@ func parseCtlArgs(args []string) (req ctl.Request, asJSON bool, err error) {
 		return req, false, fmt.Errorf("worktree %q should be written as repo/name", req.Worktree)
 	}
 	return req, asJSON, nil
+}
+
+// parseStageArgs fills req for `ym ctl stage TEXT | --clear [--worktree
+// repo/name]`. Without a worktree the stage is for the session the command runs
+// in, which ym names in YM_AGENT. ym checks the text itself.
+func parseStageArgs(req *ctl.Request, worktree, text string) error {
+	req.Op, req.Worktree, req.Text = ctl.OpStage, worktree, text
+	if worktree == "" {
+		req.AgentToken = os.Getenv(session.AgentTokenEnv)
+		if req.AgentToken == "" {
+			return fmt.Errorf("not run from a ym agent session: name the worktree with --worktree repo/name")
+		}
+	}
+	if !req.Clear && strings.TrimSpace(text) == "" {
+		return fmt.Errorf("stage needs text (as arguments, or - for stdin), or --clear")
+	}
+
+	return nil
+}
+
+// textArg is a command's text: what stdin or --prompt gave, else the rest of
+// its arguments joined by spaces.
+func textArg(text *string, rest []string) string {
+	if text != nil {
+		return *text
+	}
+
+	return strings.Join(rest, " ")
 }
 
 // parseFeatureArgs fills req for `ym ctl feature <sub> …`.
@@ -317,6 +355,9 @@ func formatWorktree(wt ctl.WorktreeInfo) string {
 		}
 		if a.WaitingFor != "" {
 			b.WriteString("(" + a.WaitingFor + ")")
+		}
+		if a.Stage != "" {
+			b.WriteString(" [" + a.Stage + "]")
 		}
 	}
 	if wt.Queued > 0 {

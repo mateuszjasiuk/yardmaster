@@ -43,6 +43,8 @@ type Spec struct {
 	// SessionID is the provider-owned, opaque conversation ID recorded on the
 	// started Session so ym can persist and later resume it.
 	SessionID string
+	// Stage is restored on the Session when ym resumes an agent.
+	Stage string
 	// Env adds or replaces process environment entries in KEY=value form.
 	Env []string
 	// UnsetEnv removes inherited process environment entries by key. Removal

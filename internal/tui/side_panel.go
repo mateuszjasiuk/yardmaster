@@ -206,6 +206,7 @@ type sidePanelBlock struct {
 	lead        []sidePanelRow
 	look        sidePanelBoxLook
 	title, body string
+	stage       string
 	target      sidePanelRow
 	// repoAbove is the worktree whose repo header is above this box, out of
 	// its own rows; nil when the box holds the header or has none (home).
@@ -221,7 +222,7 @@ func (b sidePanelBlock) height() int {
 
 // rows draws the block: its lead rows, then the box.
 func (b sidePanelBlock) rows() []sidePanelRow {
-	return append(slices.Clone(b.lead), b.look.render(b.title, b.body, b.target)...)
+	return append(slices.Clone(b.lead), b.look.render(b.title, b.body, b.stage, b.target)...)
 }
 
 // sidePanelBlocks lists the panel's boxes as blocks: the agent strip's entries
@@ -316,7 +317,8 @@ func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 		sign, signSt := attnSign(a.attn, a.busy, panelIdleStyle)
 		blocks = append(blocks, sidePanelBlock{
 			look:  sidePanelBoxLook{heavy: active, sign: sign, signSt: signSt, bodySt: worktreeSt},
-			title: a.label, body: worktree, target: sidePanelRow{agent: a}, attn: a.attn, active: active,
+			title: a.label, body: worktree, stage: a.stage, target: sidePanelRow{agent: a},
+			attn: a.attn, active: active,
 		})
 	}
 
@@ -457,10 +459,10 @@ type sidePanelBoxLook struct {
 
 // render draws the box one column in from the panel's edge: the corner, the
 // sign (if any) and the title, the border to the right edge, then one row of
-// body and the bottom border. A heavy box has an accent bar in that first
-// column, which a status colour on its border can't hide. Every row opens
-// what target opens.
-func (b sidePanelBoxLook) render(title, body string, target sidePanelRow) []sidePanelRow {
+// body and the bottom border, with the stage (if any) at its right end. A
+// heavy box has an accent bar in that first column, which a status colour on
+// its border can't hide. Every row opens what target opens.
+func (b sidePanelBoxLook) render(title, body, stage string, target sidePanelRow) []sidePanelRow {
 	const boxW = sidePanelWidth - 1
 	edge := lipgloss.RoundedBorder()
 	if b.heavy {
@@ -491,9 +493,25 @@ func (b sidePanelBoxLook) render(title, body string, target sidePanelRow) []side
 	rows := []sidePanelRow{target, target, target}
 	rows[0].text = margin + border.Render(edge.TopLeft+edge.Top) + head + border.Render(fill+edge.TopRight)
 	rows[1].text = margin + border.Render(edge.Left) + body + border.Render(edge.Right)
-	rows[2].text = margin + border.Render(edge.BottomLeft+strings.Repeat(edge.Bottom, boxW-2)+edge.BottomRight)
+	rows[2].text = margin + bottomBorder(edge, border, stage, boxW)
 
 	return rows
+}
+
+// bottomBorder is a box's bottom border, boxW wide, with the stage (if any) at
+// its right end in a dim colour.
+func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, boxW int) string {
+	if stage == "" {
+		return border.Render(edge.BottomLeft + strings.Repeat(edge.Bottom, boxW-2) + edge.BottomRight)
+	}
+
+	// Around the stage: the corner and at least one line before it, a space on
+	// each side, one line and the corner after it.
+	const around = 6
+	stage = truncateTo(stage, boxW-around)
+	line := strings.Repeat(edge.Bottom, boxW-around+1-lipgloss.Width(stage))
+
+	return border.Render(edge.BottomLeft+line+" ") + dimStyle.Render(stage) + border.Render(" "+edge.Bottom+edge.BottomRight)
 }
 
 // sidePanelRepo renders a repo's header, w columns wide. An extra Claude

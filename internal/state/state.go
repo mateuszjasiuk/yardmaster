@@ -57,6 +57,7 @@ type AgentState struct {
 	Provider  agent.Provider `json:"provider"`
 	SessionID string         `json:"session_id"`
 	Label     string         `json:"label"`
+	Stage     string         `json:"stage,omitempty"`
 }
 
 // dir returns ym's state directory (honoring XDG_STATE_HOME).

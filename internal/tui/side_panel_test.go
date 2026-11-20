@@ -308,6 +308,23 @@ func TestSidePanelGivesEachSessionABoxAndMarksTheActiveOne(t *testing.T) {
 	}
 }
 
+func TestSidePanelShowsTheStageInTheBottomBorder(t *testing.T) {
+	m := stripModel(t, 140, "alpha", "beta") // beta is current
+	m.sidePanel = true
+	ws, _ := m.mgr.Workspace("repo/alpha")
+	ws.Agents[0].Stage = "step 2"
+
+	// Rows: the top row, "repo", then alpha's box.
+	got := panelRows(m)[4]
+	want := " ╰" + strings.Repeat("─", sidePanelWidth-1-5-len("step 2")) + " step 2 ─╯"
+	if got != want {
+		t.Fatalf("bottom border = %q, want %q", got, want)
+	}
+	if w := ansi.StringWidth(m.sidePanelRows()[4].text); w != sidePanelWidth {
+		t.Fatalf("the row should stay %d wide, got %d", sidePanelWidth, w)
+	}
+}
+
 func TestSidePanelHidesTheAgentStrip(t *testing.T) {
 	m := stripModel(t, 140, "alpha", "beta")
 	if m.barHeight() != 4 || !strings.Contains(barStripRow(m), "alpha · beta") {

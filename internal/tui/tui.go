@@ -253,6 +253,7 @@ type boardRow struct {
 	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
 	busy     bool      // the agent is working
+	stage    string    // what the session says it is at
 }
 
 // Focus order of the new-agent form's fields.
@@ -2187,7 +2188,7 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: m.boardStatus(pid, attn), attn: attn, busy: busy,
+			status: m.boardStatus(pid, attn), attn: attn, busy: busy, stage: a.Stage,
 		})
 		if attn > g.attn {
 			g.attn = attn
@@ -3417,7 +3418,14 @@ func (m Model) workspaceSpecs(key string, addDefault bool) ([]session.Spec, erro
 
 // restoreAgentSpec rebuilds one saved agent, handing it prompt.
 func (m Model) restoreAgentSpec(a state.AgentState, prompt string) (session.Spec, error) {
-	return m.ctrl.RestoreProviderAgentSpec(normalizedProvider(a.Provider), a.SessionID, a.Label, prompt)
+	spec, err := m.ctrl.RestoreProviderAgentSpec(normalizedProvider(a.Provider), a.SessionID, a.Label, prompt)
+	if err != nil {
+		return spec, err
+	}
+
+	spec.Stage = a.Stage
+
+	return spec, nil
 }
 
 // prepareWorkspaceSpecs starts provider companions before their interactive
@@ -3531,7 +3539,7 @@ func (m *Model) persistAgents(key string) {
 			continue // not a ym-managed claude session; nothing to resume
 		}
 		agents = append(agents, state.AgentState{
-			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title,
+			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title, Stage: s.Stage,
 		})
 	}
 	m.state.SetAgents(key, agents, ws.ActiveAgent)

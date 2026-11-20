@@ -73,7 +73,8 @@ them, and they last for ym's lifetime.
   their repo and gh stack. Each agent session is a box: its sign (`!` waiting, `✓` done, `●`
   working) and name in the top border, its worktree inside. A box with a sign has its border in
   the sign's colour. The session you'd come back to (the current worktree's active agent) has a
-  heavy border and an accent bar on its left, in the accent colour when it has no sign. Click a
+  heavy border and an accent bar on its left, in the accent colour when it has no sign. A stage the
+  session set with `ym ctl stage` (`step 2`, `review`) sits in the box's bottom border. Click a
   box to open that session. When the boxes don't fit, the list scrolls with the mouse wheel and
   always moves to show the active session when it changes. `↑ N more` and `↓ N more` count the
   boxes out of view, with how many of them wait for you (`!`) or are done (`✓`); a click on one
