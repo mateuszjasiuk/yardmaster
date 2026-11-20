@@ -612,3 +612,26 @@ func TestActiveRowAgentNames(t *testing.T) {
 		t.Errorf("no named agents should mean no column, got width %d", w)
 	}
 }
+
+// TestAgentNamesCellNarrow checks that a narrow names column keeps the name
+// and drops the "+N" count, rather than showing a count with no name.
+func TestAgentNamesCellNarrow(t *testing.T) {
+	names := []string{"Mew", "Abra"}
+	cases := []struct {
+		w    int
+		want string
+	}{
+		{4, "Mew "},
+		{5, "Mew  "},
+		{6, "Mew +1"},
+		{7, "Mew +1 "},
+	}
+	for _, tc := range cases {
+		if got := ansi.Strip(agentNamesCell(names, tc.w, false)); got != tc.want {
+			t.Errorf("width %d: got %q, want %q", tc.w, got, tc.want)
+		}
+	}
+	if got := ansi.Strip(agentNamesCell([]string{"Kangaskhan", "Mew"}, 7, false)); got != "Kan… +1" {
+		t.Errorf("a long name should be cut before the count: got %q", got)
+	}
+}

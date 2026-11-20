@@ -1758,9 +1758,14 @@ func (m Model) activeRow(it activeItem, names []string, highlight bool, innerW, 
 
 // agentNamesCell draws a row's names column, padded to w: the active agent's
 // name in the accent colour and a dim "+N". The selected row stays plain so
-// the selection style covers it. The name is cut before the count.
+// the selection style covers it. The name is cut before the count, and the
+// count is dropped when it would leave too little room for the name.
 func agentNamesCell(names []string, w int, highlight bool) string {
 	first, more := agentNamesParts(names)
+	tooTight := w-lipgloss.Width(more) < agentNamesMinW
+	if lipgloss.Width(first+more) > w && tooTight {
+		more = ""
+	}
 	first = truncateTo(first, w-lipgloss.Width(more))
 	if highlight {
 		return padLine(first+more, w)
