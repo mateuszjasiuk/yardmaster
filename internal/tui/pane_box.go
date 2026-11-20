@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
@@ -53,9 +54,12 @@ func renderPaneBox(screen, title string, w, h int, border lipgloss.Style) string
 		if i < len(lines) {
 			line = lines[i]
 		}
-		// The reset keeps a colour the program left on (a background, say)
-		// from running into the right border.
-		rows = append(rows, left+padLine(line, w)+"\x1b[m"+right)
+		// Right after a resize the screen can still hold wider lines; cut
+		// them so the right border stays put. The reset comes before the
+		// padding, so a colour the program left on (a background, say)
+		// doesn't fill the gap up to the border.
+		line = ansi.Truncate(line, w, "") + "\x1b[m"
+		rows = append(rows, left+padLine(line, w)+right)
 	}
 	rows = append(rows, bottomBorder(edge, border, "", w+2))
 

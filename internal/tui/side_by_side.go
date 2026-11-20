@@ -98,6 +98,7 @@ func (m Model) sideBySideRects(room sessionPane) (editor, agent sessionPane) {
 	left := (room.w - divider) / 2
 	editor = m.framed(sessionPane{x: room.x, y: room.y, w: left, h: room.h})
 	agent = m.framed(sessionPane{x: room.x + left + divider, y: room.y, w: room.w - divider - left, h: room.h})
+
 	return editor, agent
 }
 

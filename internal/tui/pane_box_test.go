@@ -116,3 +116,16 @@ func TestPaneBoxesOffKeepsTheLineAndTheDivider(t *testing.T) {
 		t.Fatalf("the divider should be at column %d: %q", left.w, string(row))
 	}
 }
+
+func TestRenderPaneBoxKeepsTheBorderInPlace(t *testing.T) {
+	box := renderPaneBox("\x1b[41mabcdefghij", "", 4, 1, barSep)
+	row := strings.Split(box, "\n")[1]
+
+	if got := ansi.Strip(row); got != "│abcd│" {
+		t.Fatalf("a line wider than the box should be cut, got %q", got)
+	}
+	short := strings.Split(renderPaneBox("\x1b[41mab", "", 4, 1, barSep), "\n")[1]
+	if !strings.Contains(short, "ab\x1b[m  ") {
+		t.Fatalf("the colour should be reset before the padding, got %q", short)
+	}
+}

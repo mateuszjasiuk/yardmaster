@@ -237,12 +237,12 @@ const (
 
 // renderBar draws the pinned status bar, the agent strip's row while it shows,
 // and a light separator line unless the panes have boxes (barHeight rows
-// total). The four left icons
-// (yardmaster, nvim, claude, term) are bold Nerd Font glyphs evenly spaced: the yardmaster is a
-// stable seedling, lit yellow while the deck is active and dim once you drop
-// into a session; the session icons glow in their own colour when active and
-// dim otherwise (faint until a workspace exists). Agent attention lives in the
-// "! N" badge, not the icons. The current repo / worktree sits on the right.
+// total). The four left icons (yardmaster, nvim, claude, term) are bold Nerd
+// Font glyphs evenly spaced: the yardmaster is a stable seedling, lit yellow
+// while the deck is active and dim once you drop into a session; the session
+// icons glow in their own colour when active and dim otherwise (faint until a
+// workspace exists). Agent attention lives in the "! N" badge, not the icons.
+// The current repo / worktree sits on the right.
 func (m Model) renderBar() string {
 	left := m.renderBarLeft()
 

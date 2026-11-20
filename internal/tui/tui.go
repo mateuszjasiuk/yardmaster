@@ -4476,7 +4476,7 @@ func (m Model) deckWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 // already-selected row activates it — opening a worktree or starting the create
 // flow, mirroring enter. handled is false when the click misses every row.
 func (m Model) deckClick(x, y int) (tea.Model, tea.Cmd, bool) {
-	by := y - m.barHeight() // body-relative row (bar + separator sit above)
+	by := y - m.barHeight() // body-relative row (the bar sits above)
 	if by < 0 {
 		return m, nil, false
 	}
