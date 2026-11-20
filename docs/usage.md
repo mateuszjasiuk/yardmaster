@@ -22,9 +22,13 @@ by repo (`●` running · `○` stopped · `✷` uncommitted changes).
 - Within each repo, worktrees are ordered by when you last opened them in ym (most recent first),
   falling back to git commit time for ones you haven't opened yet. The three most recently opened
   worktrees overall get a `1`/`2`/`3` rank in the left column.
+- Before the worktree name, each row shows its session name: the active agent, and `+N` when the
+  worktree has more agents (`Abra +1`). Stopped worktrees show the agents they will resume. The
+  column is left out when the deck is too narrow.
 - Each row shows how far its branch is ahead/behind the repo's main branch (`↑N ↓M`,
-  right-aligned). The selected row expands a `└` detail line with new context only: uncommitted
-  diffstat, last commit subject, age, and (when available) pull-request state.
+  right-aligned). The selected row expands a `└` detail line with new context only: every agent's
+  name (when there is more than one), uncommitted diffstat, last commit subject, age, and (when
+  available) pull-request state.
 - Last-opened times are saved in `$XDG_STATE_HOME/ym/state.json` (default
   `~/.local/state/ym/state.json`).
 - A repo's main checkout, the `(main)` row, is an ordinary worktree: open it to get a plain agent
