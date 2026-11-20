@@ -113,7 +113,7 @@ func (m Model) sideBySideBox(p sessionPane) string {
 	if p.s == m.activeSession() {
 		border = accentStyle
 	}
-	return renderPaneBox(m.sideBySidePane(p), p.w, p.h, border)
+	return renderPaneBox(m.sideBySidePane(p), m.paneTitle(p.s), p.w, p.h, border)
 }
 
 // sideBySidePane is a pane's screen, dimmed when it doesn't have focus: faint

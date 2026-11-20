@@ -32,6 +32,9 @@ func TestPaneBoxFramesNvimAndKeepsTheCursorInside(t *testing.T) {
 	if len(top) < x+w || top[x] != '╭' || top[x+w-1] != '╮' || bottom[x] != '╰' || bottom[x+w-1] != '╯' {
 		t.Fatalf("nvim should sit in a rounded box:\n%q\n%q", string(top), string(bottom))
 	}
+	if got := string(top[x : x+6]); got != "╭─nvim" {
+		t.Fatalf("nvim's top border should name it, got %q", got)
+	}
 	cx, cy, visible := p.s.Cursor()
 	if visible && (v.Cursor == nil || v.Cursor.X != p.x+cx || v.Cursor.Y != p.y+cy) {
 		t.Fatalf("the cursor should be inside the box at %d,%d, got %+v", p.x+cx, p.y+cy, v.Cursor)
@@ -46,5 +49,24 @@ func TestPaneBoxLeavesTheTerminalUnboxed(t *testing.T) {
 	p := m.sessionPanes()[0]
 	if p.x != m.sidePanelW() || p.y != m.barHeight() || p.w != w || p.h != h {
 		t.Fatalf("the terminal should fill the room, got %+v", p)
+	}
+}
+
+func TestPaneBoxNamesTheAgentSideBySide(t *testing.T) {
+	m := pressSideBySide(t, sideBySideModel(t, 150))
+	agent := m.current.ws.ActiveAgentSession()
+	right := m.sessionPanes()[1]
+
+	top := []rune(ansi.Strip(strings.Split(m.View().Content, "\n")[m.barHeight()]))
+	want := "╭─" + m.paneTitle(agent) + "─"
+	if got := string(top[right.x-1 : right.x-1+len([]rune(want))]); got != want {
+		t.Fatalf("the agent's top border should name it, got %q, want %q", got, want)
+	}
+}
+
+func TestRenderPaneBoxCutsALongTitle(t *testing.T) {
+	top := ansi.Strip(strings.Split(renderPaneBox("", "a-very-long-name", 8, 1, barSep), "\n")[0])
+	if top != "╭─a-ver…─╮" {
+		t.Fatalf("a long title should be cut to fit, got %q", top)
 	}
 }
