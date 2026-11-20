@@ -239,7 +239,7 @@ func TestRecentRanks(t *testing.T) {
 
 	// The rank-1 worktree's row should show a leading "1".
 	m.recomputeActive()
-	row := m.activeRow(activeItem{repo: repo.Repo{Name: "r2"}, view: WorktreeView{WT: repo.Worktree{Repo: "r2", Name: "c"}}}, false, 40)
+	row := m.activeRow(activeItem{repo: repo.Repo{Name: "r2"}, view: WorktreeView{WT: repo.Worktree{Repo: "r2", Name: "c"}}}, false, 40, 0)
 	if !strings.Contains(row, "1") {
 		t.Errorf("rank-1 row should show 1: %q", row)
 	}
