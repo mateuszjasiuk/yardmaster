@@ -1130,6 +1130,29 @@ func TestPersistAgentsRecordsProvider(t *testing.T) {
 	}
 }
 
+func TestPersistAgentsActiveIndexSkipsAgentsWithoutSession(t *testing.T) {
+	m := mixedProviderModel(agent.Claude)
+	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
+	specs := []session.Spec{
+		{Kind: session.Agent, Title: "plain", Argv: []string{"/usr/bin/true"}},
+		{Kind: session.Agent, Title: "Abra", Argv: []string{"/usr/bin/true"}, SessionID: "abra"},
+		{Kind: session.Agent, Title: "Mew", Argv: []string{"/usr/bin/true"}, SessionID: "mew"},
+	}
+	ws, err := m.mgr.Activate("r/w", t.TempDir(), specs, session.SameSize(80, 24))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.mgr.CloseAll()
+	ws.ActiveAgent = 2
+
+	m.persistAgents("r/w")
+
+	saved, active := m.state.Agents("r/w")
+	if len(saved) != 2 || active >= len(saved) || saved[active].Label != "Mew" {
+		t.Fatalf("saved active agent = %d in %+v, want Mew", active, saved)
+	}
+}
+
 func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 	m := mixedProviderModel(agent.Claude)
 	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}

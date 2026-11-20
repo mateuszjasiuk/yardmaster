@@ -3671,15 +3671,21 @@ func (m *Model) persistAgents(key string) {
 		return
 	}
 	agents := make([]state.AgentState, 0, len(ws.Agents))
-	for _, s := range ws.Agents {
+	// The saved index points into the saved list, which skips agents without a
+	// session id. An active agent that is skipped falls back to the first one.
+	active := 0
+	for i, s := range ws.Agents {
 		if s.SessionID == "" {
 			continue // not a ym-managed claude session; nothing to resume
+		}
+		if i == ws.ActiveAgent {
+			active = len(agents)
 		}
 		agents = append(agents, state.AgentState{
 			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title, Stage: s.Stage,
 		})
 	}
-	m.state.SetAgents(key, agents, ws.ActiveAgent)
+	m.state.SetAgents(key, agents, active)
 }
 
 // syncAgentNames gives each hosted Claude agent the name Claude polls for it,
