@@ -1157,13 +1157,17 @@ func (m Model) sessionSize() (int, int) {
 }
 
 // sizesFor is the size each kind of session in workspace key gets. Terminal
-// panes fill the room for sessions; nvim and the agent split it while the
-// worktree is side by side. Agents get their half also before the first one
-// starts, so it starts at the width it is shown at. A worktree that isn't open
-// yet is assumed to start with nvim and an agent.
+// panes fill the room for sessions; nvim and the agent fill the inside of a
+// box, and split the room while the worktree is side by side. Agents get their
+// half also before the first one starts, so it starts at the width it is shown
+// at. A worktree that isn't open yet is assumed to start with nvim and an
+// agent.
 func (m Model) sizesFor(key string) session.Sizes {
 	w, h := m.sessionSize()
 	sizes := session.SameSize(w, h)
+	inside := boxed(sessionPane{w: w, h: h})
+	sizes.Editor = session.Size{W: inside.w, H: inside.h}
+	sizes.Agent = sizes.Editor
 	if !m.sideBySideFits() {
 		return sizes
 	}
@@ -1171,10 +1175,10 @@ func (m Model) sizesFor(key string) session.Sizes {
 	left, right := sideBySideWidths(w)
 	ws, open := m.mgr.Workspace(key)
 	if !open || m.sideBySideIn(ws) {
-		sizes.Editor.W = left
+		sizes.Editor.W = boxed(sessionPane{w: left, h: h}).w
 	}
 	if !open || ws.Editor != nil {
-		sizes.Agent.W = right
+		sizes.Agent.W = boxed(sessionPane{w: right, h: h}).w
 	}
 	return sizes
 }

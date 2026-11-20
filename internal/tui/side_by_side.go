@@ -10,9 +10,9 @@ import (
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
 )
 
-// sideBySideMinWidth is the narrowest room for sessions that fits nvim and the
-// agent next to each other, with the divider between them.
-const sideBySideMinWidth = 2*minSessionWidth + 1
+// sideBySideMinWidth is the narrowest room for sessions that fits the boxes
+// of nvim and the agent next to each other.
+const sideBySideMinWidth = 2 * minSessionWidth
 
 // toggleSideBySide shows nvim and the agent next to each other, or one at a
 // time again, resizes them, and remembers the choice.
@@ -85,20 +85,35 @@ func (m Model) rememberSideBySideFocus() Model {
 	return m
 }
 
-// sideBySideWidths splits w columns into nvim's and the agent's, with one
-// column for the divider between them.
+// sideBySideWidths splits w columns into the widths of nvim's box and the
+// agent's, borders included.
 func sideBySideWidths(w int) (left, right int) {
-	left = (w - 1) / 2
-	return left, w - 1 - left
+	left = w / 2
+	return left, w - left
 }
 
-// renderSideBySide draws nvim and the agent next to each other, the one
-// without focus in gray. The divider always borders the focused pane, so it is
-// lit, as between two terminal panes.
+// renderSideBySide draws nvim and the agent in boxes next to each other, the
+// one without focus in gray with a gray border.
 func (m Model) renderSideBySide() string {
 	panes := m.sessionPanes()
-	left, right := panes[0], panes[1]
-	return joinVerticalSplit(m.sideBySidePane(left), m.sideBySidePane(right), cAccent, left.h, left.w)
+	left := splitLines(m.sideBySideBox(panes[0]))
+	right := splitLines(m.sideBySideBox(panes[1]))
+
+	rows := make([]string, len(left))
+	for i := range rows {
+		rows[i] = left[i] + right[i]
+	}
+	return strings.Join(rows, "\n")
+}
+
+// sideBySideBox is a pane's screen in its box, the border lit when the pane
+// has focus.
+func (m Model) sideBySideBox(p sessionPane) string {
+	border := barSep
+	if p.s == m.activeSession() {
+		border = accentStyle
+	}
+	return renderPaneBox(m.sideBySidePane(p), p.w, p.h, border)
 }
 
 // sideBySidePane is a pane's screen, dimmed when it doesn't have focus: faint
@@ -120,7 +135,7 @@ func (m Model) sideBySidePane(p sessionPane) string {
 
 // faintLines turns on the terminal's faint style at the start of each line and
 // again after each SGR sequence, since the program's own resets turn it off.
-// Each line ends with a reset, so faint doesn't spill into the divider after it.
+// Each line ends with a reset, so faint doesn't spill into the border after it.
 func faintLines(s string) string {
 	const faint = "\x1b[2m"
 	lines := splitLines(s)
