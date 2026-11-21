@@ -643,19 +643,26 @@ type barRight struct {
 // does.
 func (m Model) barRightZones() barRight {
 	z := barRight{notif: m.renderNotifZone()}
+	restoring := m.restoringSign()
 	label := m.barContextLabel()
 	fullLabel := label
 	available := max(0, m.width-lipgloss.Width(m.renderBarLeft())-1)
 	assemble := func() string {
 		text := ""
+		if restoring != "" {
+			text = restoring + "   "
+		}
 		if z.notif != "" {
-			text = z.notif + "   "
+			text += z.notif + "   "
 		}
 		text += label
 		if text != "" {
 			text += "  "
 		}
 		return text
+	}
+	if lipgloss.Width(assemble()) > available {
+		restoring = "" // the strip's … marks still show what is starting
 	}
 	if lipgloss.Width(assemble()) > available && m.current != nil {
 		// Volatile usage/agent/pane facts disappear before stable identity.
@@ -670,6 +677,9 @@ func (m Model) barRightZones() barRight {
 	z.text = assemble()
 
 	z.notifStart = m.width - lipgloss.Width(z.text)
+	if restoring != "" {
+		z.notifStart += lipgloss.Width(restoring + "   ")
+	}
 	labelStart := z.notifStart
 	if z.notif != "" {
 		labelStart += lipgloss.Width(z.notif + "   ")

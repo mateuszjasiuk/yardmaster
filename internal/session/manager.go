@@ -128,6 +128,17 @@ func (w *Workspace) all() []*Session {
 	return append(ss, w.Agents...)
 }
 
+// Starting reports whether any of the workspace's programs has not drawn yet.
+func (w *Workspace) Starting() bool {
+	for _, s := range w.all() {
+		if s.Starting() {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Manager owns the live Workspace for every activated worktree, keyed by a
 // caller-provided workspace key (e.g. "repo/worktree").
 type Manager struct {

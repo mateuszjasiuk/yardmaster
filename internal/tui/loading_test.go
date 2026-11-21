@@ -120,3 +120,68 @@ func TestAgentThatExitedBeforeStartingNeedsTheUser(t *testing.T) {
 		t.Errorf("attn = %v, status = %q; want waiting and the exit named", g.attn, g.agents[0].status)
 	}
 }
+
+// openAgent opens workspace key with one agent running argv.
+func openAgent(t *testing.T, m Model, key string, argv ...string) *session.Workspace {
+	t.Helper()
+	specs := []session.Spec{{Kind: session.Agent, Argv: argv, Provider: agent.Claude}}
+	ws, err := m.mgr.Activate(key, t.TempDir(), specs, session.SameSize(60, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.mgr.CloseAll)
+
+	return ws
+}
+
+func TestRestoreSignCountsTheWorkspacesThatCameUp(t *testing.T) {
+	m := loadingModel()
+	openAgent(t, m, "r/slow", "sleep", "30")
+	ready := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
+	waitStarted(t, ready.Agents[0])
+	m.restoring = []string{"r/slow", "r/ready", "r/closed"}
+
+	if got := ansi.Strip(barFirstRow(m)); !strings.Contains(got, "restoring 2 of 3…") {
+		t.Errorf("bar = %q, want the closed and the ready workspace counted", got)
+	}
+	m, cmd := m.finishRestore()
+	if cmd != nil || len(m.restoring) != 3 {
+		t.Error("the restore finished while a workspace was still starting")
+	}
+}
+
+func TestRestoreFlashesOnceEveryWorkspaceCameUp(t *testing.T) {
+	m := loadingModel()
+	ws := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
+	waitStarted(t, ws.Agents[0])
+	m.restoring = []string{"r/ready"}
+
+	m, cmd := m.finishRestore()
+	if cmd == nil || m.restoring != nil {
+		t.Fatal("the restore should end with its flash once every workspace is up")
+	}
+	if got := barFirstRow(m); strings.Contains(got, "restoring") {
+		t.Errorf("the bar still shows the restore: %q", got)
+	}
+}
+
+func TestNotificationZoneStaysClickableBesideTheRestoreSign(t *testing.T) {
+	m := loadingModel()
+	openAgent(t, m, "r/slow", "sleep", "30")
+	m.restoring = []string{"r/slow"}
+	m.attention = map[int]attnEntry{1: {level: attnDone, key: "r/slow"}}
+	m.width = 160
+
+	z := m.barRightZones()
+	bar := ansi.Strip(strings.SplitN(m.renderBar(), "\n", 2)[0])
+	notifAt := strings.Index(bar, "✓")
+	if z.notif == "" || notifAt < 0 {
+		t.Fatalf("no notification zone in %q", bar)
+	}
+	if !m.notifZoneAt(len([]rune(bar[:notifAt])), 0) {
+		t.Errorf("a click on the ✓ in %q misses the notification zone", bar)
+	}
+	if m.notifZoneAt(len([]rune(bar[:strings.Index(bar, "restoring")])), 0) {
+		t.Error("a click on the restore sign opens the notifications")
+	}
+}

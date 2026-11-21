@@ -544,6 +544,10 @@ type Model struct {
 	// (issue #54).
 	creating []creatingItem
 
+	// restoring holds the workspaces the startup restore reopened until all
+	// their panes have drawn or failed; the bar counts them meanwhile.
+	restoring []string
+
 	// loadingTicking mirrors plasmaTicking: the spinner tick disarms itself
 	// when nothing is loading any more, so no timer runs at rest.
 	loadingTicking bool
@@ -1441,14 +1445,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
 
 	case loadingTickMsg:
+		var restored tea.Cmd
+		m, restored = m.finishRestore()
 		// Re-arm only while something is still loading, so the timer stops on
 		// its own once the last loading ends.
 		if !m.loading() {
 			m.loadingTicking = false
-			return m, nil
+			return m, restored
 		}
 		m.loadingTicking = true
-		return m, scheduleLoadingTick()
+		return m, tea.Batch(restored, scheduleLoadingTick())
 
 	case ctlRequestMsg:
 		return m.handleCtl(msg.p)
@@ -3805,7 +3811,7 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 		return m, nil
 	}
 	var cmds []tea.Cmd
-	opened := 0
+	var opened []string
 	for _, key := range m.state.Open {
 		if m.mgr.Has(key) {
 			continue
@@ -3834,11 +3840,11 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 			continue
 		}
 		cmds = append(cmds, cmd)
-		opened++
+		opened = append(opened, key)
 	}
-	if opened > 0 {
+	if len(opened) > 0 {
 		m.recomputeActive()
-		cmds = append(cmds, m.flashCmd(fmt.Sprintf("restored %d workspace(s)", opened)))
+		m.restoring = opened // finishRestore flashes once they have all come up
 	}
 	return m, tea.Batch(cmds...)
 }

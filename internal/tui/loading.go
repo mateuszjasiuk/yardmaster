@@ -40,7 +40,7 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 // loading reports whether anything on screen shows a spinner, so the tick
 // keeps running.
 func (m Model) loading() bool {
-	if m.scanning() || len(m.creating) > 0 {
+	if m.scanning() || len(m.creating) > 0 || len(m.restoring) > 0 {
 		return true
 	}
 	for _, s := range m.visibleSessions() {
@@ -141,4 +141,39 @@ func paneProgram(s *session.Session) string {
 	default:
 		return normalizedProvider(s.Provider).String()
 	}
+}
+
+// restoringSign is the bar's sign while restored workspaces come up, or "".
+func (m Model) restoringSign() string {
+	if len(m.restoring) == 0 {
+		return ""
+	}
+
+	return m.loadingLine(fmt.Sprintf("restoring %d of %d…", m.restoredCount(), len(m.restoring)))
+}
+
+// finishRestore ends the restore sign once every restored workspace has come
+// up, and says how many came back.
+func (m Model) finishRestore() (Model, tea.Cmd) {
+	total := len(m.restoring)
+	if total == 0 || m.restoredCount() < total {
+		return m, nil
+	}
+	m.restoring = nil
+
+	return m, m.flashCmd(fmt.Sprintf("restored %d workspace(s)", total))
+}
+
+// restoredCount is how many restored workspaces have come up: none of their
+// panes is still starting. A workspace closed meanwhile counts as done.
+func (m Model) restoredCount() int {
+	n := 0
+	for _, key := range m.restoring {
+		ws, ok := m.openWorkspace(key)
+		if !ok || !ws.Starting() {
+			n++
+		}
+	}
+
+	return n
 }
