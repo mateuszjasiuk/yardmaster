@@ -645,7 +645,7 @@ func (s *Session) sendOrHold(send func()) {
 	s.heldMu.Lock()
 	defer s.heldMu.Unlock()
 
-	if s.Kind == Agent && s.starting.Load() {
+	if s.Kind == Agent && s.Starting() {
 		s.held = append(s.held, send)
 		return
 	}
@@ -676,13 +676,21 @@ func (s *Session) dropHeld() {
 // codes alone (alternate screen, modes, a cleared screen) leave every cell
 // blank. Called only while starting, so the scan stops after the first draw.
 func (s *Session) hasVisibleText() bool {
-	w, h := s.emu.Width(), s.emu.Height()
-	for y := range h {
-		for x := range w {
-			c := s.emu.CellAt(x, y)
-			if c != nil && strings.TrimSpace(c.Content) != "" {
-				return true
-			}
+	for y := range s.emu.Height() {
+		if s.rowHasText(y) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// rowHasText reports whether screen row y shows a character.
+func (s *Session) rowHasText(y int) bool {
+	for x := range s.emu.Width() {
+		c := s.emu.CellAt(x, y)
+		if c != nil && strings.TrimSpace(c.Content) != "" {
+			return true
 		}
 	}
 

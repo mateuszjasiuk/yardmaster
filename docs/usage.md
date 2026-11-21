@@ -14,7 +14,7 @@ nothing until a workspace is active).
 
 At startup the deck shows `⠹ scanning repos…` until git has looked at every worktree. ym then
 reopens the worktrees you had open, and the bar shows `⠹ restoring 3 of 14…` until each one's
-nvim, agents and terminals have drawn; then it says `restored 14 workspace(s)`.
+nvim, agents and terminals have drawn; then it says `restored 14 workspaces` (or after 30 s, when a pane still has not drawn).
 
 ## The deck
 

@@ -76,17 +76,27 @@ func (m Model) loadingLine(text string) string {
 // paneScreen is what a pane shows: the program's screen, or a sign in the
 // middle of the pane while the program starts or after it failed to.
 func (m Model) paneScreen(s *session.Session) string {
-	sign := m.startingSign(s)
-	if sign == "" {
+	if !showsSign(s) {
 		return s.Render()
 	}
+
 	w, h := s.Size()
 
-	return centerBlock(sign, w, h)
+	return centerBlock(m.startingSign(s), w, h)
 }
 
-// startingSign is the sign for a pane whose program has not drawn yet, or ""
-// when the program's own screen should show.
+// showsSign reports whether a pane shows its starting sign instead of the
+// program's screen: the program failed to start, or has been silent past the
+// delay.
+func showsSign(s *session.Session) bool {
+	if s.ExitedBeforeStart() {
+		return true
+	}
+
+	return s.Starting() && time.Since(s.StartedAt()) >= startingSignDelay
+}
+
+// startingSign is the sign of a pane for which showsSign holds.
 func (m Model) startingSign(s *session.Session) string {
 	if s.ExitedBeforeStart() {
 		sign := errStyle.Render(paneProgram(s) + " exited before it started")
@@ -94,9 +104,6 @@ func (m Model) startingSign(s *session.Session) string {
 			sign += "\n" + m.restartHint()
 		}
 		return sign
-	}
-	if !s.Starting() {
-		return ""
 	}
 
 	return m.startingSignAfter(s, time.Since(s.StartedAt()))
@@ -107,6 +114,7 @@ func (m Model) startingSignAfter(s *session.Session, waited time.Duration) strin
 	if waited < startingSignDelay {
 		return ""
 	}
+
 	text := "starting " + paneProgram(s) + "…"
 	if waited >= startingTooLong {
 		text = "still " + text
@@ -117,6 +125,7 @@ func (m Model) startingSignAfter(s *session.Session, waited time.Duration) strin
 	if held := s.HeldKeys(); held > 0 {
 		text += fmt.Sprintf(" (%s waiting)", pluralize(held, "key"))
 	}
+
 	sign := m.loadingLine(text)
 	if waited >= startingTooLong && s.Kind == session.Agent {
 		sign += "\n" + m.restartHint()
@@ -153,15 +162,21 @@ func (m Model) restoringSign() string {
 }
 
 // finishRestore ends the restore sign once every restored workspace has come
-// up, and says how many came back.
+// up, and says how many came back. A pane that hangs keeps its own sign, so
+// the restore gives up waiting for it after startingTooLong; the tick would
+// otherwise never stop.
 func (m Model) finishRestore() (Model, tea.Cmd) {
 	total := len(m.restoring)
-	if total == 0 || m.restoredCount() < total {
+	if total == 0 {
+		return m, nil
+	}
+	timedOut := time.Since(m.restoreSince) >= startingTooLong
+	if !timedOut && m.restoredCount() < total {
 		return m, nil
 	}
 	m.restoring = nil
 
-	return m, m.flashCmd(fmt.Sprintf("restored %d workspace(s)", total))
+	return m, m.flashCmd("restored " + pluralize(total, "workspace"))
 }
 
 // restoredCount is how many restored workspaces have come up: none of their

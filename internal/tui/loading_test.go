@@ -139,7 +139,7 @@ func TestRestoreSignCountsTheWorkspacesThatCameUp(t *testing.T) {
 	openAgent(t, m, "r/slow", "sleep", "30")
 	ready := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
 	waitStarted(t, ready.Agents[0])
-	m.restoring = []string{"r/slow", "r/ready", "r/closed"}
+	m.restoring, m.restoreSince = []string{"r/slow", "r/ready", "r/closed"}, time.Now()
 
 	if got := ansi.Strip(barFirstRow(m)); !strings.Contains(got, "restoring 2 of 3…") {
 		t.Errorf("bar = %q, want the closed and the ready workspace counted", got)
@@ -154,7 +154,7 @@ func TestRestoreFlashesOnceEveryWorkspaceCameUp(t *testing.T) {
 	m := loadingModel()
 	ws := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
 	waitStarted(t, ws.Agents[0])
-	m.restoring = []string{"r/ready"}
+	m.restoring, m.restoreSince = []string{"r/ready"}, time.Now()
 
 	m, cmd := m.finishRestore()
 	if cmd == nil || m.restoring != nil {
@@ -183,5 +183,16 @@ func TestNotificationZoneStaysClickableBesideTheRestoreSign(t *testing.T) {
 	}
 	if m.notifZoneAt(len([]rune(bar[:strings.Index(bar, "restoring")])), 0) {
 		t.Error("a click on the restore sign opens the notifications")
+	}
+}
+
+func TestRestoreStopsWaitingForAPaneThatHangs(t *testing.T) {
+	m := loadingModel()
+	openAgent(t, m, "r/slow", "sleep", "30")
+	m.restoring, m.restoreSince = []string{"r/slow"}, time.Now().Add(-startingTooLong)
+
+	m, cmd := m.finishRestore()
+	if cmd == nil || m.restoring != nil {
+		t.Error("the restore should end after startingTooLong, even with a pane still starting")
 	}
 }

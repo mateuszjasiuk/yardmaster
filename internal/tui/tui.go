@@ -545,8 +545,10 @@ type Model struct {
 	creating []creatingItem
 
 	// restoring holds the workspaces the startup restore reopened until all
-	// their panes have drawn or failed; the bar counts them meanwhile.
-	restoring []string
+	// their panes have drawn or failed, or restoreSince is startingTooLong ago;
+	// the bar counts them meanwhile.
+	restoring    []string
+	restoreSince time.Time
 
 	// loadingTicking mirrors plasmaTicking: the spinner tick disarms itself
 	// when nothing is loading any more, so no timer runs at rest.
@@ -1445,16 +1447,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
 
 	case loadingTickMsg:
-		var restored tea.Cmd
-		m, restored = m.finishRestore()
+		var restoredFlash tea.Cmd
+		m, restoredFlash = m.finishRestore()
 		// Re-arm only while something is still loading, so the timer stops on
 		// its own once the last loading ends.
 		if !m.loading() {
 			m.loadingTicking = false
-			return m, restored
+			return m, restoredFlash
 		}
 		m.loadingTicking = true
-		return m, tea.Batch(restored, scheduleLoadingTick())
+		return m, tea.Batch(restoredFlash, scheduleLoadingTick())
 
 	case ctlRequestMsg:
 		return m.handleCtl(msg.p)
@@ -2202,11 +2204,12 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
 		status := m.boardStatus(pid, attn)
+		starting := a.Starting()
 		switch {
 		case a.ExitedBeforeStart():
 			attn = attnWaiting // a dead agent needs the user to restart it
 			status = "exited before it started"
-		case a.Starting():
+		case starting:
 			status = "starting…"
 		}
 		busy := m.agentStatus[pid].Status == "busy"
@@ -2214,11 +2217,11 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: status, attn: attn, busy: busy, starting: a.Starting(), stage: a.Stage,
+			status: status, attn: attn, busy: busy, starting: starting, stage: a.Stage,
 		})
 		g.attn = max(g.attn, attn)
 		g.busy = g.busy || busy
-		g.starting = g.starting || a.Starting()
+		g.starting = g.starting || starting
 	}
 	return g, true
 }
@@ -3844,7 +3847,7 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 	}
 	if len(opened) > 0 {
 		m.recomputeActive()
-		m.restoring = opened // finishRestore flashes once they have all come up
+		m.restoring, m.restoreSince = opened, time.Now() // finishRestore flashes once they have all come up
 	}
 	return m, tea.Batch(cmds...)
 }

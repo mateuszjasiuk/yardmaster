@@ -662,7 +662,7 @@ func (m Model) barRightZones() barRight {
 		return text
 	}
 	if lipgloss.Width(assemble()) > available {
-		restoring = "" // the strip's … marks still show what is starting
+		restoring = "" // assemble drops it now; the strip's … marks still show what is starting
 	}
 	if lipgloss.Width(assemble()) > available && m.current != nil {
 		// Volatile usage/agent/pane facts disappear before stable identity.
@@ -1506,7 +1506,7 @@ func (m Model) renderNew(innerW, rows int) []string {
 		if m.scanning() {
 			return append(lines, "   "+m.loadingLine("scanning repos…"))
 		}
-		if !m.groupsLoaded {
+		if m.scanFailed {
 			return append(lines, dimStyle.Render("   scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("   no repos under root"))
@@ -1655,7 +1655,7 @@ func (m Model) renderActive(innerW, rows int) []string {
 		if m.scanning() {
 			return append(lines, m.loadingLine("scanning worktrees…"))
 		}
-		if !m.groupsLoaded {
+		if m.scanFailed {
 			return append(lines, dimStyle.Render("scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("no workspaces yet — pick a repo above to create one"))
