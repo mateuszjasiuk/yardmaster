@@ -74,10 +74,12 @@ type Session struct {
 	dirty         func(*Session) // signalled when the screen changes
 	companion     io.Closer
 
-	// Starting state: from StartSpec until the program first draws visible
-	// text. Keys typed into a starting agent wait in held, because a program
-	// that has not taken over its terminal yet gets them echoed as plain text
-	// and may lose them. heldMu orders held keys before any key sent after the first draw.
+	// Starting state: from StartSpec until an agent or the editor first draws
+	// visible text. A terminal is never starting: a shell may wait silently
+	// and never draw. Keys typed into a starting agent wait in held, because a
+	// program that has not taken over its terminal yet gets them echoed as
+	// plain text and may lose them. heldMu orders held keys before any key
+	// sent after the first draw.
 	startedAt time.Time
 	starting  atomic.Bool
 	heldMu    sync.Mutex
@@ -232,7 +234,7 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 	s.cursorVisible.Store(true)
 	s.renderCacheDirty.Store(true) // no cache yet: first Render must serialise
 	s.startedAt = time.Now()
-	s.starting.Store(true)
+	s.starting.Store(spec.Kind != Terminal)
 	s.emu.SetCallbacks(vt.Callbacks{
 		CursorVisibility: func(v bool) { s.cursorVisible.Store(v) },
 	})
@@ -307,8 +309,8 @@ func (s *Session) pumpOutput() {
 			s.signal()
 		}
 		if err != nil {
+			s.closed.Store(true) // before dropHeld, so no key is held after it
 			s.dropHeld()
-			s.closed.Store(true)
 			s.signal()
 			s.closeCompanion()
 			return
@@ -365,8 +367,7 @@ func (s *Session) Starting() bool { return s.starting.Load() && !s.closed.Load()
 // visible text, which leaves its pane blank.
 func (s *Session) ExitedBeforeStart() bool { return s.starting.Load() && s.closed.Load() }
 
-// StartedAt is when the program was launched; zero for a session that was not
-// started by StartSpec.
+// StartedAt is when the program was launched.
 func (s *Session) StartedAt() time.Time { return s.startedAt }
 
 // HeldKeys is how many keys and pastes wait for the program's first draw.
@@ -639,8 +640,8 @@ func killAfter(pids []int, grace time.Duration) {
 }
 
 // sendOrHold runs send now, or keeps it for the first draw while an agent is
-// starting. Other programs get keys at once: a shell or `cat` may wait silently
-// for input and would never draw.
+// starting. nvim gets keys at once: holding is for programs that lose input
+// typed before they start.
 func (s *Session) sendOrHold(send func()) {
 	s.heldMu.Lock()
 	defer s.heldMu.Unlock()
@@ -697,14 +698,16 @@ func (s *Session) rowHasText(y int) bool {
 	return false
 }
 
-// isStopKey is Esc or Ctrl+C, the keys that stop or cancel a program.
+// isStopKey is Esc or Ctrl+C, the keys that stop or cancel a program. Caps
+// lock and num lock don't change what the key means.
 func isStopKey(k uv.KeyEvent) bool {
 	key := k.Key()
 	if key.Code == uv.KeyEscape {
 		return true
 	}
+	mods := key.Mod &^ (uv.ModCapsLock | uv.ModNumLock | uv.ModScrollLock)
 
-	return key.Code == 'c' && key.Mod == uv.ModCtrl
+	return key.Code == 'c' && mods == uv.ModCtrl
 }
 
 // reap waits for the program to exit, so Close knows when it is gone.

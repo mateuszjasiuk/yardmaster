@@ -554,9 +554,10 @@ type Model struct {
 	// when nothing is loading any more, so no timer runs at rest.
 	loadingTicking bool
 
-	// scanFailed is set when the first deck scan fails, which ends the
-	// "scanning" sign; the bar shows the error.
-	scanFailed bool
+	// firstScanFailed is set while the deck has never loaded because its
+	// first scan failed, which ends the "scanning" sign; the bar shows the
+	// error.
+	firstScanFailed bool
 
 	// agentProviders is the normalized provider palette. Legacy/direct configs
 	// remain Claude-only through the controller's normalization.
@@ -1428,12 +1429,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.setError("load error: " + msg.err.Error())
-			m.scanFailed = !m.groupsLoaded
+			m.firstScanFailed = !m.groupsLoaded
 			return m, nil
 		}
 		firstLoad := !m.groupsLoaded
 		m.groups = msg.groups
-		m.groupsLoaded = true
+		m.groupsLoaded, m.firstScanFailed = true, false
 		m.recomputeMatches()
 		m.recomputeActive()
 		m.computeRecentRanks()
@@ -1447,6 +1448,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
 
 	case loadingTickMsg:
+		// The restore can only end here: its panes' first draws don't send a
+		// message of their own.
 		var restoredFlash tea.Cmd
 		m, restoredFlash = m.finishRestore()
 		// Re-arm only while something is still loading, so the timer stops on

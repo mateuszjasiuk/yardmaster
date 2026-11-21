@@ -467,6 +467,21 @@ func TestFailedFirstScanEndsTheScanningSign(t *testing.T) {
 	}
 }
 
+func TestScanThatWorksAfterAFailedOneClearsTheFailure(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+	mm, _ := m.Update(testWindowSize())
+	m = mm.(Model)
+	mm, _ = m.update(loadedMsg{err: errors.New("permission denied")})
+	m = mm.(Model)
+
+	mm, _ = m.update(loadedMsg{groups: nil})
+	m = mm.(Model)
+
+	if screen := screenText(t, m); strings.Contains(screen, "scan failed") || !strings.Contains(screen, "no repos under root") {
+		t.Errorf("a scan that worked should replace the failure:\n%s", screen)
+	}
+}
+
 func TestFirstFrameBeforeTheWindowSizeIsEmpty(t *testing.T) {
 	m := New(&Controller{}, session.NewManager())
 

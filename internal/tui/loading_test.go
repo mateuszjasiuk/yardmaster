@@ -26,6 +26,19 @@ func silentSession(t *testing.T, kind session.Kind) *session.Session {
 	return s
 }
 
+// eventually polls cond until it holds, or fails with what.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting until %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// loadingModel is the sample deck with the default keys, for the restart hint.
 func loadingModel() Model {
 	m := sampleModel()
 	m.keys = config.Default().Keys
@@ -37,9 +50,10 @@ func TestStartingSignWaitsBeforeShowing(t *testing.T) {
 	m := loadingModel()
 	s := silentSession(t, session.Agent)
 
-	if got := m.startingSignAfter(s, 100*time.Millisecond); got != "" {
-		t.Errorf("a pane that just started shows %q, want nothing yet", got)
+	if showsSign(s) {
+		t.Error("a pane that just started shows its sign; want nothing for 150 ms")
 	}
+	eventually(t, "the sign shows after the delay", func() bool { return showsSign(s) })
 	if got := ansi.Strip(m.startingSignAfter(s, time.Second)); !strings.HasSuffix(got, " starting claude…") {
 		t.Errorf("after a second the sign is %q", got)
 	}
@@ -58,13 +72,38 @@ func TestStartingSignAddsSecondsThenSaysStillStarting(t *testing.T) {
 	}
 }
 
-func TestStartingSignHasNoRestartHintOutsideAgents(t *testing.T) {
+func TestStartingSignHasNoRestartHintForNvim(t *testing.T) {
 	m := loadingModel()
-	s := silentSession(t, session.Terminal)
+	s := silentSession(t, session.Editor)
 
 	got := ansi.Strip(m.startingSignAfter(s, 34*time.Second))
-	if !strings.Contains(got, "still starting terminal…") || strings.Contains(got, "restart") {
-		t.Errorf("a slow terminal's sign is %q", got)
+	if !strings.Contains(got, "still starting nvim…") || strings.Contains(got, "restart") {
+		t.Errorf("a slow nvim's sign is %q", got)
+	}
+}
+
+func TestSilentTerminalShowsItsOwnScreen(t *testing.T) {
+	s := silentSession(t, session.Terminal)
+	time.Sleep(2 * startingSignDelay)
+
+	if showsSign(s) {
+		t.Error("a terminal that has not drawn shows a sign; a shell may never draw")
+	}
+}
+
+func TestStartingSignFitsANarrowPane(t *testing.T) {
+	m := loadingModel()
+	s, err := session.StartSpec(session.Spec{Kind: session.Agent, Argv: []string{"sleep", "30"}, Provider: agent.Claude}, t.TempDir(), 12, 4, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	eventually(t, "the sign shows", func() bool { return showsSign(s) })
+
+	for _, line := range strings.Split(m.paneScreen(s), "\n") {
+		if w := ansi.StringWidth(line); w > 12 {
+			t.Errorf("a sign line is %d cells wide in a 12-cell pane: %q", w, ansi.Strip(line))
+		}
 	}
 }
 
@@ -172,16 +211,17 @@ func TestNotificationZoneStaysClickableBesideTheRestoreSign(t *testing.T) {
 	m.attention = map[int]attnEntry{1: {level: attnDone, key: "r/slow"}}
 	m.width = 160
 
-	z := m.barRightZones()
 	bar := ansi.Strip(strings.SplitN(m.renderBar(), "\n", 2)[0])
-	notifAt := strings.Index(bar, "✓")
-	if z.notif == "" || notifAt < 0 {
-		t.Fatalf("no notification zone in %q", bar)
+	notifAt, restoreAt := strings.Index(bar, "✓"), strings.Index(bar, "restoring")
+	if notifAt < 0 || restoreAt < 0 {
+		t.Fatalf("the bar lacks the restore sign or the notifications: %q", bar)
 	}
-	if !m.notifZoneAt(len([]rune(bar[:notifAt])), 0) {
+	notifCol, restoreCol := len([]rune(bar[:notifAt])), len([]rune(bar[:restoreAt]))
+
+	if !m.notifZoneAt(notifCol, 0) {
 		t.Errorf("a click on the ✓ in %q misses the notification zone", bar)
 	}
-	if m.notifZoneAt(len([]rune(bar[:strings.Index(bar, "restoring")])), 0) {
+	if m.notifZoneAt(restoreCol, 0) {
 		t.Error("a click on the restore sign opens the notifications")
 	}
 }
@@ -194,5 +234,32 @@ func TestRestoreStopsWaitingForAPaneThatHangs(t *testing.T) {
 	m, cmd := m.finishRestore()
 	if cmd == nil || m.restoring != nil {
 		t.Error("the restore should end after startingTooLong, even with a pane still starting")
+	}
+}
+
+func TestRestoreNamesTheWorkspacesThatFailed(t *testing.T) {
+	m := loadingModel()
+	ready := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
+	failed := openAgent(t, m, "r/failed", "/usr/bin/true")
+	waitStarted(t, ready.Agents[0])
+	waitStarted(t, failed.Agents[0])
+	m.restoring, m.restoreSince = []string{"r/ready", "r/failed"}, time.Now()
+
+	m, _ = m.finishRestore()
+
+	if m.status != "restored 1 of 2 workspaces" {
+		t.Errorf("flash = %q, want the failed workspace left out of the count", m.status)
+	}
+}
+
+func TestRestoreKeepsAnErrorOnTheBar(t *testing.T) {
+	m := loadingModel()
+	m.restoring, m.restoreSince = []string{"r/closed"}, time.Now()
+	m.setError("restore error (r/x): gone")
+
+	m, cmd := m.finishRestore()
+
+	if cmd != nil || m.status != "restore error (r/x): gone" || m.restoring != nil {
+		t.Errorf("status = %q; the restore should end without covering the error", m.status)
 	}
 }

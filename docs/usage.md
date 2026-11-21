@@ -14,7 +14,8 @@ nothing until a workspace is active).
 
 At startup the deck shows `⠹ scanning repos…` until git has looked at every worktree. ym then
 reopens the worktrees you had open, and the bar shows `⠹ restoring 3 of 14…` until each one's
-nvim, agents and terminals have drawn; then it says `restored 14 workspaces` (or after 30 s, when a pane still has not drawn).
+nvim and agents have drawn; then it says `restored 14 workspaces`, or `restored 12 of 14
+workspaces` when some failed to start. It stops waiting after 30 s.
 
 ## The deck
 
@@ -64,7 +65,7 @@ Pressing **enter** on a worktree starts nvim, an agent from `agents.default` and
 that worktree, and drops you into the nvim view. Sessions keep running: switching never relaunches
 them, and they last for ym's lifetime.
 
-A pane whose program has not drawn yet shows `⠹ starting claude…` in its middle (after 150 ms, so
+An agent or nvim pane that has not drawn yet shows `⠹ starting claude…` in its middle (after 150 ms, so
 a fast start shows nothing). The seconds appear after 5 s, and after 30 s it says `still
 starting` and how to restart the agent. Keys you type into a starting agent wait and are sent
 once it has drawn (`3 keys waiting`); `esc` or `ctrl+c` drops them and goes through at once. A

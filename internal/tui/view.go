@@ -636,54 +636,38 @@ type barRight struct {
 }
 
 // barRightZones assembles the bar's right side and locates its clickable zones.
-// The right side is the notification zone (with a 3-column gap) followed by the
-// workspace context label, with a 2-column trailing pad when anything is shown —
-// exactly what renderBar draws. The usage and pane segments each lead the context
-// label on their own screen (they never coexist), so both begin where the label
-// does.
+// The right side is the restore sign and the notification zone (each with a
+// 3-column gap) followed by the workspace context label, with a 2-column
+// trailing pad when anything is shown — exactly what renderBar draws. The usage
+// and pane segments each lead the context label on their own screen (they never
+// coexist), so both begin where the label does.
 func (m Model) barRightZones() barRight {
 	z := barRight{notif: m.renderNotifZone()}
 	restoring := m.restoringSign()
 	label := m.barContextLabel()
 	fullLabel := label
 	available := max(0, m.width-lipgloss.Width(m.renderBarLeft())-1)
-	assemble := func() string {
-		text := ""
-		if restoring != "" {
-			text = restoring + "   "
-		}
-		if z.notif != "" {
-			text += z.notif + "   "
-		}
-		text += label
-		if text != "" {
-			text += "  "
-		}
-		return text
+
+	// Narrow bars drop parts in this order: the restore sign (the strip's …
+	// marks still show what is starting), then the volatile usage/agent/pane
+	// facts before stable identity, then the notifications, then the label's end.
+	tooWide := func() bool { return lipgloss.Width(barRightText(restoring, z.notif, label)) > available }
+	if tooWide() {
+		restoring = ""
 	}
-	if lipgloss.Width(assemble()) > available {
-		restoring = "" // assemble drops it now; the strip's … marks still show what is starting
-	}
-	if lipgloss.Width(assemble()) > available && m.current != nil {
-		// Volatile usage/agent/pane facts disappear before stable identity.
+	if tooWide() && m.current != nil {
 		label = dimStyle.Render(m.current.repo + " / " + m.current.worktree)
 	}
-	if lipgloss.Width(assemble()) > available {
+	if tooWide() {
 		z.notif = ""
 	}
-	if lipgloss.Width(assemble()) > available {
+	if tooWide() {
 		label = ansi.Truncate(label, max(0, available-2), "…")
 	}
-	z.text = assemble()
+	z.text = barRightText(restoring, z.notif, label)
 
-	z.notifStart = m.width - lipgloss.Width(z.text)
-	if restoring != "" {
-		z.notifStart += lipgloss.Width(restoring + "   ")
-	}
-	labelStart := z.notifStart
-	if z.notif != "" {
-		labelStart += lipgloss.Width(z.notif + "   ")
-	}
+	z.notifStart = m.width - lipgloss.Width(z.text) + lipgloss.Width(withBarGap(restoring))
+	labelStart := z.notifStart + lipgloss.Width(withBarGap(z.notif))
 	if label == fullLabel {
 		if seg, ok := m.usageSegment(); ok {
 			z.usage, z.usageStart = seg, labelStart
@@ -693,6 +677,26 @@ func (m Model) barRightZones() barRight {
 		}
 	}
 	return z
+}
+
+// barRightText is the bar's right side from its parts, any of which may be "".
+func barRightText(restoring, notif, label string) string {
+	text := withBarGap(restoring) + withBarGap(notif) + label
+	if text == "" {
+		return ""
+	}
+
+	return text + "  "
+}
+
+// withBarGap is part followed by the 3-column gap between right-side parts, or
+// "" for an empty part.
+func withBarGap(part string) string {
+	if part == "" {
+		return ""
+	}
+
+	return part + "   "
 }
 
 // notifZoneAt reports whether bar coordinates (x, y) land on the notification
@@ -1506,7 +1510,7 @@ func (m Model) renderNew(innerW, rows int) []string {
 		if m.scanning() {
 			return append(lines, "   "+m.loadingLine("scanning repos…"))
 		}
-		if m.scanFailed {
+		if m.firstScanFailed {
 			return append(lines, dimStyle.Render("   scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("   no repos under root"))
@@ -1655,7 +1659,7 @@ func (m Model) renderActive(innerW, rows int) []string {
 		if m.scanning() {
 			return append(lines, m.loadingLine("scanning worktrees…"))
 		}
-		if m.scanFailed {
+		if m.firstScanFailed {
 			return append(lines, dimStyle.Render("scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("no workspaces yet — pick a repo above to create one"))

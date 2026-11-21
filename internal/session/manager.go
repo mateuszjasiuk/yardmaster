@@ -3,6 +3,7 @@ package session
 import (
 	"errors"
 	"io"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -130,13 +131,13 @@ func (w *Workspace) all() []*Session {
 
 // Starting reports whether any of the workspace's programs has not drawn yet.
 func (w *Workspace) Starting() bool {
-	for _, s := range w.all() {
-		if s.Starting() {
-			return true
-		}
-	}
+	return slices.ContainsFunc(w.all(), (*Session).Starting)
+}
 
-	return false
+// FailedToStart reports whether any of the workspace's programs exited before
+// it drew anything.
+func (w *Workspace) FailedToStart() bool {
+	return slices.ContainsFunc(w.all(), (*Session).ExitedBeforeStart)
 }
 
 // Manager owns the live Workspace for every activated worktree, keyed by a

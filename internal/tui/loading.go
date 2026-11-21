@@ -2,9 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mateuszjasiuk/yardmaster/internal/config"
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
@@ -30,6 +32,7 @@ type loadingTickMsg struct{}
 // wait costs a handful of redraws per second.
 const loadingTickInterval = 120 * time.Millisecond
 
+// scheduleLoadingTick arms one spinner tick.
 func scheduleLoadingTick() tea.Cmd {
 	return tea.Tick(loadingTickInterval, func(time.Time) tea.Msg { return loadingTickMsg{} })
 }
@@ -54,7 +57,7 @@ func (m Model) loading() bool {
 
 // scanning reports whether the deck is still waiting for its first scan.
 func (m Model) scanning() bool {
-	return m.screen != screenSetup && !m.groupsLoaded && !m.scanFailed
+	return m.screen != screenSetup && !m.groupsLoaded && !m.firstScanFailed
 }
 
 // spinner is the current spinner frame. Every spinner shows the same frame,
@@ -81,8 +84,12 @@ func (m Model) paneScreen(s *session.Session) string {
 	}
 
 	w, h := s.Size()
+	lines := strings.Split(m.startingSign(s), "\n")
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, w, "…") // a narrow split pane must not grow
+	}
 
-	return centerBlock(m.startingSign(s), w, h)
+	return centerBlock(strings.Join(lines, "\n"), w, h)
 }
 
 // showsSign reports whether a pane shows its starting sign instead of the
@@ -109,12 +116,9 @@ func (m Model) startingSign(s *session.Session) string {
 	return m.startingSignAfter(s, time.Since(s.StartedAt()))
 }
 
-// startingSignAfter is the sign of a starting pane that has waited this long.
+// startingSignAfter is the sign of a starting pane that has waited this long;
+// showsSign has already checked the delay.
 func (m Model) startingSignAfter(s *session.Session, waited time.Duration) string {
-	if waited < startingSignDelay {
-		return ""
-	}
-
 	text := "starting " + paneProgram(s) + "…"
 	if waited >= startingTooLong {
 		text = "still " + text
@@ -140,16 +144,14 @@ func (m Model) restartHint() string {
 	return dimStyle.Render(m.keys.CommandPalette + " then \"restart agent\"")
 }
 
-// paneProgram names what runs in a pane, in the words the user knows it by.
+// paneProgram names what runs in a starting pane, in the words the user knows
+// it by. Terminals are never starting.
 func paneProgram(s *session.Session) string {
-	switch s.Kind {
-	case session.Editor:
+	if s.Kind == session.Editor {
 		return "nvim"
-	case session.Terminal:
-		return "terminal"
-	default:
-		return normalizedProvider(s.Provider).String()
 	}
+
+	return normalizedProvider(s.Provider).String()
 }
 
 // restoringSign is the bar's sign while restored workspaces come up, or "".
@@ -158,37 +160,57 @@ func (m Model) restoringSign() string {
 		return ""
 	}
 
-	return m.loadingLine(fmt.Sprintf("restoring %d of %d…", m.restoredCount(), len(m.restoring)))
+	settled, _ := m.restoreProgress()
+
+	return m.loadingLine(fmt.Sprintf("restoring %d of %d…", settled, len(m.restoring)))
 }
 
 // finishRestore ends the restore sign once every restored workspace has come
-// up, and says how many came back. A pane that hangs keeps its own sign, so
-// the restore gives up waiting for it after startingTooLong; the tick would
-// otherwise never stop.
+// up or failed, and says how many came back. A pane that hangs keeps its own
+// sign, so the restore gives up waiting for it after startingTooLong; the tick
+// would otherwise never stop. An error on the bar stays: the flash would hide it.
 func (m Model) finishRestore() (Model, tea.Cmd) {
 	total := len(m.restoring)
 	if total == 0 {
 		return m, nil
 	}
+
+	settled, restored := m.restoreProgress()
 	timedOut := time.Since(m.restoreSince) >= startingTooLong
-	if !timedOut && m.restoredCount() < total {
+	if !timedOut && settled < total {
 		return m, nil
 	}
 	m.restoring = nil
+	if m.statusLevel == statusError {
+		return m, nil
+	}
 
-	return m, m.flashCmd("restored " + pluralize(total, "workspace"))
+	text := "restored " + pluralize(total, "workspace")
+	if restored < total {
+		text = fmt.Sprintf("restored %d of %d workspaces", restored, total)
+	}
+
+	return m, m.flashCmd(text)
 }
 
-// restoredCount is how many restored workspaces have come up: none of their
-// panes is still starting. A workspace closed meanwhile counts as done.
-func (m Model) restoredCount() int {
-	n := 0
+// restoreProgress counts the restored workspaces whose panes are no longer
+// starting (settled), and of those the ones where every program started
+// (restored). A workspace closed meanwhile counts as both.
+func (m Model) restoreProgress() (settled, restored int) {
 	for _, key := range m.restoring {
 		ws, ok := m.openWorkspace(key)
-		if !ok || !ws.Starting() {
-			n++
+		if !ok {
+			settled, restored = settled+1, restored+1
+			continue
+		}
+		if ws.Starting() {
+			continue
+		}
+		settled++
+		if !ws.FailedToStart() {
+			restored++
 		}
 	}
 
-	return n
+	return settled, restored
 }

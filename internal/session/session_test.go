@@ -1251,3 +1251,26 @@ func TestOutputBeforeExitIsNotAFailedStart(t *testing.T) {
 		t.Error("a program that printed its error counts as exited before start")
 	}
 }
+
+func TestTerminalIsNeverStarting(t *testing.T) {
+	s, err := StartSpec(Spec{Kind: Terminal, Argv: []string{"sleep", "5"}}, t.TempDir(), 80, 24, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	if s.Starting() {
+		t.Error("a silent terminal counts as starting; a shell may never draw")
+	}
+}
+
+func TestCtrlCWithCapsLockIsAStopKey(t *testing.T) {
+	s := startAgent(t, `sleep 5`)
+
+	s.SendKey(keyRune('a'))
+	s.SendKey(uv.KeyPressEvent{Code: 'c', Mod: uv.ModCtrl | uv.ModCapsLock})
+
+	if got := s.HeldKeys(); got != 0 {
+		t.Errorf("HeldKeys after Ctrl+C with caps lock = %d, want 0", got)
+	}
+}
