@@ -130,17 +130,17 @@ func (m Model) sideBySideBox(p sessionPane) string {
 // over its own colours, or plain gray text (display.side_by_side_dim).
 func (m Model) sideBySidePane(p sessionPane) string {
 	if p.s == m.activeSession() {
-		return p.s.Render()
+		return m.paneScreen(p.s)
 	}
 
 	if m.sideBySideDim == config.DimGray {
-		lines := splitLines(ansi.Strip(p.s.Render()))
+		lines := splitLines(ansi.Strip(m.paneScreen(p.s)))
 		for i, l := range lines {
 			lines[i] = dimPaneStyle.Render(l)
 		}
 		return strings.Join(lines, "\n")
 	}
-	return faintLines(p.s.Render())
+	return faintLines(m.paneScreen(p.s))
 }
 
 // faintLines turns on the terminal's faint style at the start of each line and

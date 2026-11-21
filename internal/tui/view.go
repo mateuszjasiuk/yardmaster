@@ -163,7 +163,7 @@ func (m Model) View() tea.View {
 	default:
 		s := m.activeSession()
 		if p, ok := m.paneOf(s); ok {
-			body = m.appendSessionFooter(m.paneFrame(p.s.Render(), p, accentStyle))
+			body = m.appendSessionFooter(m.paneFrame(m.paneScreen(p.s), p, accentStyle))
 			cursor = m.sessionCursor()
 		}
 	}
@@ -2355,7 +2355,7 @@ func (m Model) renderTermPanes(w, h int) string {
 		return ""
 	}
 	if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-		return ws.Terms[ws.ActiveTerm].Render()
+		return m.paneScreen(ws.Terms[ws.ActiveTerm])
 	}
 	return m.renderPaneNode(ws.TermLayout, w, h, ws)
 }
@@ -2370,7 +2370,7 @@ func (m Model) renderPaneNode(node *session.PaneNode, w, h int, ws *session.Work
 		if node.Idx >= len(ws.Terms) {
 			return ""
 		}
-		return ws.Terms[node.Idx].Render()
+		return m.paneScreen(ws.Terms[node.Idx])
 	}
 
 	if node.Dir == session.SplitV {
@@ -2771,7 +2771,7 @@ func (m Model) openStripGroup(g agentGroup) (tea.Model, tea.Cmd) {
 // shows, else in the accent colour. idle is the style of a worktree with
 // nothing to show.
 func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt, nameSt lipgloss.Style) {
-	sign, signSt = attnSign(g.attn, g.busy, idle)
+	sign, signSt = attnSign(g.attn, g.busy, g.starting, idle)
 	if sign == "" && g.flag != nil {
 		signSt = idle.Foreground(g.flag)
 	}
@@ -2787,8 +2787,8 @@ func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt
 }
 
 // attnSign is the sign of an agent's state and its style: "!" waiting, "✓" done,
-// "●" working, else no sign, in the seen or the idle style.
-func attnSign(attn attnLevel, busy bool, idle lipgloss.Style) (string, lipgloss.Style) {
+// "●" working, "…" starting, else no sign, in the seen or the idle style.
+func attnSign(attn attnLevel, busy, starting bool, idle lipgloss.Style) (string, lipgloss.Style) {
 	switch {
 	case attn == attnWaiting:
 		return "!", boldRed
@@ -2796,6 +2796,8 @@ func attnSign(attn attnLevel, busy bool, idle lipgloss.Style) (string, lipgloss.
 		return "✓", boldGreen
 	case busy:
 		return "●", dirtyStyle
+	case starting:
+		return "…", idle
 	case attn == attnSeen:
 		return "", nameStyle
 	}

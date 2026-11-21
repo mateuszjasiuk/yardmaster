@@ -348,7 +348,7 @@ func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 			mark = managerIcon
 		}
 		active := m.isActiveSession(*a)
-		sign, signSt := attnSign(a.attn, a.busy, panelIdleStyle)
+		sign, signSt := attnSign(a.attn, a.busy, a.starting, panelIdleStyle)
 		blocks = append(blocks, sidePanelBlock{
 			look: sidePanelBoxLook{
 				heavy: active, sign: sign, mark: mark, seen: a.attn == attnSeen,

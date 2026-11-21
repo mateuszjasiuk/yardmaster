@@ -1181,14 +1181,17 @@ func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
 	dir := t.TempDir()
 	specs := []session.Spec{
-		{Kind: session.Agent, Title: "one", Argv: []string{"/usr/bin/true"}, Provider: agent.Claude, SessionID: "claude-id"},
-		{Kind: session.Agent, Title: "two", Argv: []string{"/usr/bin/true"}, Provider: agent.Codex, SessionID: "codex-id"},
+		{Kind: session.Agent, Title: "one", Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Claude, SessionID: "claude-id"},
+		{Kind: session.Agent, Title: "two", Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Codex, SessionID: "codex-id"},
 	}
 	ws, err := m.mgr.Activate("r/w", dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer m.mgr.CloseAll()
+	for _, a := range ws.Agents {
+		waitStarted(t, a) // an agent that exits first would sort to the top of the board
+	}
 	ws.ActiveAgent = 1
 	old := ws.Agents[1]
 	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w", path: dir, ws: ws}
@@ -1863,11 +1866,14 @@ func activateAgents(t *testing.T, m Model, key, dir string, n int) *session.Work
 	t.Helper()
 	specs := make([]session.Spec, n)
 	for i := range specs {
-		specs[i] = session.Spec{Kind: session.Agent, Argv: []string{"/usr/bin/true"}, Provider: agent.Claude}
+		specs[i] = session.Spec{Kind: session.Agent, Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Claude}
 	}
 	ws, err := m.mgr.Activate(key, dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, a := range ws.Agents {
+		waitStarted(t, a)
 	}
 	return ws
 }

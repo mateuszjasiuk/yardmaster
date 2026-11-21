@@ -295,9 +295,11 @@ func TestSidePanelBoxOpensItsSession(t *testing.T) {
 func TestSidePanelGivesEachSessionABoxAndMarksTheActiveOne(t *testing.T) {
 	m := stripModel(t, 140, "alpha") // alpha is current
 	m.sidePanel = true
-	if _, err := m.mgr.SpawnAgent("repo/alpha", t.TempDir(), session.Spec{Kind: session.Agent, Title: "second", Argv: []string{"cat"}}, 10, 10); err != nil {
+	second, err := m.mgr.SpawnAgent("repo/alpha", t.TempDir(), session.Spec{Kind: session.Agent, Title: "second", Argv: []string{"sh", "-c", "echo ready; exec cat"}}, 10, 10)
+	if err != nil {
 		t.Fatal(err)
 	}
+	waitStarted(t, second)
 	m.current.ws.ActiveAgent = 0
 
 	want := panelLines("", "  repo", activeBoxRows("claude", "alpha"), boxRows("second", "alpha"))

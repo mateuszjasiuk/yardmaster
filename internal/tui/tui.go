@@ -258,6 +258,7 @@ type boardRow struct {
 	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
 	busy     bool      // the agent is working
+	starting bool      // the agent has not drawn yet
 	stage    string    // what the session says it is at
 }
 
@@ -2163,6 +2164,7 @@ type agentGroup struct {
 	agents                    []boardRow
 	attn                      attnLevel   // highest attention among agents
 	busy                      bool        // some agent is working
+	starting                  bool        // some agent has not drawn yet
 	flag                      color.Color // the highlight key's colour; nil when not flagged
 	opened                    int64
 	account                   string           // Claude account; set by stripGroups only
@@ -2193,19 +2195,24 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	for i, a := range ws.Agents {
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
+		status := m.boardStatus(pid, attn)
+		switch {
+		case a.ExitedBeforeStart():
+			attn = attnWaiting // a dead agent needs the user to restart it
+			status = "exited before it started"
+		case a.Starting():
+			status = "starting…"
+		}
 		busy := m.agentStatus[pid].Status == "busy"
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: m.boardStatus(pid, attn), attn: attn, busy: busy, stage: a.Stage,
+			status: status, attn: attn, busy: busy, starting: a.Starting(), stage: a.Stage,
 		})
-		if attn > g.attn {
-			g.attn = attn
-		}
-		if busy {
-			g.busy = true
-		}
+		g.attn = max(g.attn, attn)
+		g.busy = g.busy || busy
+		g.starting = g.starting || a.Starting()
 	}
 	return g, true
 }

@@ -107,7 +107,7 @@ func (m Model) sessionCursor() *tea.Cursor {
 		return nil
 	}
 	cx, cy, visible := p.s.Cursor()
-	if !visible {
+	if !visible || m.startingSign(p.s) != "" {
 		return nil
 	}
 	return tea.NewCursor(p.x+cx, p.y+cy)
