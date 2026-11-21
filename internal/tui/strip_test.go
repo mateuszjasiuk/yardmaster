@@ -139,21 +139,21 @@ func TestHighlightHandsOutColoursInOrder(t *testing.T) {
 
 func TestAgentStripShowsFlagColours(t *testing.T) {
 	m := stripModel(t, 120, "alpha", "beta", "gamma") // gamma is current
-	purple := "38;2;199;146;234"                      // the first default flag colour
-	cyan := "38;2;137;221;255"                        // the second
+	violet := "38;2;187;128;179"                      // the first default flag colour
+	paleBlue := "38;2;178;204;214"                    // the second
 	blue := "38;2;130;170;255"                        // cAccent
 	m.highlighted["repo/alpha"] = 0
 	m.highlighted["repo/gamma"] = 1
 	raw, _ := m.agentStripLayout()
 
-	if st := stripStyleOf(t, raw, "alpha"); !strings.Contains(st, purple) {
+	if st := stripStyleOf(t, raw, "alpha"); !strings.Contains(st, violet) {
 		t.Fatalf("a flagged worktree should show its colour: %q", st)
 	}
-	if st := stripStyleOf(t, raw, "beta"); strings.Contains(st, purple) || strings.Contains(st, cyan) {
+	if st := stripStyleOf(t, raw, "beta"); strings.Contains(st, violet) || strings.Contains(st, paleBlue) {
 		t.Fatalf("an unflagged worktree should have no flag colour: %q", st)
 	}
 	st := stripStyleOf(t, raw, "gamma")
-	if !strings.Contains(st, cyan) || strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
+	if !strings.Contains(st, paleBlue) || strings.Contains(st, blue) || !strings.HasPrefix(st, "\x1b[4;") {
 		t.Fatalf("the flagged current worktree should be underlined in its colour: %q", st)
 	}
 }
@@ -171,7 +171,7 @@ func TestAgentStripStatusWinsOverFlag(t *testing.T) {
 	if row := ansi.Strip(raw); !strings.Contains(row, "! alpha") {
 		t.Fatalf("a waiting flagged worktree should show \"! alpha\": %q", row)
 	}
-	if st := stripStyleOf(t, raw, "!"); strings.Contains(st, "38;2;199;146;234") {
+	if st := stripStyleOf(t, raw, "!"); strings.Contains(st, "38;2;187;128;179") {
 		t.Fatalf("waiting red should win over the flag colour: %q", st)
 	}
 }

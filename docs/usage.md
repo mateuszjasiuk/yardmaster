@@ -5,9 +5,9 @@ Keys below are the defaults; all of them can be changed in [config.md](config.md
 ## The status bar
 
 A pinned status bar sits at the top at all times. It is a row of spaced **Nerd Font** glyphs (a
-Nerd Font is required). The yardmaster is a seedling, lit yellow while you tend the deck and dim
-once you drop into a session; the nvim (code), agent (robot), and term (terminal) icons glow in
-their own colour when active and dim otherwise (faint until a workspace exists). When an agent is
+Nerd Font is required). The yardmaster is a seedling, lit cyan while you tend the deck and dim
+once you drop into a session; the nvim (code) and term (terminal) icons glow blue and the agent
+(robot) purple when active, and dim otherwise (faint until a workspace exists). When an agent is
 waiting on your input, the `! N` badge on the right signals it. The active repo / worktree shows
 on the right. You can **click** any of the four icons to jump to that view (the session icons do
 nothing until a workspace is active).

@@ -69,8 +69,8 @@ type rgb struct{ r, g, b float64 }
 
 var (
 	mBg     = rgb{15, 17, 26}    // #0F111A background
-	mFaint  = rgb{70, 75, 93}    // #464B5D disabled
-	mDim    = rgb{113, 124, 180} // #717CB4 secondary text
+	mFaint  = rgb{75, 78, 88}    // #4B4E58 disabled
+	mDim    = rgb{143, 147, 162} // #8F93A2 secondary text
 	mBlue   = rgb{130, 170, 255} // #82AAFF
 	mPurple = rgb{199, 146, 234} // #C792EA
 	mYellow = rgb{255, 203, 107} // #FFCB6B

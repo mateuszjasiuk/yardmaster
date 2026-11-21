@@ -19,17 +19,20 @@ import (
 	"github.com/mateuszjasiuk/yardmaster/internal/usage"
 )
 
-// Palette (material.nvim, Deep Ocean).
+// Palette (material.nvim, Deep Ocean). Each hue has one role; the role table
+// in docs/design-language.md says which.
 var (
-	cAccent = lipgloss.Color("#82AAFF") // blue
-	cPurple = lipgloss.Color("#C792EA") // purple
-	cGreen  = lipgloss.Color("#C3E88D") // green
-	cYellow = lipgloss.Color("#FFCB6B") // yellow
-	cRed    = lipgloss.Color("#FF5370") // error red
+	cAccent = lipgloss.Color("#82AAFF") // blue: focus
+	cPurple = lipgloss.Color("#C792EA") // purple: identity
+	cCyan   = lipgloss.Color("#89DDFF") // cyan: place
+	cOrange = lipgloss.Color("#F78C6C") // orange: grouping
+	cGreen  = lipgloss.Color("#C3E88D") // green: status done
+	cYellow = lipgloss.Color("#FFCB6B") // yellow: status working
+	cRed    = lipgloss.Color("#FF5370") // red: status waiting, errors
 	cFg     = lipgloss.Color("#EEFFFF") // foreground
-	cFg3    = lipgloss.Color("#A6ACCD") // text
-	cDim    = lipgloss.Color("#717CB4") // secondary text
-	cFaint  = lipgloss.Color("#464B5D") // disabled
+	cFg3    = lipgloss.Color("#B0B3BE") // text
+	cDim    = lipgloss.Color("#8F93A2") // secondary text
+	cFaint  = lipgloss.Color("#4B4E58") // disabled
 	cSelBg  = lipgloss.Color("#1F2233") // selection
 	// cStackBg sits behind a gh stack in the agent strip, so you can see where
 	// it ends.
@@ -42,7 +45,6 @@ var (
 	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(cPurple)
 	countStyle   = lipgloss.NewStyle().Foreground(cDim)
 	repoHdrStyle = lipgloss.NewStyle().Bold(true).Foreground(cFg)
-	repoStyle    = lipgloss.NewStyle().Foreground(cFg)
 	nameStyle    = lipgloss.NewStyle().Foreground(cFg)
 	dimStyle     = lipgloss.NewStyle().Foreground(cDim)
 	liveStyle    = lipgloss.NewStyle().Foreground(cGreen)
@@ -63,10 +65,19 @@ var (
 	// kept distinct from the ahead/behind hues it sits beside in the row cluster.
 	stackWaitStyle = lipgloss.NewStyle().Foreground(cYellow)
 
-	// Non-bold accent/purple foregrounds for the bar's volatile context
-	// segments (pane indicator, agent position) and the accent split divider.
+	// Non-bold accent foreground for the bar's pane indicator and the accent
+	// split divider.
 	accentStyle = lipgloss.NewStyle().Foreground(cAccent)
-	purpleStyle = lipgloss.NewStyle().Foreground(cPurple)
+	// mergedStyle is a merged gh stack branch: purple like GitHub's "merged"
+	// label, not the identity role.
+	mergedStyle = lipgloss.NewStyle().Foreground(cPurple)
+
+	// Role styles: who a session is, where it lives (a repo, bold in a
+	// header), and what it belongs to (a feature, a gh stack, a manager).
+	identityStyle = lipgloss.NewStyle().Foreground(cPurple)
+	placeStyle    = lipgloss.NewStyle().Foreground(cCyan)
+	placeHdrStyle = placeStyle.Bold(true)
+	groupStyle    = lipgloss.NewStyle().Foreground(cOrange)
 
 	// Bold glyph styles, cached rather than rebuilt per frame: the status-bar
 	// tab icons (a lit accent per tab plus the shared dim/faint states) and the
@@ -78,7 +89,7 @@ var (
 	boldGreen  = lipgloss.NewStyle().Bold(true).Foreground(cGreen)
 	boldPurple = lipgloss.NewStyle().Bold(true).Foreground(cPurple)
 	boldAccent = lipgloss.NewStyle().Bold(true).Foreground(cAccent)
-	boldYellow = lipgloss.NewStyle().Bold(true).Foreground(cYellow)
+	boldCyan   = lipgloss.NewStyle().Bold(true).Foreground(cCyan)
 	boldRed    = lipgloss.NewStyle().Bold(true).Foreground(cRed)
 	// dimPaneStyle draws the side without focus in gray.
 	dimPaneStyle = lipgloss.NewStyle().Foreground(cDim)
@@ -238,7 +249,7 @@ const (
 // renderBar draws the pinned status bar, the agent strip's row while it shows,
 // and a light separator line unless the panes have boxes (barHeight rows
 // total). The four left icons (yardmaster, nvim, claude, term) are bold Nerd
-// Font glyphs evenly spaced: the yardmaster is a stable seedling, lit yellow
+// Font glyphs evenly spaced: the yardmaster is a stable seedling, lit cyan
 // while the deck is active and dim once you drop into a session; the session
 // icons glow in their own colour when active and dim otherwise (faint until a
 // workspace exists). Agent attention lives in the "! N" badge, not the icons.
@@ -333,7 +344,7 @@ func (m Model) barContextLabel() string {
 			if n > 1 {
 				identity = fmt.Sprintf("%d/%d ", clamp(ws.ActiveAgent, 0, n-1)+1, n) + identity
 			}
-			s = purpleStyle.Render(truncateTo(identity, 32)) + sep + s
+			s = identityStyle.Render(truncateTo(identity, 32)) + sep + s
 		}
 	}
 	if seg, ok := m.usageSegment(); ok {
@@ -551,12 +562,12 @@ func (m Model) barZones() []barZone {
 	}
 
 	// Yardmaster: a stable seedling that follows the same lit-when-active rule as
-	// the other tabs — yellow while the deck is active, dim otherwise (never
+	// the other tabs — cyan while the deck is active, dim otherwise (never
 	// faint: the deck is always reachable). Agent attention lives in the ! badge
 	// on the right, so the icon never reacts to agent status.
 	ymStyle := boldDim
 	if m.screen == screenPicker {
-		ymStyle = boldYellow
+		ymStyle = boldCyan
 	}
 	ym := ymStyle.Render(m.destinationGlyph(screenPicker))
 
@@ -567,7 +578,7 @@ func (m Model) barZones() []barZone {
 
 	zones := []barZone{
 		{screenPicker, ym},
-		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldGreen, m.screen == screenEditor || joined, has)},
+		{screenEditor, glyph(m.destinationGlyph(screenEditor), boldAccent, m.screen == screenEditor || joined, has)},
 		{screenAgent, agent},
 		{screenTerminal, glyph(m.destinationGlyph(screenTerminal), boldAccent, m.screen == screenTerminal, has)},
 	}
@@ -827,7 +838,7 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 		left += m.boardWorktreeStyle(r.key).Render(r.key) + dimStyle.Render(" · ")
 	}
 	left += helpKeyStyle.Render(normalizedProvider(r.provider).String()) +
-		dimStyle.Render(" · ") + nameStyle.Render(r.label)
+		dimStyle.Render(" · ") + identityStyle.Render(r.label)
 	status := truncateTo(r.status, max(0, innerW-lipgloss.Width(left)-2))
 	statusSt := dimStyle
 	switch {
@@ -1455,7 +1466,7 @@ func (m Model) renderNew(innerW, rows int) []string {
 		if i == m.newCursor && m.focus == focusNew {
 			lines = append(lines, selBar("   "+name, innerW))
 		} else {
-			lines = append(lines, repoStyle.Render("   "+name))
+			lines = append(lines, placeStyle.Render("   "+name))
 		}
 	}
 	return lines
@@ -1463,7 +1474,7 @@ func (m Model) renderNew(innerW, rows int) []string {
 
 // renderCreateForm draws the new-worktree naming form inside the NEW box.
 func (m Model) renderCreateForm() []string {
-	label := dimStyle.Render("new worktree in ") + repoHdrStyle.Render(m.pendingRepo.Name)
+	label := dimStyle.Render("new worktree in ") + placeHdrStyle.Render(m.pendingRepo.Name)
 	hint := keyhint("enter", "create") + helpStyle.Render("   ·   ") + keyhint("esc", "cancel")
 	return []string{
 		header("new", -1),
@@ -1507,14 +1518,14 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 			// The previous repo's pending rows close out its group before the next
 			// header opens.
 			flushPending(lastRepo)
-			lines = append(lines, repoHdrStyle.Render(it.repo.Name))
+			lines = append(lines, placeHdrStyle.Render(it.repo.Name))
 			rowItem = append(rowItem, -1)
 			lastRepo = it.repo.Name
 			lastStack = ""
 		}
 		pos, inStack := m.ghStackPosition(it.repo.Name, it.view.WT.Branch)
 		if inStack && pos.Bottom != lastStack {
-			lines = append(lines, strings.Repeat(" ", activeRowPrefixW)+dimStyle.Render(ghStackIcon+" "+pos.Name()))
+			lines = append(lines, strings.Repeat(" ", activeRowPrefixW)+groupStyle.Render(ghStackIcon+" "+pos.Name()))
 			rowItem = append(rowItem, -1)
 		}
 		lastStack = pos.Bottom
@@ -1539,7 +1550,7 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 			continue
 		}
 		flushed[c.repo] = true
-		lines = append(lines, repoHdrStyle.Render(c.repo))
+		lines = append(lines, placeHdrStyle.Render(c.repo))
 		rowItem = append(rowItem, -1)
 		for _, p := range m.creatingIn(c.repo) {
 			lines = append(lines, m.creatingRow(p, innerW))

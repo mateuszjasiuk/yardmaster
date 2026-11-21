@@ -20,10 +20,9 @@ func TestCachedStylesMatchInline(t *testing.T) {
 		// Bar tab glyphs (barZones): lit accents + shared dim/faint.
 		{"boldDim", boldDim, lipgloss.NewStyle().Bold(true).Foreground(cDim)},
 		{"boldFaint", boldFaint, lipgloss.NewStyle().Bold(true).Foreground(cFaint)},
-		{"boldGreen(tab)", boldGreen, lipgloss.NewStyle().Bold(true).Foreground(cGreen)},
 		{"boldPurple", boldPurple, lipgloss.NewStyle().Bold(true).Foreground(cPurple)},
 		{"boldAccent", boldAccent, lipgloss.NewStyle().Bold(true).Foreground(cAccent)},
-		{"boldYellow", boldYellow, lipgloss.NewStyle().Bold(true).Foreground(cYellow)},
+		{"boldCyan", boldCyan, lipgloss.NewStyle().Bold(true).Foreground(cCyan)},
 		// Attention markers (renderNotifZone / boardAgentLine / activeRow) built
 		// as Foreground(...).Bold(true) inline; caching flips the setter order,
 		// which must not change output.
@@ -31,7 +30,7 @@ func TestCachedStylesMatchInline(t *testing.T) {
 		{"boldGreen(notif)", boldGreen, lipgloss.NewStyle().Foreground(cGreen).Bold(true)},
 		// barContextLabel volatile segments and the accent split divider.
 		{"accentStyle", accentStyle, lipgloss.NewStyle().Foreground(cAccent)},
-		{"purpleStyle", purpleStyle, lipgloss.NewStyle().Foreground(cPurple)},
+		{"identityStyle", identityStyle, lipgloss.NewStyle().Foreground(cPurple)},
 		{"dimStyle(context)", dimStyle, lipgloss.NewStyle().Foreground(cDim)},
 		// Faint split divider reuses barSep (a faint foreground).
 		{"barSep(divider)", barSep, lipgloss.NewStyle().Foreground(cFaint)},

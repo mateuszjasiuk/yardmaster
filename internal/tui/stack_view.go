@@ -1195,7 +1195,7 @@ func (m Model) renderStackStatus(st stack.StackStatus, cursor, h int) string {
 	var rows []string
 
 	// Title: "STACK  <repo> / <wt>" left, "base: <main>" right-justified.
-	left := headerStyle.Render("STACK") + "  " + repoHdrStyle.Render(st.Repo) +
+	left := headerStyle.Render("STACK") + "  " + placeHdrStyle.Render(st.Repo) +
 		dimStyle.Render(" / ") + nameStyle.Render(st.Worktree)
 	right := dimStyle.Render("base: " + st.MainBranch)
 	rows = append(rows, trunc(stackJustify(left, right, innerW)), "")
@@ -1269,7 +1269,7 @@ func (m Model) renderStackSplit(st stack.StackStatus, cursor, h int) string {
 	if zoom {
 		layout = dimStyle.Render("   [zoom] ") + helpKeyStyle.Render("diff")
 	}
-	hdr := headerStyle.Render("STACK") + "  " + repoHdrStyle.Render(st.Repo) +
+	hdr := headerStyle.Render("STACK") + "  " + placeHdrStyle.Render(st.Repo) +
 		dimStyle.Render("/") + nameStyle.Render(st.Worktree) +
 		dimStyle.Render("   base: "+st.MainBranch) + layout
 	rule := diffRuleStyle.Render(strings.Repeat("─", max(1, m.width)))

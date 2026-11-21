@@ -125,22 +125,32 @@ Delight comes from coherence, responsiveness, and small moments of character.
 
 The current palette is material.nvim, Deep Ocean, so ym matches the editor inside it. Preserve its soft, low-glare character and semantic roles.
 
-| Token | Hex | Role |
-|---|---:|---|
-| Ink | `#0F111A` | Dark text on filled accent selections |
-| Primary text | `#EEFFFF` | Names, selected content, primary facts |
-| Secondary text | `#717CB4` | Explanations, metadata, key descriptions |
-| Faint | `#464B5D` | Rules, idle borders, disabled/inert chrome |
-| Accent blue | `#82AAFF` | Focus, keys, interactive affordance, active terminal concepts |
-| Purple | `#C792EA` | Agent identity and panel headings |
-| Green | `#C3E88D` | Healthy, live, ahead, completed, additions |
-| Yellow | `#FFCB6B` | Deck identity, caution, dirty/recent/pending |
-| Red | `#FF5370` | Error, destructive consequence, required attention, removals |
+Each hue has one role, so a colour tells you what kind of thing you look at
+before you read it:
+
+| Role | Token | Hex | Covers |
+|---|---|---:|---|
+| Focus | Accent blue | `#82AAFF` | Focus borders, keys, the cursor, interactive affordance, lit nvim and terminal tabs |
+| Identity | Purple | `#C792EA` | Who: session and agent names, the lit agent tab; panel headings |
+| Place | Cyan | `#89DDFF` | Where: repo names in the side panel, deck and stack view; the lit deck tab |
+| Grouping | Orange | `#F78C6C` | What belongs together: feature `⚑` and gh stack `⛁` headers, the manager `★` |
+| Status: done | Green | `#C3E88D` | Healthy, live, ahead, completed, additions |
+| Status: working | Yellow | `#FFCB6B` | Working, caution, dirty/recent/pending |
+| Status: waiting | Red | `#FF5370` | Error, destructive consequence, required attention, removals |
+| Text | Primary | `#EEFFFF` | Selected content, primary facts |
+| Text | Secondary | `#8F93A2` | Explanations, metadata, key descriptions, a session's stage |
+| Text | Faint | `#4B4E58` | Rules, idle borders, disabled/inert chrome |
+| — | Ink | `#0F111A` | Dark text on filled accent selections |
+
+The text grays are neutral, not blue-gray, so the hues above carry the colour
+of the screen.
 
 Rules:
 
-- Assign color by meaning, not by feature preference.
+- Assign color by meaning, not by feature preference. A new thing on screen takes the hue of its role in the table above.
+- Status colours a sign and a border; it never replaces an identity colour. In the side panel a session's name stays purple whatever its state. The agent strip is the exception: it has no border, so the name itself takes the status colour.
 - The accent border means focus. A faint border means structure without focus.
+- Flag (highlight) colours are the user's own marks, so their defaults avoid every hue in the table above.
 - Selection uses a neutral filled background with bright primary text. Use accent-filled chips only for small binary/segmented choices.
 - Keep large surfaces unfilled so the terminal background remains part of the design.
 - Do not add a new hue until existing semantic roles demonstrably cannot express the state.
@@ -196,7 +206,7 @@ Ask only for information the system cannot infer. Start focus on the field most 
 
 ### Agent strip
 
-After the bar icons, a faint `│` and then every open worktree, separated by `·`. The order is fixed (repos in deck order, worktrees by name) so items never move; only colour and glyph change: yellow working, green `✓` done, red `!` waiting, white seen but not answered, dim idle, underline for the current worktree. With more than one repo open, each repo's worktrees follow its faint name and repos are divided by a faint `│`. Repo names go first when space is short, then names shorten before items drop, and dropped items show as `+N`. The strip uses only space the right-side facts leave free.
+After the bar icons, a faint `│` and then every open worktree, separated by `·`. The order is fixed (repos in deck order, worktrees by name) so items never move; only colour and glyph change: yellow working, green `✓` done, red `!` waiting, white seen but not answered, dim idle, underline for the current worktree. With more than one repo open, each repo's worktrees follow its bold name and repos are divided by a faint `│`. Repo names go first when space is short, then names shorten before items drop, and dropped items show as `+N`. The strip uses only space the right-side facts leave free.
 
 ### Notifications and attention
 

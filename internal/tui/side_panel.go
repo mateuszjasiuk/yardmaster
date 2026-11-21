@@ -294,10 +294,10 @@ func (m Model) sidePanelLeadRows(groups []agentGroup, i int) (lead []sidePanelRo
 	return lead, showsRepo
 }
 
-// sidePanelGroupHeader is the dim header row above a feature's or a gh stack's
-// boxes.
+// sidePanelGroupHeader is the header row above a feature's or a gh stack's
+// boxes, in the grouping colour.
 func sidePanelGroupHeader(name string) sidePanelRow {
-	text := " " + dimStyle.Render(truncateTo(name, sidePanelWidth-1))
+	text := " " + groupStyle.Render(truncateTo(name, sidePanelWidth-1))
 
 	return sidePanelRow{text: padLine(text, sidePanelWidth)}
 }
@@ -312,9 +312,16 @@ const managerIcon = "★"
 // border, and how many worktrees it holds inside.
 func (m Model) stackBox(g *agentGroup) sidePanelBlock {
 	sign, signSt, _ := m.stripLook(*g, panelIdleStyle)
+	bodySt := dimStyle
+	if g.flag != nil {
+		bodySt = bodySt.Foreground(g.flag)
+	}
 
 	return sidePanelBlock{
-		look:  sidePanelBoxLook{sign: sign, signSt: signSt, bodySt: dimStyle},
+		look: sidePanelBoxLook{
+			sign: sign, seen: g.attn == attnSeen,
+			signSt: signSt, titleSt: groupStyle, bodySt: bodySt,
+		},
 		title: ghStackIcon + " " + g.worktree, body: fmt.Sprintf("%d worktrees", len(g.members)),
 		target: sidePanelRow{group: g}, attn: g.attn,
 	}
@@ -336,15 +343,18 @@ func (m Model) sessionBoxes(g *agentGroup) []sidePanelBlock {
 	var blocks []sidePanelBlock
 	for i := range g.agents {
 		a := &g.agents[i]
-		title := a.label
+		mark := ""
 		if g.manager {
-			title = managerIcon + " " + a.label
+			mark = managerIcon
 		}
 		active := m.isActiveSession(*a)
 		sign, signSt := attnSign(a.attn, a.busy, panelIdleStyle)
 		blocks = append(blocks, sidePanelBlock{
-			look:  sidePanelBoxLook{heavy: active, sign: sign, signSt: signSt, bodySt: worktreeSt},
-			title: title, body: worktree, stage: a.stage, target: sidePanelRow{agent: a},
+			look: sidePanelBoxLook{
+				heavy: active, sign: sign, mark: mark, seen: a.attn == attnSeen,
+				signSt: signSt, titleSt: identityStyle, bodySt: worktreeSt,
+			},
+			title: a.label, body: worktree, stage: a.stage, target: sidePanelRow{agent: a},
 			attn: a.attn, active: active,
 		})
 	}
@@ -475,13 +485,16 @@ func (m Model) isActiveSession(a boardRow) bool {
 }
 
 // sidePanelBoxLook is how one box in the side panel looks: its weight, its
-// sign, and the colours of the sign and the body. A box with a sign has its
-// border and title in the sign's colour; a heavy box without one is in the
-// accent colour; any other box has a faint border.
+// sign, a mark before the title (if any, always in the grouping colour), and
+// the colours of the sign, the title and the body. A box with a sign has its
+// border in the sign's colour; a heavy box without one is in the accent
+// colour; a seen box (finished, viewed, still your turn) has its border in the
+// sign style's colour too, as it has no sign; any other box has a faint
+// border. The title keeps its own colour, so status never hides who it is.
 type sidePanelBoxLook struct {
-	heavy          bool
-	sign           string
-	signSt, bodySt lipgloss.Style
+	heavy, seen             bool
+	sign, mark              string
+	signSt, titleSt, bodySt lipgloss.Style
 }
 
 // render draws the box one column in from the panel's edge: the corner, the
@@ -495,21 +508,26 @@ func (b sidePanelBoxLook) render(title, body, stage string, target sidePanelRow)
 	if b.heavy {
 		edge = lipgloss.ThickBorder()
 	}
-	border, titleSt := barSep, b.signSt
+	border := barSep
 	switch {
 	case b.sign != "":
 		border = lipgloss.NewStyle().Foreground(b.signSt.GetForeground())
 	case b.heavy:
-		border, titleSt = accentStyle, b.signSt.Foreground(cAccent)
+		border = accentStyle
+	case b.seen:
+		border = lipgloss.NewStyle().Foreground(b.signSt.GetForeground())
 	}
 
 	head := ""
 	if b.sign != "" {
 		head = b.signSt.Render(b.sign) + " "
 	}
+	if b.mark != "" {
+		head += groupStyle.Render(b.mark) + " "
+	}
 	// The corner and one line before the title, at least one line and the
 	// corner after it.
-	head += titleSt.Render(truncateTo(title, boxW-4-lipgloss.Width(head)))
+	head += b.titleSt.Render(truncateTo(title, boxW-4-lipgloss.Width(head)))
 	fill := strings.Repeat(edge.Top, boxW-3-lipgloss.Width(head))
 	body = padLine(b.bodySt.Render(truncateTo(body, boxW-2)), boxW-2)
 	margin := " "
@@ -548,5 +566,5 @@ func sidePanelRepo(g agentGroup, w int) string {
 	tag := accountTag(g)
 	repo := truncateTo(g.repo, w-2-lipgloss.Width(tag))
 
-	return padLine("  "+repoHdrStyle.Render(repo)+dimStyle.Render(tag), w)
+	return padLine("  "+placeHdrStyle.Render(repo)+dimStyle.Render(tag), w)
 }
