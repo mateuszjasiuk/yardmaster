@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/mateuszjasiuk/yardmaster/internal/config"
 	"github.com/mateuszjasiuk/yardmaster/internal/repo"
 	"github.com/mateuszjasiuk/yardmaster/internal/session"
+	"github.com/mateuszjasiuk/yardmaster/internal/state"
 )
 
 func sampleModel() Model {
@@ -85,7 +87,7 @@ func TestSelectionBarFillsWidth(t *testing.T) {
 	m := sampleModel()
 	m.focus = focusActive
 	innerW := m.width - 4
-	bar := m.activeRow(m.active[0], true, innerW)
+	bar := m.activeRow(m.active[0], nil, true, innerW, 0)
 	if w := lipgloss.Width(bar); w != innerW {
 		t.Fatalf("selected row width = %d, want %d", w, innerW)
 	}
@@ -138,8 +140,8 @@ func TestActiveRowStateCluster(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			it := activeItem{repo: repo.Repo{Name: "r"}, view: tc.view}
-			row := m.activeRow(it, false, innerW)
-			sel := m.activeRow(it, true, innerW)
+			row := m.activeRow(it, nil, false, innerW, 0)
+			sel := m.activeRow(it, nil, true, innerW, 0)
 			for _, want := range tc.wants {
 				if !strings.Contains(row, want) {
 					t.Errorf("row missing cluster %q:\n%s", want, row)
@@ -159,7 +161,7 @@ func TestActiveRowStateCluster(t *testing.T) {
 
 	// A diverged row must not also show the — placeholder.
 	it := activeItem{repo: repo.Repo{Name: "r"}, view: cases[2].view}
-	if row := m.activeRow(it, false, innerW); strings.Contains(row, "—") {
+	if row := m.activeRow(it, nil, false, innerW, 0); strings.Contains(row, "—") {
 		t.Errorf("diverged row should not show the — placeholder:\n%s", row)
 	}
 }
@@ -174,13 +176,13 @@ func TestActiveRowNarrowWidth(t *testing.T) {
 		Subject: "A long subject line that cannot possibly fit", CommitTime: 1,
 	}}
 	for _, innerW := range []int{1, 5, 10, 18, 24, 40} {
-		_ = m.activeRow(it, false, innerW)
-		_ = m.activeRow(it, true, innerW)
-		_ = activeDetail(it.view, "", innerW)
+		_ = m.activeRow(it, nil, false, innerW, 0)
+		_ = m.activeRow(it, nil, true, innerW, 0)
+		_ = activeDetail(it.view, "", "", innerW)
 	}
 	// At a comfortable width the long name still yields a full-width row with
 	// the cluster present.
-	row := m.activeRow(it, false, 40)
+	row := m.activeRow(it, nil, false, 40, 0)
 	if !strings.Contains(row, "↑12") || !strings.Contains(row, "↓34") {
 		t.Errorf("narrowed row lost its cluster:\n%s", row)
 	}
@@ -234,7 +236,7 @@ func TestActiveDetailSegments(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := activeDetail(tc.view, "", 80)
+			out := activeDetail(tc.view, "", "", 80)
 			for _, want := range tc.want {
 				if !strings.Contains(out, want) {
 					t.Errorf("detail missing %q:\n%s", want, out)
@@ -249,14 +251,14 @@ func TestActiveDetailSegments(t *testing.T) {
 	}
 
 	// Every segment empty → no line at all.
-	if out := activeDetail(WorktreeView{}, "", 68); out != "" {
+	if out := activeDetail(WorktreeView{}, "", "", 68); out != "" {
 		t.Errorf("empty view should yield no detail line, got:\n%s", out)
 	}
 
 	// A long subject flexes: it is the truncated segment, the age survives.
 	long := WorktreeView{HasBase: true, Ahead: 2, CommitTime: now,
 		Subject: strings.Repeat("wide subject ", 20)}
-	out := activeDetail(long, "", 48)
+	out := activeDetail(long, "", "", 48)
 	if w := lipgloss.Width(out); w > 48 {
 		t.Errorf("detail with long subject overflows: width %d", w)
 	}
@@ -542,5 +544,94 @@ func TestCreateModeInlineInput(t *testing.T) {
 	}
 	if testing.Verbose() {
 		t.Logf("\n%s", m.renderDeck(m.height-m.barHeight()))
+	}
+}
+
+// TestActiveRowAgentNames checks the names column: the active agent first with
+// a "+N" count, saved names for closed worktrees, worktree names aligned on
+// every row, all names on the └ line, and no column when nothing is named.
+func TestActiveRowAgentNames(t *testing.T) {
+	m := sampleModel()
+	innerW := m.width - 4
+	if _, err := m.mgr.Activate("yardmaster/feat-login", t.TempDir(), []session.Spec{
+		{Kind: session.Agent, Title: "Abra", SessionID: "a", Argv: []string{"cat"}},
+		{Kind: session.Agent, Title: "Mew", SessionID: "b", Argv: []string{"cat"}},
+	}, session.SameSize(80, 24)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.mgr.CloseAll)
+	ws, _ := m.mgr.Workspace("yardmaster/feat-login")
+	ws.ActiveAgent = 1
+	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
+	m.state.SetAgents("yardmaster/bugfix", []state.AgentState{{SessionID: "s", Label: "Squirtle"}}, 0)
+
+	display, _ := m.activeDisplay(innerW)
+	rows := map[string]string{}
+	for _, ln := range display {
+		plain := ansi.Strip(ln)
+		for _, wt := range []string{"feat-login", "bugfix", "spike"} {
+			if strings.Contains(plain, wt) {
+				rows[wt] = plain
+			}
+		}
+	}
+	if !strings.Contains(rows["feat-login"], "Mew +1") {
+		t.Errorf("open worktree should show the active agent and a count:\n%s", rows["feat-login"])
+	}
+	if !strings.Contains(rows["bugfix"], "Squirtle") {
+		t.Errorf("closed worktree should show its saved agent:\n%s", rows["bugfix"])
+	}
+	nameCol := func(row, wt string) int { return lipgloss.Width(row[:strings.Index(row, wt)]) }
+	// Squirtle is the widest label, so it sets the column.
+	want := activeRowPrefixW + len("Squirtle") + 1
+	for _, wt := range []string{"feat-login", "bugfix", "spike"} {
+		if got := nameCol(rows[wt], wt); got != want {
+			t.Errorf("%s starts at column %d, want %d:\n%s", wt, got, want, rows[wt])
+		}
+	}
+
+	m.focus = focusActive
+	m.selectActiveByKey("yardmaster/feat-login")
+	display, rowItem := m.activeDisplay(innerW)
+	selLine := slices.Index(rowItem, m.activeCursor)
+	if selLine < 0 {
+		t.Fatal("feat-login should be on the deck")
+	}
+	if detail := ansi.Strip(display[selLine+1]); !strings.Contains(detail, "└ Mew, Abra") {
+		t.Errorf("the └ line should list every agent, active first:\n%s", detail)
+	}
+	if w := lipgloss.Width(display[selLine]); w != innerW {
+		t.Errorf("selected row width = %d, want %d", w, innerW)
+	}
+
+	tooNarrow := activeRowPrefixW + activeRowMinNameW + agentNamesMinW // one column short
+	if w := agentNamesColW([][]string{{"Squirtle"}}, tooNarrow); w != 0 {
+		t.Errorf("a box too narrow for the column should drop it, got width %d", w)
+	}
+	if w := agentNamesColW([][]string{nil, {""}}, innerW); w != 0 {
+		t.Errorf("no named agents should mean no column, got width %d", w)
+	}
+}
+
+// TestAgentNamesCellNarrow checks that a narrow names column keeps the name
+// and drops the "+N" count, rather than showing a count with no name.
+func TestAgentNamesCellNarrow(t *testing.T) {
+	names := []string{"Mew", "Abra"}
+	cases := []struct {
+		w    int
+		want string
+	}{
+		{4, "Mew "},
+		{5, "Mew  "},
+		{6, "Mew +1"},
+		{7, "Mew +1 "},
+	}
+	for _, tc := range cases {
+		if got := ansi.Strip(agentNamesCell(names, tc.w, false)); got != tc.want {
+			t.Errorf("width %d: got %q, want %q", tc.w, got, tc.want)
+		}
+	}
+	if got := ansi.Strip(agentNamesCell([]string{"Kangaskhan", "Mew"}, 7, false)); got != "Kan… +1" {
+		t.Errorf("a long name should be cut before the count: got %q", got)
 	}
 }

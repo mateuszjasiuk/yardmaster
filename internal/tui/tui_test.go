@@ -239,7 +239,7 @@ func TestRecentRanks(t *testing.T) {
 
 	// The rank-1 worktree's row should show a leading "1".
 	m.recomputeActive()
-	row := m.activeRow(activeItem{repo: repo.Repo{Name: "r2"}, view: WorktreeView{WT: repo.Worktree{Repo: "r2", Name: "c"}}}, false, 40)
+	row := m.activeRow(activeItem{repo: repo.Repo{Name: "r2"}, view: WorktreeView{WT: repo.Worktree{Repo: "r2", Name: "c"}}}, nil, false, 40, 0)
 	if !strings.Contains(row, "1") {
 		t.Errorf("rank-1 row should show 1: %q", row)
 	}
@@ -1127,6 +1127,29 @@ func TestPersistAgentsRecordsProvider(t *testing.T) {
 	saved, _ := m.state.Agents("r/w")
 	if len(saved) != 1 || saved[0].Provider != agent.Codex || saved[0].SessionID != "thread-123" {
 		t.Fatalf("persisted agents = %+v", saved)
+	}
+}
+
+func TestPersistAgentsActiveIndexSkipsAgentsWithoutSession(t *testing.T) {
+	m := mixedProviderModel(agent.Claude)
+	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
+	specs := []session.Spec{
+		{Kind: session.Agent, Title: "plain", Argv: []string{"/usr/bin/true"}},
+		{Kind: session.Agent, Title: "Abra", Argv: []string{"/usr/bin/true"}, SessionID: "abra"},
+		{Kind: session.Agent, Title: "Mew", Argv: []string{"/usr/bin/true"}, SessionID: "mew"},
+	}
+	ws, err := m.mgr.Activate("r/w", t.TempDir(), specs, session.SameSize(80, 24))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.mgr.CloseAll()
+	ws.ActiveAgent = 2
+
+	m.persistAgents("r/w")
+
+	saved, active := m.state.Agents("r/w")
+	if len(saved) != 2 || active >= len(saved) || saved[active].Label != "Mew" {
+		t.Fatalf("saved active agent = %d in %+v, want Mew", active, saved)
 	}
 }
 

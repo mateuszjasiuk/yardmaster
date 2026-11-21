@@ -3412,6 +3412,22 @@ func (m Model) usedAgentNames() map[string]bool {
 	return used
 }
 
+// worktreeAgentNames are the names of key's agents, the active one first: its
+// open agents while ym hosts the worktree, otherwise its saved pool.
+func (m Model) worktreeAgentNames(key string) []string {
+	if ws, open := m.openWorkspace(key); open {
+		return activeFirst(agentNames(ws.Agents), ws.ActiveAgent)
+	}
+
+	saved, active := m.savedAgents(key)
+	names := make([]string, 0, len(saved))
+	for _, a := range saved {
+		names = append(names, a.Label)
+	}
+
+	return activeFirst(names, active)
+}
+
 // pickAgentName returns a random name from names that is not in used. When
 // every name is taken it adds the lowest free number to a random one
 // ("Pikachu 2"). With no names it falls back to randomAgentTitle.
@@ -3668,15 +3684,21 @@ func (m *Model) persistAgents(key string) {
 		return
 	}
 	agents := make([]state.AgentState, 0, len(ws.Agents))
-	for _, s := range ws.Agents {
+	// The saved index points into the saved list, which skips agents without a
+	// session id. An active agent that is skipped falls back to the first one.
+	active := 0
+	for i, s := range ws.Agents {
 		if s.SessionID == "" {
 			continue // not a ym-managed claude session; nothing to resume
+		}
+		if i == ws.ActiveAgent {
+			active = len(agents)
 		}
 		agents = append(agents, state.AgentState{
 			Provider: normalizedProvider(s.Provider), SessionID: s.SessionID, Label: s.Title, Stage: s.Stage,
 		})
 	}
-	m.state.SetAgents(key, agents, ws.ActiveAgent)
+	m.state.SetAgents(key, agents, active)
 }
 
 // syncAgentNames gives each hosted Claude agent the name Claude polls for it,
@@ -5998,4 +6020,38 @@ func clamp(v, lo, hi int) int {
 		return hi
 	}
 	return v
+}
+
+// openWorkspace is key's workspace while ym hosts it.
+func (m Model) openWorkspace(key string) (*session.Workspace, bool) {
+	if m.mgr == nil {
+		return nil, false
+	}
+
+	return m.mgr.Workspace(key)
+}
+
+// agentNames are the agents' names, in pool order.
+func agentNames(agents []*session.Session) []string {
+	titles := make([]string, 0, len(agents))
+	for _, a := range agents {
+		titles = append(titles, a.Title)
+	}
+
+	return titles
+}
+
+// activeFirst moves names[active] to the front and drops empty names.
+func activeFirst(names []string, active int) []string {
+	var out []string
+	if active >= 0 && active < len(names) && names[active] != "" {
+		out = append(out, names[active])
+	}
+	for i, n := range names {
+		if i != active && n != "" {
+			out = append(out, n)
+		}
+	}
+
+	return out
 }
