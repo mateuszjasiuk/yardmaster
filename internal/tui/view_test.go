@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -372,6 +373,75 @@ func TestBarNotifZone(t *testing.T) {
 	board := m.renderBoard(m.height - m.barHeight())
 	if !strings.Contains(board, "2") {
 		t.Errorf("board header should show pool count 2:\n%s", board)
+	}
+}
+
+// boardBoxRows counts the rows inside the rendered board's border.
+func boardBoxRows(out string) int {
+	n := 0
+	for _, line := range strings.Split(ansi.Strip(out), "\n") {
+		if strings.HasPrefix(strings.TrimLeft(line, " "), "│") {
+			n++
+		}
+	}
+	return n
+}
+
+// namedAgentsModel is modelWithAgents with every agent named agent-NN.
+func namedAgentsModel(n int) Model {
+	m := modelWithAgents(n)
+	for i, a := range m.current.ws.Agents {
+		a.Title = fmt.Sprintf("agent-%02d", i)
+	}
+	return m
+}
+
+func TestBoardKeepsHeightWhileTyping(t *testing.T) {
+	m := namedAgentsModel(4)
+	m.width, m.height = 100, 40
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	h := m.height - m.barHeight()
+
+	want := boardBoxRows(m.renderBoard(h))
+	for _, q := range []string{"agent", "agent-02", "zzz"} {
+		m.boardInput.SetValue(q)
+		if got := boardBoxRows(m.renderBoard(h)); got != want {
+			t.Errorf("query %q: board has %d rows, want %d as with an empty query", q, got, want)
+		}
+	}
+}
+
+func TestBoardGroupedListScrollsToSelection(t *testing.T) {
+	m := namedAgentsModel(30)
+	m.width, m.height = 100, 30
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	h := m.height - m.barHeight()
+	_, nav := m.boardView()
+	m.boardCursor = len(nav) - 2 // the last agent, above "+ new agent"
+
+	out := m.renderBoard(h)
+	if !strings.Contains(out, "agent-29") {
+		t.Fatalf("the selected last agent should be scrolled into view:\n%s", out)
+	}
+	if strings.Contains(out, "agent-00") {
+		t.Fatalf("the first agent should be scrolled out of view:\n%s", out)
+	}
+	if got, limit := boardBoxRows(out), h-2-2*boardMargin; got > limit {
+		t.Fatalf("board has %d rows, want at most %d to keep the margin", got, limit)
+	}
+}
+
+func TestBoardListIsCappedOnTallTerminal(t *testing.T) {
+	m := namedAgentsModel(30)
+	m.width, m.height = 100, 80
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+
+	// 7 rows around the list: title, input, hints and their blank lines.
+	if got, want := boardBoxRows(m.renderBoard(m.height-m.barHeight())), 7+boardMaxRows; got != want {
+		t.Fatalf("board has %d rows, want %d", got, want)
 	}
 }
 
