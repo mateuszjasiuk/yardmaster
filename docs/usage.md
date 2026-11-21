@@ -127,7 +127,8 @@ deck does. `enter` on an agent focuses it, and `esc` closes the board.
 
 `ctrl+e` creates an agent, `ctrl+r` restarts the selected one in place, `ctrl+d` removes it, and
 `ctrl+x` dismisses its "your turn". These four are chords because the search takes every letter;
-change them with the `board_*` keys. `f3` / `f4` move between the agents of the current worktree.
+change them with the `board_*` keys. `ctrl+j` / `ctrl+k` move the selection down / up like the
+arrows (`board_down` / `board_up`). `f3` / `f4` move between the agents of the current worktree.
 
 The new-agent form passes its prompt as the CLI's first prompt; agents run interactively. The
 prompt supports several lines: `ctrl+enter` launches, `enter` adds a line. When more than one

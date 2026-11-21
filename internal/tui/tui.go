@@ -2555,12 +2555,12 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case m.keys.Attention:
 		// The jump works from within the board too: focusBoardAgent closes it.
 		return m.jumpAttention()
-	case "up":
+	case "up", m.keys.BoardUp:
 		if m.boardCursor > 0 {
 			m.boardCursor--
 		}
 		return m, nil
-	case "down":
+	case "down", m.keys.BoardDown:
 		if m.boardCursor < len(nav)-1 {
 			m.boardCursor++
 		}

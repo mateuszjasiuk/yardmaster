@@ -599,6 +599,29 @@ func TestRotateAgentWraps(t *testing.T) {
 	}
 }
 
+func TestBoardCtrlJKMoveSelection(t *testing.T) {
+	m := modelWithAgents(3)
+	mm, _ := m.openBoard()
+	m = mm.(Model)
+	m.boardCursor = 0
+
+	mm, _ = m.handleBoard(ctrlKey('j'))
+	m = mm.(Model)
+	mm, _ = m.handleBoard(ctrlKey('j'))
+	m = mm.(Model)
+	if m.boardCursor != 2 {
+		t.Fatalf("two ctrl+j should move the cursor to 2, got %d", m.boardCursor)
+	}
+	mm, _ = m.handleBoard(ctrlKey('k'))
+	m = mm.(Model)
+	if m.boardCursor != 1 {
+		t.Fatalf("ctrl+k should move the cursor up to 1, got %d", m.boardCursor)
+	}
+	if m.boardQuery() != "" {
+		t.Fatalf("ctrl+j/k should not type into the search, got %q", m.boardQuery())
+	}
+}
+
 func TestBoardNavigateAndFocus(t *testing.T) {
 	m := modelWithAgents(3)
 	m.current.ws.ActiveAgent = 0

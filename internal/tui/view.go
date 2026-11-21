@@ -692,11 +692,19 @@ func (m Model) notifZoneAt(x, y int) bool {
 	return x >= z.notifStart && x < z.notifStart+lipgloss.Width(z.notif)
 }
 
+// boardMaxRows caps the board's list so a long board stays a menu on a tall
+// terminal; more rows scroll.
+const boardMaxRows = 20
+
+// boardMargin is the number of empty rows kept above and below the board.
+const boardMargin = 2
+
 // renderBoard draws the agent board overlay: the finder query, then every open
 // workspace's agents grouped under worktree header rows (attention sorted to the
 // top) with a trailing "+ new agent" row. While the query has text, the matching
-// agents show with their worktree, then the matching worktrees without agents,
-// windowed to the height. Delegates to renderBoardForm in form state.
+// agents show with their worktree, then the matching worktrees without agents.
+// The list keeps one height (boardBodyRows) and scrolls around the selection.
+// Delegates to renderBoardForm in form state.
 func (m Model) renderBoard(h int) string {
 	if m.formOpen {
 		return m.renderBoardForm(h, panelInnerWidth(m.width, 84))
@@ -726,15 +734,33 @@ func (m Model) renderBoard(h int) string {
 		"  " + strings.Join(boardActionHints(m.keys), separator),
 	}
 
+	bodyRows := m.boardBodyRows(h-2-len(top)-len(hints), innerW) // 2 for the panel border
 	var body []string
 	if m.boardQuery() != "" {
-		rowsAvail := max(1, h-2-len(top)-len(hints)) // 2 for the panel border
-		body = m.boardMatchLines(rows, selRow, innerW, rowsAvail)
+		body = m.boardMatchLines(rows, selRow, innerW, bodyRows)
 	} else {
-		body = m.boardGroupLines(rows, selRow, agentCount, innerW)
+		lines, selLine := m.boardGroupLines(rows, selRow, agentCount, innerW)
+		start, end := windowBounds(len(lines), selLine, bodyRows)
+		body = lines[start:end]
+	}
+	for len(body) < bodyRows {
+		body = append(body, "")
 	}
 	lines := append(append(top, body...), hints...)
 	return renderPanel(lines, innerW, m.width, h)
+}
+
+// boardBodyRows is the height of the board's list, the same whatever the
+// query, so the panel doesn't shrink while the user types: as tall as the full
+// grouped board, capped at boardMaxRows and at the space left after keeping
+// boardMargin empty rows above and below the panel. space is the room for the
+// list with no margin.
+func (m Model) boardBodyRows(space, innerW int) int {
+	rows, nav := m.buildBoard()
+	agentCount := len(nav) - 1 // every nav entry but the "+ new agent" row
+	full, _ := m.boardGroupLines(rows, -1, agentCount, innerW)
+
+	return max(1, min(len(full), boardMaxRows, space-2*boardMargin))
 }
 
 // boardActionHints lists the board's action keys, leaving out disabled ones.
@@ -751,10 +777,17 @@ func boardActionHints(k config.Keys) []string {
 }
 
 // boardGroupLines draws the board with an empty query: agents under their
-// worktree headers, then the "+ new agent" row.
-func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) []string {
-	var lines []string
+// worktree headers, then the "+ new agent" row. selLine is the line of selRow,
+// or -1 when nothing is selected.
+func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) (lines []string, selLine int) {
+	selLine = -1
 	for i, r := range rows {
+		if i == selRow {
+			selLine = len(lines)
+			if r.kind == rowNew && agentCount > 0 {
+				selLine++ // after the blank line above "+ new agent"
+			}
+		}
 		switch r.kind {
 		case rowNew:
 			if agentCount > 0 {
@@ -785,7 +818,7 @@ func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) 
 			lines = append(lines, left)
 		}
 	}
-	return lines
+	return lines, selLine
 }
 
 // boardMatchLines draws the agents matching the query, best first, each with its
