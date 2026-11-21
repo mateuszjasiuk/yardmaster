@@ -540,10 +540,16 @@ type Model struct {
 	// the deck can show a row for work that has been asked for but does not exist
 	// on disk yet. On a large repository the fetch and checkout take long enough
 	// that a deck with no sign of them reads as ym having ignored the request
-	// (issue #54). creatingTicking mirrors plasmaTicking: the spinner tick
-	// disarms itself when the last creation lands, so no timer runs at rest.
-	creating        []creatingItem
-	creatingTicking bool
+	// (issue #54).
+	creating []creatingItem
+
+	// loadingTicking mirrors plasmaTicking: the spinner tick disarms itself
+	// when nothing is loading any more, so no timer runs at rest.
+	loadingTicking bool
+
+	// scanFailed is set when the first deck scan fails, which ends the
+	// "scanning" sign; the bar shows the error.
+	scanFailed bool
 
 	// agentProviders is the normalized provider palette. Legacy/direct configs
 	// remain Claude-only through the controller's normalization.
@@ -850,19 +856,6 @@ const plasmaTickInterval = 150 * time.Millisecond
 // schedulePlasmaTick arms one plasma frame tick.
 func schedulePlasmaTick() tea.Cmd {
 	return tea.Tick(plasmaTickInterval, func(time.Time) tea.Msg { return plasmaTickMsg{} })
-}
-
-// creatingTickMsg advances the worktree-setup spinner. Like the plasma tick it is
-// only armed while there is something to animate.
-type creatingTickMsg struct{}
-
-// creatingTickInterval paces the spinner. Fast enough to read as motion — the
-// whole point is to distinguish "working" from "hung" — and slow enough that a
-// multi-minute checkout costs a handful of deck redraws per second.
-const creatingTickInterval = 120 * time.Millisecond
-
-func scheduleCreatingTick() tea.Cmd {
-	return tea.Tick(creatingTickInterval, func(time.Time) tea.Msg { return creatingTickMsg{} })
 }
 
 // beginCreating records a worktree as being set up, so the deck shows it
@@ -1303,12 +1296,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.plasmaTicking = true
 			cmd = tea.Batch(cmd, schedulePlasmaTick())
 		}
-		// Same one-timer discipline for the worktree-setup spinner: arming here
-		// rather than where a creation starts is what keeps two concurrent
-		// creations from running two ticks and animating at double speed.
-		if !model.creatingTicking && len(model.creating) > 0 {
-			model.creatingTicking = true
-			cmd = tea.Batch(cmd, scheduleCreatingTick())
+		// Same one-timer discipline for the loading spinners: arming here
+		// rather than where loading starts is what keeps two loadings from
+		// running two ticks.
+		if !model.loadingTicking && model.loading() {
+			model.loadingTicking = true
+			cmd = tea.Batch(cmd, scheduleLoadingTick())
 		}
 		return model, cmd
 	}
@@ -1428,6 +1421,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.setError("load error: " + msg.err.Error())
+			m.scanFailed = !m.groupsLoaded
 			return m, nil
 		}
 		firstLoad := !m.groupsLoaded
@@ -1445,15 +1439,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// freshness window (the deck's `r` re-kicks with force).
 		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
 
-	case creatingTickMsg:
-		// Re-arm only while something is still being set up, so the timer stops on
-		// its own once the last creation lands.
-		if len(m.creating) == 0 {
-			m.creatingTicking = false
+	case loadingTickMsg:
+		// Re-arm only while something is still loading, so the timer stops on
+		// its own once the last loading ends.
+		if !m.loading() {
+			m.loadingTicking = false
 			return m, nil
 		}
-		m.creatingTicking = true
-		return m, scheduleCreatingTick()
+		m.loadingTicking = true
+		return m, scheduleLoadingTick()
 
 	case ctlRequestMsg:
 		return m.handleCtl(msg.p)

@@ -3877,22 +3877,22 @@ func TestCreatingSpinnerTimerSelfDisarms(t *testing.T) {
 	// Update arms exactly one tick, and will not arm a second while it is pending.
 	mm, cmd := m.Update(dirtyMsg{})
 	m = mm.(Model)
-	if !m.creatingTicking || cmd == nil {
+	if !m.loadingTicking || cmd == nil {
 		t.Fatal("a pending creation should arm the spinner tick")
 	}
 	m.beginCreating("repo", "b")
 	mm, _ = m.Update(dirtyMsg{})
 	m = mm.(Model)
-	if !m.creatingTicking {
+	if !m.loadingTicking {
 		t.Fatal("the tick should stay armed for a second concurrent creation")
 	}
 
 	// With both creations retired, the next tick disarms instead of re-arming.
 	m.endCreating("repo", "a")
 	m.endCreating("repo", "b")
-	mm, cmd = m.Update(creatingTickMsg{})
+	mm, cmd = m.Update(loadingTickMsg{})
 	m = mm.(Model)
-	if m.creatingTicking || cmd != nil {
+	if m.loadingTicking || cmd != nil {
 		t.Fatal("the tick should disarm once nothing is being set up")
 	}
 }

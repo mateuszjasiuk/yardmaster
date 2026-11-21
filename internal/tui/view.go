@@ -115,7 +115,13 @@ var (
 func (m Model) View() tea.View {
 	w, h := m.width, m.height
 	if w < minViableWidth || h < minViableHeight {
-		v := tea.NewView("ym — please enlarge the terminal")
+		// The first frame comes before the window size; asking to enlarge a
+		// terminal of unknown size would only flash.
+		text := "ym — please enlarge the terminal"
+		if w == 0 && h == 0 {
+			text = ""
+		}
+		v := tea.NewView(text)
 		v.ReportFocus = true
 		v.AltScreen = true
 		return v
@@ -1487,8 +1493,11 @@ func (m Model) renderNew(innerW, rows int) []string {
 	if len(m.repoMatches) == 0 {
 		// Before the first scan lands, an empty list means "still looking",
 		// not "nothing there" — don't claim the root is empty.
+		if m.scanning() {
+			return append(lines, "   "+m.loadingLine("scanning repos…"))
+		}
 		if !m.groupsLoaded {
-			return append(lines, dimStyle.Render("   scanning repos…"))
+			return append(lines, dimStyle.Render("   scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("   no repos under root"))
 	}
@@ -1600,23 +1609,12 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 	return
 }
 
-// creatingSpinner are the braille frames the setup row animates through. Motion
-// is the whole point: a static "creating…" is what a hung process looks like.
-var creatingSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 // creatingRow draws one worktree-setup row: a spinner, the name it will have, and
 // how long it has been running. The elapsed time is what tells a user waiting on a
 // slow clone that ym is still working rather than wedged, so it is shown from the
 // first second rather than after some threshold.
 func (m Model) creatingRow(c creatingItem, innerW int) string {
-	frame := creatingSpinner[0]
-	if m.iconMode == config.IconsASCII || m.iconMode == config.IconsText {
-		frame = "*"
-	} else {
-		elapsed := time.Since(c.since) / creatingTickInterval
-		frame = creatingSpinner[int(elapsed)%len(creatingSpinner)]
-	}
-	label := fmt.Sprintf("  %s %s", frame, c.name)
+	label := fmt.Sprintf("  %s %s", m.spinner(), c.name)
 	note := fmt.Sprintf("setting up worktree… %ds", int(time.Since(c.since).Seconds()))
 	gap := innerW - lipgloss.Width(label) - lipgloss.Width(note)
 	if gap < 1 {
@@ -1644,8 +1642,11 @@ func (m Model) renderActive(innerW, rows int) []string {
 	// A pending creation counts as content: the empty-state copy invites the user
 	// to create a worktree, which is exactly the thing already underway.
 	if len(m.active) == 0 && len(m.creating) == 0 {
+		if m.scanning() {
+			return append(lines, m.loadingLine("scanning worktrees…"))
+		}
 		if !m.groupsLoaded {
-			return append(lines, dimStyle.Render("scanning…"))
+			return append(lines, dimStyle.Render("scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("no workspaces yet — pick a repo above to create one"))
 	}
