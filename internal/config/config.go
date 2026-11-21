@@ -259,6 +259,10 @@ type Keys struct {
 	BoardRestart string `toml:"board_restart"`
 	BoardRemove  string `toml:"board_remove"`
 	BoardDismiss string `toml:"board_dismiss"`
+	// BoardUp / BoardDown move the board's selection like the arrow keys, which
+	// keep working too.
+	BoardUp   string `toml:"board_up"`
+	BoardDown string `toml:"board_down"`
 	// NextAgent / PrevAgent cycle the focused agent within the worktree.
 	NextAgent string `toml:"next_agent"`
 	PrevAgent string `toml:"prev_agent"`
@@ -341,6 +345,7 @@ func Default() Config {
 			Picker:  "ctrl+g",
 			Palette: "alt+a", NextAgent: "f4", PrevAgent: "f3",
 			BoardNew: "ctrl+e", BoardRestart: "ctrl+r", BoardRemove: "ctrl+d", BoardDismiss: "ctrl+x",
+			BoardUp: "ctrl+k", BoardDown: "ctrl+j",
 			NextWorktree: "ctrl+l", PrevWorktree: "ctrl+h", ToggleStacks: "ctrl+y", StackPopup: "ctrl+s", SidePanel: "ctrl+\\", SideBySide: "ctrl+shift+\\",
 			Help: "f1", GlobalConfig: "alt+g", Attention: "alt+n", Highlight: "ctrl+q", Back: "alt+b",
 			TermSplitV: "alt+v", TermSplitH: "alt+s",
