@@ -1757,9 +1757,9 @@ func (m Model) activeRow(it activeItem, names []string, highlight bool, innerW, 
 }
 
 // agentNamesCell draws a row's names column, padded to w: the active agent's
-// name in the accent colour and a dim "+N". The selected row stays plain so
-// the selection style covers it. The name is cut before the count, and the
-// count is dropped when it would leave too little room for the name.
+// name in purple, like session names elsewhere, and a dim "+N". The selected
+// row stays plain so the selection style covers it. The name is cut before the
+// count, and the count is dropped when it would leave too little room for it.
 func agentNamesCell(names []string, w int, highlight bool) string {
 	first, more := agentNamesParts(names)
 	tooTight := w-lipgloss.Width(more) < agentNamesMinW
@@ -1771,7 +1771,7 @@ func agentNamesCell(names []string, w int, highlight bool) string {
 		return padLine(first+more, w)
 	}
 
-	return padLine(accentStyle.Render(first)+dimStyle.Render(more), w)
+	return padLine(identityStyle.Render(first)+dimStyle.Render(more), w)
 }
 
 // agentsDetailSeg is the └ line's names segment: every agent, active first.
