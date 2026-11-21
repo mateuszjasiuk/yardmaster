@@ -407,21 +407,21 @@ func TestBoardShowsFlagColours(t *testing.T) {
 	}
 	m.highlightColors = highlightColors(config.DefaultHighlightColors())
 	m.highlighted = map[string]int{"r/w": 0, "r/idle": 1}
-	purple := "38;2;199;146;234m" // the first default flag colour
-	cyan := "38;2;137;221;255m"   // the second
+	violet := "38;2;187;128;179m"   // the first default flag colour
+	paleBlue := "38;2;178;204;214m" // the second
 	mm, _ := m.openBoard()
 	m = mm.(Model)
 	m.width = 100
 
-	if out := m.renderBoard(30); !strings.Contains(out, purple+"r/w") {
+	if out := m.renderBoard(30); !strings.Contains(out, violet+"r/w") {
 		t.Fatalf("the header of a flagged worktree should show its colour:\n%q", out)
 	}
 	m.boardInput.SetValue("r/")
 	out := m.renderBoard(30)
-	if !strings.Contains(out, purple+"r/w") {
+	if !strings.Contains(out, violet+"r/w") {
 		t.Fatalf("an agent row should show its worktree's colour:\n%q", out)
 	}
-	if !strings.Contains(out, cyan+"r/idle") {
+	if !strings.Contains(out, paleBlue+"r/idle") {
 		t.Fatalf("an idle worktree row should show its colour:\n%q", out)
 	}
 }

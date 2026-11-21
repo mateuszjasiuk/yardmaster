@@ -338,7 +338,7 @@ func TestSideBySideLightsBothBarIcons(t *testing.T) {
 	for _, s := range []screen{screenEditor, screenAgent} {
 		mm, _ := m.gotoScreen(s)
 		m = mm.(Model)
-		if editor, agent := icons(); editor != boldGreen.Render(eg) || agent != boldPurple.Render(ag) {
+		if editor, agent := icons(); editor != boldAccent.Render(eg) || agent != boldPurple.Render(ag) {
 			t.Fatalf("side by side with %v focused, both icons should be lit", s)
 		}
 	}

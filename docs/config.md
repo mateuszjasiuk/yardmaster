@@ -100,7 +100,7 @@ side_by_side_dim = "faint" # faint | gray
 # back the line under the bar and the divider between them side by side.
 pane_boxes = true
 # The colours ctrl+q gives flagged worktrees in the bar, in order ("#RRGGBB").
-highlight_colors = ["#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"]
+highlight_colors = ["#BB80B3", "#B2CCD6", "#FF9CAC", "#80CBC4"]
 
 # The diff viewer (deck `v` and the stack `d` preview). All optional.
 [diff]

@@ -385,6 +385,63 @@ func TestSidePanelGroupsAFeatureUnderItsName(t *testing.T) {
 	}
 }
 
+func TestSidePanelColoursEachThingByItsRole(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	m := stripModel(t, 140, "lead", "m1") // m1 is current
+	m.sidePanel = true
+	if err := m.state.NewFeature("repo/sch-1", "repo/lead", ""); err != nil {
+		t.Fatal(err)
+	}
+	ws, _ := m.mgr.Workspace("repo/lead")
+	if len(ws.Agents) == 0 {
+		t.Skip("workspace started without an agent")
+	}
+	m.agentStatus = map[int]AgentStatus{ws.Agents[0].Pid(): {Status: "waiting"}}
+
+	// Rows: the top row, the repo, the feature header, then lead's box.
+	rows := m.sidePanelRows()
+	repoInPlaceColour := strings.HasPrefix(rows[1].text, "  "+placeHdrStyle.Render("repo"))
+	if !repoInPlaceColour {
+		t.Errorf("the repo name should be in the place colour: %q", rows[1].text)
+	}
+	featureInGroupColour := strings.HasPrefix(rows[2].text, " "+groupStyle.Render(featureIcon+" sch-1"))
+	if !featureInGroupColour {
+		t.Errorf("the feature header should be in the grouping colour: %q", rows[2].text)
+	}
+	wantTop := " " + errStyle.Render("╭─") + boldRed.Render("!") + " " + groupStyle.Render(managerIcon) + " " + identityStyle.Render("claude")
+	nameKeepsItsColour := strings.HasPrefix(rows[3].text, wantTop)
+	if !nameKeepsItsColour {
+		t.Errorf("a waiting manager's box: red border and sign, orange mark, purple name:\n%q\nwant prefix\n%q", rows[3].text, wantTop)
+	}
+}
+
+func TestSidePanelSeenBoxHasABrightBorderUnlessActive(t *testing.T) {
+	seen := sidePanelBoxLook{seen: true, signSt: nameStyle, titleSt: identityStyle, bodySt: dimStyle}
+	bright := " " + lipgloss.NewStyle().Foreground(cFg).Render("╭─")
+	top := seen.render("claude", "wt", "", sidePanelRow{})[0].text
+	if !strings.HasPrefix(top, bright) {
+		t.Errorf("a seen box should have a bright border: %q", top)
+	}
+
+	seen.heavy = true
+	top = seen.render("claude", "wt", "", sidePanelRow{})[0].text
+	activeKeepsAccent := strings.HasPrefix(top, accentStyle.Render("▌")+accentStyle.Render("┏━"))
+	if !activeKeepsAccent {
+		t.Errorf("the active box keeps its accent border when seen: %q", top)
+	}
+}
+
+func TestSidePanelStackBoxShowsItsFlagColour(t *testing.T) {
+	flag := lipgloss.Color("#80CBC4")
+	g := agentGroup{worktree: "s1", flag: flag, members: []agentGroup{{}, {}}}
+
+	body := Model{}.stackBox(&g).look.render("⛁ s1", "2 worktrees", "", sidePanelRow{})[1].text
+	flagOnBody := strings.Contains(body, dimStyle.Foreground(flag).Render("2 worktrees"))
+	if !flagOnBody {
+		t.Errorf("a flagged stack's box should show the flag colour on its body: %q", body)
+	}
+}
+
 func TestSidePanelHidesTheAgentStrip(t *testing.T) {
 	m := stripModel(t, 140, "alpha", "beta")
 	if m.barHeight() != 4 || !strings.Contains(barStripRow(m), "alpha · beta") {

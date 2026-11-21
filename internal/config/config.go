@@ -112,9 +112,10 @@ type Display struct {
 }
 
 // DefaultHighlightColors stay apart from the strip's status colours (dim,
-// yellow, green, red, white) and from each other on a dark background.
+// yellow, green, red, white), from the hues the TUI gives a role (blue,
+// purple, cyan, orange) and from each other on a dark background.
 func DefaultHighlightColors() []string {
-	return []string{"#C792EA", "#89DDFF", "#FF9CAC", "#80CBC4"}
+	return []string{"#BB80B3", "#B2CCD6", "#FF9CAC", "#80CBC4"}
 }
 
 var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)

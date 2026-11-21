@@ -132,7 +132,7 @@ func (m Model) renderGhStackPopup(h int) string {
 
 	rows := []string{
 		header("stack", -1), "",
-		"  " + repoHdrStyle.Render(ghStackIcon+" "+p.stack.Name()) + dimStyle.Render("  "+p.repo), "",
+		"  " + groupStyle.Render(ghStackIcon+" "+p.stack.Name()) + "  " + placeStyle.Render(p.repo), "",
 	}
 	for i, b := range p.branches {
 		rows = append(rows, m.ghStackPopupRow(p, i, b, nameW, fetch))
@@ -254,7 +254,7 @@ func (m Model) worktreeOnBranch(repoName, branch string) (activeItem, bool) {
 func prStateWord(pr stack.BranchPR) string {
 	switch {
 	case pr.State == "MERGED":
-		return purpleStyle.Render("merged")
+		return mergedStyle.Render("merged")
 	case pr.State == "CLOSED":
 		return dimStyle.Render("closed")
 	case pr.Draft:
