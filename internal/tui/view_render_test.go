@@ -430,6 +430,66 @@ func TestDeckLoadingState(t *testing.T) {
 	}
 }
 
+func TestDeckScanArmsTheSpinnerUntilTheScanLands(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+	mm, cmd := m.Update(testWindowSize())
+	m = mm.(Model)
+	if !m.loadingTicking || cmd == nil {
+		t.Fatal("a deck waiting for its first scan should arm the spinner tick")
+	}
+	if screen := screenText(t, m); !strings.ContainsAny(screen, strings.Join(spinnerFrames, "")) {
+		t.Errorf("the scan sign has no spinner:\n%s", screen)
+	}
+
+	mm, _ = m.update(loadedMsg{groups: nil})
+	m = mm.(Model)
+	mm, cmd = m.Update(loadingTickMsg{})
+	m = mm.(Model)
+	if m.loadingTicking || cmd != nil {
+		t.Error("the tick should disarm once the scan has landed")
+	}
+}
+
+func TestFailedFirstScanEndsTheScanningSign(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+	mm, _ := m.Update(testWindowSize())
+	m = mm.(Model)
+
+	mm, _ = m.update(loadedMsg{err: errors.New("permission denied")})
+	m = mm.(Model)
+
+	if m.loading() {
+		t.Error("a failed first scan still counts as loading")
+	}
+	screen := screenText(t, m)
+	if strings.Contains(screen, "scanning") || !strings.Contains(screen, "scan failed") {
+		t.Errorf("a failed scan should say so, not keep scanning:\n%s", screen)
+	}
+}
+
+func TestScanThatWorksAfterAFailedOneClearsTheFailure(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+	mm, _ := m.Update(testWindowSize())
+	m = mm.(Model)
+	mm, _ = m.update(loadedMsg{err: errors.New("permission denied")})
+	m = mm.(Model)
+
+	mm, _ = m.update(loadedMsg{groups: nil})
+	m = mm.(Model)
+
+	if screen := screenText(t, m); strings.Contains(screen, "scan failed") || !strings.Contains(screen, "no repos under root") {
+		t.Errorf("a scan that worked should replace the failure:\n%s", screen)
+	}
+}
+
+func TestFirstFrameBeforeTheWindowSizeIsEmpty(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+
+	if got := m.View().Content; got != "" {
+		t.Errorf("the first frame is %q, want it empty", got)
+	}
+}
+
 func TestDeckWheelScrolls(t *testing.T) {
 	m := sampleModel()
 	L := m.deckLayout(m.height - m.barHeight())

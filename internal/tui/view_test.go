@@ -34,6 +34,7 @@ func sampleModel() Model {
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 72, Height: 24})
 	m = mm.(Model)
 	m.groups = groups
+	m.groupsLoaded = true
 	m.recomputeMatches()
 	m.recomputeActive()
 	return m

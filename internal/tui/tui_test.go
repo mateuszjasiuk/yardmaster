@@ -1181,14 +1181,17 @@ func TestBoardRestartPreservesProviderAndPoolPosition(t *testing.T) {
 	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
 	dir := t.TempDir()
 	specs := []session.Spec{
-		{Kind: session.Agent, Title: "one", Argv: []string{"/usr/bin/true"}, Provider: agent.Claude, SessionID: "claude-id"},
-		{Kind: session.Agent, Title: "two", Argv: []string{"/usr/bin/true"}, Provider: agent.Codex, SessionID: "codex-id"},
+		{Kind: session.Agent, Title: "one", Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Claude, SessionID: "claude-id"},
+		{Kind: session.Agent, Title: "two", Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Codex, SessionID: "codex-id"},
 	}
 	ws, err := m.mgr.Activate("r/w", dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer m.mgr.CloseAll()
+	for _, a := range ws.Agents {
+		waitStarted(t, a) // an agent that exits first would sort to the top of the board
+	}
 	ws.ActiveAgent = 1
 	old := ws.Agents[1]
 	m.current = &workspaceRef{repo: "r", worktree: "w", key: "r/w", path: dir, ws: ws}
@@ -1863,11 +1866,14 @@ func activateAgents(t *testing.T, m Model, key, dir string, n int) *session.Work
 	t.Helper()
 	specs := make([]session.Spec, n)
 	for i := range specs {
-		specs[i] = session.Spec{Kind: session.Agent, Argv: []string{"/usr/bin/true"}, Provider: agent.Claude}
+		specs[i] = session.Spec{Kind: session.Agent, Argv: []string{"sh", "-c", "echo ready; exec cat"}, Provider: agent.Claude}
 	}
 	ws, err := m.mgr.Activate(key, dir, specs, session.SameSize(80, 24))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, a := range ws.Agents {
+		waitStarted(t, a)
 	}
 	return ws
 }
@@ -3877,22 +3883,22 @@ func TestCreatingSpinnerTimerSelfDisarms(t *testing.T) {
 	// Update arms exactly one tick, and will not arm a second while it is pending.
 	mm, cmd := m.Update(dirtyMsg{})
 	m = mm.(Model)
-	if !m.creatingTicking || cmd == nil {
+	if !m.loadingTicking || cmd == nil {
 		t.Fatal("a pending creation should arm the spinner tick")
 	}
 	m.beginCreating("repo", "b")
 	mm, _ = m.Update(dirtyMsg{})
 	m = mm.(Model)
-	if !m.creatingTicking {
+	if !m.loadingTicking {
 		t.Fatal("the tick should stay armed for a second concurrent creation")
 	}
 
 	// With both creations retired, the next tick disarms instead of re-arming.
 	m.endCreating("repo", "a")
 	m.endCreating("repo", "b")
-	mm, cmd = m.Update(creatingTickMsg{})
+	mm, cmd = m.Update(loadingTickMsg{})
 	m = mm.(Model)
-	if m.creatingTicking || cmd != nil {
+	if m.loadingTicking || cmd != nil {
 		t.Fatal("the tick should disarm once nothing is being set up")
 	}
 }

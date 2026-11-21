@@ -2,8 +2,11 @@ package tui
 
 import (
 	"maps"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -29,7 +32,7 @@ func stripModel(t *testing.T, w int, wts ...string) Model {
 func stripModelKeys(t *testing.T, w int, keys ...string) Model {
 	t.Helper()
 	ctrl := &Controller{cfg: config.Config{
-		Editor: "cat", Agent: "cat", Shell: "sh",
+		Editor: "cat", Agent: drawingAgent(t), Shell: "sh",
 		Keys:    config.Default().Keys,
 		Display: config.Display{AgentStrip: true},
 	}}
@@ -49,9 +52,39 @@ func stripModelKeys(t *testing.T, w int, keys ...string) Model {
 		})
 		mm, _ = m.activate(repoName, name, dir)
 		m = mm.(Model)
+		ws, _ := m.mgr.Workspace(key)
+		for _, a := range ws.Agents {
+			waitStarted(t, a)
+		}
 	}
 	m.screen = screenEditor
 	return m
+}
+
+// drawingAgent is a stand-in agent command that draws a line and keeps
+// running, whatever arguments ym passes it. `cat` would print an error about
+// those arguments and exit, and a pty may lose that last output.
+func drawingAgent(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "agent")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\necho ready\nexec cat >/dev/null\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	return path
+}
+
+// waitStarted waits until s has drawn or exited, so it no longer shows as
+// starting.
+func waitStarted(t *testing.T, s *session.Session) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for s.Starting() {
+		if time.Now().After(deadline) {
+			t.Fatal("the session never drew")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func barFirstRow(m Model) string {

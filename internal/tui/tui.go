@@ -258,6 +258,7 @@ type boardRow struct {
 	status   string    // right-hand status column ("closed" or "no agent" on a worktree row)
 	attn     attnLevel // includes derived waiting
 	busy     bool      // the agent is working
+	starting bool      // the agent has not drawn yet
 	stage    string    // what the session says it is at
 }
 
@@ -540,10 +541,23 @@ type Model struct {
 	// the deck can show a row for work that has been asked for but does not exist
 	// on disk yet. On a large repository the fetch and checkout take long enough
 	// that a deck with no sign of them reads as ym having ignored the request
-	// (issue #54). creatingTicking mirrors plasmaTicking: the spinner tick
-	// disarms itself when the last creation lands, so no timer runs at rest.
-	creating        []creatingItem
-	creatingTicking bool
+	// (issue #54).
+	creating []creatingItem
+
+	// restoring holds the workspaces the startup restore reopened until all
+	// their panes have drawn or failed, or restoreSince is startingTooLong ago;
+	// the bar counts them meanwhile.
+	restoring    []string
+	restoreSince time.Time
+
+	// loadingTicking mirrors plasmaTicking: the spinner tick disarms itself
+	// when nothing is loading any more, so no timer runs at rest.
+	loadingTicking bool
+
+	// firstScanFailed is set while the deck has never loaded because its
+	// first scan failed, which ends the "scanning" sign; the bar shows the
+	// error.
+	firstScanFailed bool
 
 	// agentProviders is the normalized provider palette. Legacy/direct configs
 	// remain Claude-only through the controller's normalization.
@@ -850,19 +864,6 @@ const plasmaTickInterval = 150 * time.Millisecond
 // schedulePlasmaTick arms one plasma frame tick.
 func schedulePlasmaTick() tea.Cmd {
 	return tea.Tick(plasmaTickInterval, func(time.Time) tea.Msg { return plasmaTickMsg{} })
-}
-
-// creatingTickMsg advances the worktree-setup spinner. Like the plasma tick it is
-// only armed while there is something to animate.
-type creatingTickMsg struct{}
-
-// creatingTickInterval paces the spinner. Fast enough to read as motion — the
-// whole point is to distinguish "working" from "hung" — and slow enough that a
-// multi-minute checkout costs a handful of deck redraws per second.
-const creatingTickInterval = 120 * time.Millisecond
-
-func scheduleCreatingTick() tea.Cmd {
-	return tea.Tick(creatingTickInterval, func(time.Time) tea.Msg { return creatingTickMsg{} })
 }
 
 // beginCreating records a worktree as being set up, so the deck shows it
@@ -1303,12 +1304,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.plasmaTicking = true
 			cmd = tea.Batch(cmd, schedulePlasmaTick())
 		}
-		// Same one-timer discipline for the worktree-setup spinner: arming here
-		// rather than where a creation starts is what keeps two concurrent
-		// creations from running two ticks and animating at double speed.
-		if !model.creatingTicking && len(model.creating) > 0 {
-			model.creatingTicking = true
-			cmd = tea.Batch(cmd, scheduleCreatingTick())
+		// Same one-timer discipline for the loading spinners: arming here
+		// rather than where loading starts is what keeps two loadings from
+		// running two ticks.
+		if !model.loadingTicking && model.loading() {
+			model.loadingTicking = true
+			cmd = tea.Batch(cmd, scheduleLoadingTick())
 		}
 		return model, cmd
 	}
@@ -1428,11 +1429,12 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err != nil {
 			m.setError("load error: " + msg.err.Error())
+			m.firstScanFailed = !m.groupsLoaded
 			return m, nil
 		}
 		firstLoad := !m.groupsLoaded
 		m.groups = msg.groups
-		m.groupsLoaded = true
+		m.groupsLoaded, m.firstScanFailed = true, false
 		m.recomputeMatches()
 		m.recomputeActive()
 		m.computeRecentRanks()
@@ -1445,15 +1447,19 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// freshness window (the deck's `r` re-kicks with force).
 		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
 
-	case creatingTickMsg:
-		// Re-arm only while something is still being set up, so the timer stops on
-		// its own once the last creation lands.
-		if len(m.creating) == 0 {
-			m.creatingTicking = false
-			return m, nil
+	case loadingTickMsg:
+		// The restore can only end here: its panes' first draws don't send a
+		// message of their own.
+		var restoredFlash tea.Cmd
+		m, restoredFlash = m.finishRestore()
+		// Re-arm only while something is still loading, so the timer stops on
+		// its own once the last loading ends.
+		if !m.loading() {
+			m.loadingTicking = false
+			return m, restoredFlash
 		}
-		m.creatingTicking = true
-		return m, scheduleCreatingTick()
+		m.loadingTicking = true
+		return m, tea.Batch(restoredFlash, scheduleLoadingTick())
 
 	case ctlRequestMsg:
 		return m.handleCtl(msg.p)
@@ -2169,6 +2175,7 @@ type agentGroup struct {
 	agents                    []boardRow
 	attn                      attnLevel   // highest attention among agents
 	busy                      bool        // some agent is working
+	starting                  bool        // some agent has not drawn yet
 	flag                      color.Color // the highlight key's colour; nil when not flagged
 	opened                    int64
 	account                   string           // Claude account; set by stripGroups only
@@ -2199,19 +2206,25 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 	for i, a := range ws.Agents {
 		pid := a.Pid()
 		attn := m.agentAttn(pid)
+		status := m.boardStatus(pid, attn)
+		starting := a.Starting()
+		switch {
+		case a.ExitedBeforeStart():
+			attn = attnWaiting // a dead agent needs the user to restart it
+			status = "exited before it started"
+		case starting:
+			status = "starting…"
+		}
 		busy := m.agentStatus[pid].Status == "busy"
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
 			kind: rowAgent, key: key, repo: repoName, worktree: wtName, path: path,
 			agentIdx: i, pid: pid, label: agentTitle(provider, a.Title), provider: provider,
-			status: m.boardStatus(pid, attn), attn: attn, busy: busy, stage: a.Stage,
+			status: status, attn: attn, busy: busy, starting: starting, stage: a.Stage,
 		})
-		if attn > g.attn {
-			g.attn = attn
-		}
-		if busy {
-			g.busy = true
-		}
+		g.attn = max(g.attn, attn)
+		g.busy = g.busy || busy
+		g.starting = g.starting || starting
 	}
 	return g, true
 }
@@ -3804,7 +3817,7 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 		return m, nil
 	}
 	var cmds []tea.Cmd
-	opened := 0
+	var opened []string
 	for _, key := range m.state.Open {
 		if m.mgr.Has(key) {
 			continue
@@ -3833,11 +3846,11 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 			continue
 		}
 		cmds = append(cmds, cmd)
-		opened++
+		opened = append(opened, key)
 	}
-	if opened > 0 {
+	if len(opened) > 0 {
 		m.recomputeActive()
-		cmds = append(cmds, m.flashCmd(fmt.Sprintf("restored %d workspace(s)", opened)))
+		m.restoring, m.restoreSince = opened, time.Now() // finishRestore flashes once they have all come up
 	}
 	return m, tea.Batch(cmds...)
 }

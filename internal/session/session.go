@@ -74,6 +74,17 @@ type Session struct {
 	dirty         func(*Session) // signalled when the screen changes
 	companion     io.Closer
 
+	// Starting state: from StartSpec until an agent or the editor first draws
+	// visible text. A terminal is never starting: a shell may wait silently
+	// and never draw. Keys typed into a starting agent wait in held, because a
+	// program that has not taken over its terminal yet gets them echoed as
+	// plain text and may lose them. heldMu orders held keys before any key
+	// sent after the first draw.
+	startedAt time.Time
+	starting  atomic.Bool
+	heldMu    sync.Mutex
+	held      []func()
+
 	// Render cache. emu.Render() re-serialises the entire w×h buffer to an ANSI
 	// string on every call (~60µs/616 allocs at 80×24 up to ~253µs/1,901 allocs
 	// at 200×50), so a frame triggered by anything other than this session's own
@@ -222,6 +233,8 @@ func StartSpec(spec Spec, dir string, w, h int, dirty func(*Session)) (*Session,
 	}
 	s.cursorVisible.Store(true)
 	s.renderCacheDirty.Store(true) // no cache yet: first Render must serialise
+	s.startedAt = time.Now()
+	s.starting.Store(spec.Kind != Terminal)
 	s.emu.SetCallbacks(vt.Callbacks{
 		CursorVisibility: func(v bool) { s.cursorVisible.Store(v) },
 	})
@@ -287,13 +300,17 @@ func (s *Session) pumpOutput() {
 		n, err := s.pty.Read(buf)
 		if n > 0 {
 			_, _ = s.emu.Write(guard.filter(buf[:n]))
+			if s.starting.Load() && s.hasVisibleText() {
+				s.finishStarting()
+			}
 			// Mark the cache stale BEFORE signalling the repaint, so the frame
 			// this write triggers never serves the pre-write screen.
 			s.renderCacheDirty.Store(true)
 			s.signal()
 		}
 		if err != nil {
-			s.closed.Store(true)
+			s.closed.Store(true) // before dropHeld, so no key is held after it
+			s.dropHeld()
 			s.signal()
 			s.closeCompanion()
 			return
@@ -314,9 +331,18 @@ func (s *Session) WriteInput(p []byte) (int, error) { return s.pty.Write(p) }
 // SendKey forwards a key event to the program. Typing also returns a scrolled-back
 // pane to the live screen: input the user cannot see the result of is worse than
 // losing their scroll position.
+//
+// While an agent is starting the key is held until its first draw. Esc and
+// Ctrl+C are sent at once and drop the held keys, so a program that hangs on
+// start can still be stopped.
 func (s *Session) SendKey(k uv.KeyEvent) {
 	s.ScrollToBottom()
-	s.emu.SendKey(k)
+	if isStopKey(k) {
+		s.dropHeld()
+		s.emu.SendKey(k)
+		return
+	}
+	s.sendOrHold(func() { s.emu.SendKey(k) })
 }
 
 // Paste delivers pasted text to the program. The emulator wraps it in the
@@ -325,9 +351,31 @@ func (s *Session) SendKey(k uv.KeyEvent) {
 // rather than as line-by-line keystrokes — nvim and claude both enable the
 // mode, and raw bytes would trigger editor auto-indent mangling or a premature
 // submit. When the child has not enabled the mode the text is sent as-is.
+//
+// A paste while the program is starting is held like a key, which also lets
+// the guards follow the mode the program turns on when it starts.
 func (s *Session) Paste(text string) {
 	s.ScrollToBottom()
-	s.emu.Paste(text)
+	s.sendOrHold(func() { s.emu.Paste(text) })
+}
+
+// Starting reports whether the program is running but has not drawn any
+// visible text yet.
+func (s *Session) Starting() bool { return s.starting.Load() && !s.closed.Load() }
+
+// ExitedBeforeStart reports whether the program ended before it drew any
+// visible text, which leaves its pane blank.
+func (s *Session) ExitedBeforeStart() bool { return s.starting.Load() && s.closed.Load() }
+
+// StartedAt is when the program was launched.
+func (s *Session) StartedAt() time.Time { return s.startedAt }
+
+// HeldKeys is how many keys and pastes wait for the program's first draw.
+func (s *Session) HeldKeys() int {
+	s.heldMu.Lock()
+	defer s.heldMu.Unlock()
+
+	return len(s.held)
 }
 
 // SendMouse forwards a mouse event to the program (the emulator only encodes it
@@ -589,6 +637,77 @@ func killAfter(pids []int, grace time.Duration) {
 			time.Sleep(20 * time.Millisecond)
 		}
 	}
+}
+
+// sendOrHold runs send now, or keeps it for the first draw while an agent is
+// starting. nvim gets keys at once: holding is for programs that lose input
+// typed before they start.
+func (s *Session) sendOrHold(send func()) {
+	s.heldMu.Lock()
+	defer s.heldMu.Unlock()
+
+	if s.Kind == Agent && s.Starting() {
+		s.held = append(s.held, send)
+		return
+	}
+	send()
+}
+
+// finishStarting ends the starting state and sends the held keys in order.
+func (s *Session) finishStarting() {
+	s.heldMu.Lock()
+	defer s.heldMu.Unlock()
+
+	s.starting.Store(false)
+	for _, send := range s.held {
+		send()
+	}
+	s.held = nil
+}
+
+// dropHeld forgets the keys held for the first draw.
+func (s *Session) dropHeld() {
+	s.heldMu.Lock()
+	defer s.heldMu.Unlock()
+
+	s.held = nil
+}
+
+// hasVisibleText reports whether any screen cell shows a character. Escape
+// codes alone (alternate screen, modes, a cleared screen) leave every cell
+// blank. Called only while starting, so the scan stops after the first draw.
+func (s *Session) hasVisibleText() bool {
+	for y := range s.emu.Height() {
+		if s.rowHasText(y) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// rowHasText reports whether screen row y shows a character.
+func (s *Session) rowHasText(y int) bool {
+	for x := range s.emu.Width() {
+		c := s.emu.CellAt(x, y)
+		if c != nil && strings.TrimSpace(c.Content) != "" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isStopKey is Esc or Ctrl+C, the keys that stop or cancel a program. Caps
+// lock and num lock don't change what the key means.
+func isStopKey(k uv.KeyEvent) bool {
+	key := k.Key()
+	if key.Code == uv.KeyEscape {
+		return true
+	}
+	mods := key.Mod &^ (uv.ModCapsLock | uv.ModNumLock | uv.ModScrollLock)
+
+	return key.Code == 'c' && mods == uv.ModCtrl
 }
 
 // reap waits for the program to exit, so Close knows when it is gone.

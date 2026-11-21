@@ -115,7 +115,13 @@ var (
 func (m Model) View() tea.View {
 	w, h := m.width, m.height
 	if w < minViableWidth || h < minViableHeight {
-		v := tea.NewView("ym — please enlarge the terminal")
+		// The first frame comes before the window size; asking to enlarge a
+		// terminal of unknown size would only flash.
+		text := "ym — please enlarge the terminal"
+		if w == 0 && h == 0 {
+			text = ""
+		}
+		v := tea.NewView(text)
 		v.ReportFocus = true
 		v.AltScreen = true
 		return v
@@ -157,7 +163,7 @@ func (m Model) View() tea.View {
 	default:
 		s := m.activeSession()
 		if p, ok := m.paneOf(s); ok {
-			body = m.appendSessionFooter(m.paneFrame(p.s.Render(), p, accentStyle))
+			body = m.appendSessionFooter(m.paneFrame(m.paneScreen(p.s), p, accentStyle))
 			cursor = m.sessionCursor()
 		}
 	}
@@ -630,44 +636,38 @@ type barRight struct {
 }
 
 // barRightZones assembles the bar's right side and locates its clickable zones.
-// The right side is the notification zone (with a 3-column gap) followed by the
-// workspace context label, with a 2-column trailing pad when anything is shown —
-// exactly what renderBar draws. The usage and pane segments each lead the context
-// label on their own screen (they never coexist), so both begin where the label
-// does.
+// The right side is the restore sign and the notification zone (each with a
+// 3-column gap) followed by the workspace context label, with a 2-column
+// trailing pad when anything is shown — exactly what renderBar draws. The usage
+// and pane segments each lead the context label on their own screen (they never
+// coexist), so both begin where the label does.
 func (m Model) barRightZones() barRight {
 	z := barRight{notif: m.renderNotifZone()}
+	restoring := m.restoringSign()
 	label := m.barContextLabel()
 	fullLabel := label
 	available := max(0, m.width-lipgloss.Width(m.renderBarLeft())-1)
-	assemble := func() string {
-		text := ""
-		if z.notif != "" {
-			text = z.notif + "   "
-		}
-		text += label
-		if text != "" {
-			text += "  "
-		}
-		return text
+
+	// Narrow bars drop parts in this order: the restore sign (the strip's …
+	// marks still show what is starting), then the volatile usage/agent/pane
+	// facts before stable identity, then the notifications, then the label's end.
+	tooWide := func() bool { return lipgloss.Width(barRightText(restoring, z.notif, label)) > available }
+	if tooWide() {
+		restoring = ""
 	}
-	if lipgloss.Width(assemble()) > available && m.current != nil {
-		// Volatile usage/agent/pane facts disappear before stable identity.
+	if tooWide() && m.current != nil {
 		label = dimStyle.Render(m.current.repo + " / " + m.current.worktree)
 	}
-	if lipgloss.Width(assemble()) > available {
+	if tooWide() {
 		z.notif = ""
 	}
-	if lipgloss.Width(assemble()) > available {
+	if tooWide() {
 		label = ansi.Truncate(label, max(0, available-2), "…")
 	}
-	z.text = assemble()
+	z.text = barRightText(restoring, z.notif, label)
 
-	z.notifStart = m.width - lipgloss.Width(z.text)
-	labelStart := z.notifStart
-	if z.notif != "" {
-		labelStart += lipgloss.Width(z.notif + "   ")
-	}
+	z.notifStart = m.width - lipgloss.Width(z.text) + lipgloss.Width(withBarGap(restoring))
+	labelStart := z.notifStart + lipgloss.Width(withBarGap(z.notif))
 	if label == fullLabel {
 		if seg, ok := m.usageSegment(); ok {
 			z.usage, z.usageStart = seg, labelStart
@@ -677,6 +677,26 @@ func (m Model) barRightZones() barRight {
 		}
 	}
 	return z
+}
+
+// barRightText is the bar's right side from its parts, any of which may be "".
+func barRightText(restoring, notif, label string) string {
+	text := withBarGap(restoring) + withBarGap(notif) + label
+	if text == "" {
+		return ""
+	}
+
+	return text + "  "
+}
+
+// withBarGap is part followed by the 3-column gap between right-side parts, or
+// "" for an empty part.
+func withBarGap(part string) string {
+	if part == "" {
+		return ""
+	}
+
+	return part + "   "
 }
 
 // notifZoneAt reports whether bar coordinates (x, y) land on the notification
@@ -1487,8 +1507,11 @@ func (m Model) renderNew(innerW, rows int) []string {
 	if len(m.repoMatches) == 0 {
 		// Before the first scan lands, an empty list means "still looking",
 		// not "nothing there" — don't claim the root is empty.
-		if !m.groupsLoaded {
-			return append(lines, dimStyle.Render("   scanning repos…"))
+		if m.scanning() {
+			return append(lines, "   "+m.loadingLine("scanning repos…"))
+		}
+		if m.firstScanFailed {
+			return append(lines, dimStyle.Render("   scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("   no repos under root"))
 	}
@@ -1600,23 +1623,12 @@ func (m Model) activeDisplay(innerW int) (lines []string, rowItem []int) {
 	return
 }
 
-// creatingSpinner are the braille frames the setup row animates through. Motion
-// is the whole point: a static "creating…" is what a hung process looks like.
-var creatingSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 // creatingRow draws one worktree-setup row: a spinner, the name it will have, and
 // how long it has been running. The elapsed time is what tells a user waiting on a
 // slow clone that ym is still working rather than wedged, so it is shown from the
 // first second rather than after some threshold.
 func (m Model) creatingRow(c creatingItem, innerW int) string {
-	frame := creatingSpinner[0]
-	if m.iconMode == config.IconsASCII || m.iconMode == config.IconsText {
-		frame = "*"
-	} else {
-		elapsed := time.Since(c.since) / creatingTickInterval
-		frame = creatingSpinner[int(elapsed)%len(creatingSpinner)]
-	}
-	label := fmt.Sprintf("  %s %s", frame, c.name)
+	label := fmt.Sprintf("  %s %s", m.spinner(), c.name)
 	note := fmt.Sprintf("setting up worktree… %ds", int(time.Since(c.since).Seconds()))
 	gap := innerW - lipgloss.Width(label) - lipgloss.Width(note)
 	if gap < 1 {
@@ -1644,8 +1656,11 @@ func (m Model) renderActive(innerW, rows int) []string {
 	// A pending creation counts as content: the empty-state copy invites the user
 	// to create a worktree, which is exactly the thing already underway.
 	if len(m.active) == 0 && len(m.creating) == 0 {
-		if !m.groupsLoaded {
-			return append(lines, dimStyle.Render("scanning…"))
+		if m.scanning() {
+			return append(lines, m.loadingLine("scanning worktrees…"))
+		}
+		if m.firstScanFailed {
+			return append(lines, dimStyle.Render("scan failed — see the error above"))
 		}
 		return append(lines, dimStyle.Render("no workspaces yet — pick a repo above to create one"))
 	}
@@ -2129,6 +2144,7 @@ func markLegend() string {
 	return strings.Join([]string{
 		dirtyStyle.Render("✷") + helpStyle.Render(" uncommitted"),
 		recentStyle.Render("1 2 3") + helpStyle.Render(" recently opened"),
+		dimStyle.Render("…") + helpStyle.Render(" starting"),
 	}, helpStyle.Render("   "))
 }
 
@@ -2354,7 +2370,7 @@ func (m Model) renderTermPanes(w, h int) string {
 		return ""
 	}
 	if ws.TermZoomed || len(ws.Terms) == 1 || ws.TermLayout == nil {
-		return ws.Terms[ws.ActiveTerm].Render()
+		return m.paneScreen(ws.Terms[ws.ActiveTerm])
 	}
 	return m.renderPaneNode(ws.TermLayout, w, h, ws)
 }
@@ -2369,7 +2385,7 @@ func (m Model) renderPaneNode(node *session.PaneNode, w, h int, ws *session.Work
 		if node.Idx >= len(ws.Terms) {
 			return ""
 		}
-		return ws.Terms[node.Idx].Render()
+		return m.paneScreen(ws.Terms[node.Idx])
 	}
 
 	if node.Dir == session.SplitV {
@@ -2770,7 +2786,7 @@ func (m Model) openStripGroup(g agentGroup) (tea.Model, tea.Cmd) {
 // shows, else in the accent colour. idle is the style of a worktree with
 // nothing to show.
 func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt, nameSt lipgloss.Style) {
-	sign, signSt = attnSign(g.attn, g.busy, idle)
+	sign, signSt = attnSign(g.attn, g.busy, g.starting, idle)
 	if sign == "" && g.flag != nil {
 		signSt = idle.Foreground(g.flag)
 	}
@@ -2786,8 +2802,8 @@ func (m Model) stripLook(g agentGroup, idle lipgloss.Style) (sign string, signSt
 }
 
 // attnSign is the sign of an agent's state and its style: "!" waiting, "✓" done,
-// "●" working, else no sign, in the seen or the idle style.
-func attnSign(attn attnLevel, busy bool, idle lipgloss.Style) (string, lipgloss.Style) {
+// "●" working, "…" starting, else no sign, in the seen or the idle style.
+func attnSign(attn attnLevel, busy, starting bool, idle lipgloss.Style) (string, lipgloss.Style) {
 	switch {
 	case attn == attnWaiting:
 		return "!", boldRed
@@ -2795,6 +2811,8 @@ func attnSign(attn attnLevel, busy bool, idle lipgloss.Style) (string, lipgloss.
 		return "✓", boldGreen
 	case busy:
 		return "●", dirtyStyle
+	case starting:
+		return "…", idle
 	case attn == attnSeen:
 		return "", nameStyle
 	}
