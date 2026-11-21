@@ -12,6 +12,10 @@ waiting on your input, the `! N` badge on the right signals it. The active repo 
 on the right. You can **click** any of the four icons to jump to that view (the session icons do
 nothing until a workspace is active).
 
+At startup the deck shows `⠹ scanning repos…` until git has looked at every worktree. ym then
+reopens the worktrees you had open, and the bar shows `⠹ restoring 3 of 14…` until each one's
+nvim, agents and terminals have drawn; then it says `restored 14 workspace(s)`.
+
 ## The deck
 
 ![The ym deck showing repositories, active worktrees, branch divergence, and the ambient plasma panel](screenshots/worktree-deck.png)
@@ -60,6 +64,12 @@ Pressing **enter** on a worktree starts nvim, an agent from `agents.default` and
 that worktree, and drops you into the nvim view. Sessions keep running: switching never relaunches
 them, and they last for ym's lifetime.
 
+A pane whose program has not drawn yet shows `⠹ starting claude…` in its middle (after 150 ms, so
+a fast start shows nothing). The seconds appear after 5 s, and after 30 s it says `still
+starting` and how to restart the agent. Keys you type into a starting agent wait and are sent
+once it has drawn (`3 keys waiting`); `esc` or `ctrl+c` drops them and goes through at once. A
+program that exits before it draws anything leaves a red `claude exited before it started`.
+
 - `alt+]` / `alt+[` cycle the views (nvim → agent → terminal → nvim), and `alt+1` / `alt+2` /
   `alt+3` jump straight to one.
 - `ctrl+g` returns to the deck. From the deck, `ctrl+g` jumps to your most recently opened
@@ -76,7 +86,7 @@ them, and they last for ym's lifetime.
 - **Session list:** `ctrl+\` opens the bar's open worktrees on the left, in the same order, under
   their repo, and under their feature (`⚑ name`, see [ctl.md](ctl.md)) or gh stack. A feature's
   manager comes first, marked `★`. Each agent session is a box: its sign (`!` waiting, `✓` done, `●`
-  working) and name in the top border, its worktree inside. A box with a sign has its border in
+  working, `…` starting) and name in the top border, its worktree inside. A box with a sign has its border in
   the sign's colour. The session you'd come back to (the current worktree's active agent) has a
   heavy border and an accent bar on its left, in the accent colour when it has no sign. A stage the
   session set with `ym ctl stage` (`step 2`, `review`) sits in the box's bottom border. Click a
@@ -92,8 +102,8 @@ them, and they last for ym's lifetime.
 ## The agent strip
 
 The bar lists every open worktree after its icons, in a fixed order, coloured by what its agents
-are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you, and
-dim when idle. White means "look at this": a finished agent you have looked at turns white ("your
+are doing: yellow while working, green `✓` when done and unread, red `!` when waiting for you (or
+exited before it started), `…` while starting, and dim when idle. White means "look at this": a finished agent you have looked at turns white ("your
 turn" in the board) until it works again. The current worktree is underlined.
 
 In each repo, the main checkout comes first, unless it belongs to a feature. Then come the

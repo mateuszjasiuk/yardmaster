@@ -2140,6 +2140,7 @@ func markLegend() string {
 	return strings.Join([]string{
 		dirtyStyle.Render("✷") + helpStyle.Render(" uncommitted"),
 		recentStyle.Render("1 2 3") + helpStyle.Render(" recently opened"),
+		dimStyle.Render("…") + helpStyle.Render(" starting"),
 	}, helpStyle.Render("   "))
 }
 

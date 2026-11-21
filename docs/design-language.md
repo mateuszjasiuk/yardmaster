@@ -89,7 +89,7 @@ Keyboard-first must not mean memory-first.
 No important state may depend on color alone.
 
 - Pair color with a glyph, word, position, or count.
-- Use consistent semantics everywhere: `!` needs attention, `✓` is healthy or newly complete, `✷` is uncommitted, `●/○` is live/stopped, `…` is pending.
+- Use consistent semantics everywhere: `!` needs attention, `✓` is healthy or newly complete, `✷` is uncommitted, `●/○` is live/stopped, `…` is pending (an agent still starting).
 - Do not reuse a glyph for unrelated meanings within the same view.
 - Status summaries should answer “what needs me?” before “what is happening?” Waiting input outranks unread completion; both outrank ambient activity.
 - Use elapsed time for continuing work and plain words for terminal states.
@@ -199,6 +199,8 @@ Ask only for information the system cannot infer. Start focus on the field most 
 ### Loading, empty, success, and error
 
 - Loading: present-progress wording such as `scanning…`, `loading diff…`, or `working…`; no fake percentages.
+- A wait the user is looking at gets the one braille spinner (`⠋⠙⠹…`) in yellow before its words: the deck scan, worktree setup, a pane whose program has not drawn, the restore count on the bar. This is the exception to "do not animate semantic status": loading is continuing work, and motion is what tells it from a hang. Show one spinner per place you wait; a list of many starting items uses the static `…`.
+- A short wait shows nothing: a pane's sign appears only after 150 ms, its seconds after 5 s, and after 30 s it says `still …` and how to get out. ym never gives up on the user's behalf.
 - Empty: explain what is absent and, when not obvious, the next action.
 - Success: brief transient feedback for actions whose result is not already visually obvious.
 - Error: persistent enough to read, colored red, scoped to the failed action, and recoverable without losing the user's place.
