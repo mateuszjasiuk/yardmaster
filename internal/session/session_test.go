@@ -1162,3 +1162,92 @@ func TestCloseLeavesAnAgentChildRunning(t *testing.T) {
 		t.Fatalf("the agent's child should keep running: %v", err)
 	}
 }
+
+// startAgent starts script under sh as an agent session.
+func startAgent(t *testing.T, script string) *Session {
+	t.Helper()
+	s, err := StartSpec(Spec{Kind: Agent, Argv: []string{"sh", "-c", script}}, t.TempDir(), 80, 24, func(*Session) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	return s
+}
+
+// eventually polls cond until it holds, or fails with what.
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting until %s", what)
+}
+
+func TestStartingEndsOnFirstVisibleText(t *testing.T) {
+	s := startAgent(t, `printf '\033[?1049h\033[2J'; sleep 0.4; printf READY; sleep 5`)
+
+	if !s.Starting() {
+		t.Fatal("a just started session is not starting")
+	}
+	time.Sleep(200 * time.Millisecond) // the escape codes have landed by now
+	if !s.Starting() {
+		t.Fatal("escape codes alone ended the starting state")
+	}
+	eventually(t, "the first text ends starting", func() bool { return !s.Starting() })
+	if s.ExitedBeforeStart() {
+		t.Error("a running program counts as exited before start")
+	}
+}
+
+func TestStartingAgentHoldsKeysUntilFirstDraw(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "captured")
+	s := startAgent(t, `stty raw -echo; sleep 0.3; printf READY; exec cat > '`+out+`'`)
+
+	s.SendKey(keyRune('h'))
+	s.Paste("i")
+	if got := s.HeldKeys(); got != 2 {
+		t.Fatalf("HeldKeys = %d, want 2", got)
+	}
+
+	waitForFileEquals(t, out, "hi")
+	if got := s.HeldKeys(); got != 0 {
+		t.Errorf("HeldKeys after the first draw = %d, want 0", got)
+	}
+}
+
+func TestStopKeyDropsHeldKeysAndGoesThrough(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "captured")
+	s := startAgent(t, `stty raw -echo; exec cat > '`+out+`'`)
+	time.Sleep(200 * time.Millisecond) // raw mode is on before the key goes through
+
+	s.SendKey(keyRune('a'))
+	s.SendKey(uv.KeyPressEvent{Code: uv.KeyEscape})
+
+	if got := s.HeldKeys(); got != 0 {
+		t.Errorf("HeldKeys after Esc = %d, want 0", got)
+	}
+	waitForFileEquals(t, out, "\x1b")
+}
+
+func TestExitBeforeFirstDrawIsReported(t *testing.T) {
+	s := startAgent(t, `exit 0`)
+
+	eventually(t, "the exit is reported", s.ExitedBeforeStart)
+	if s.Starting() {
+		t.Error("an exited program still counts as starting")
+	}
+}
+
+func TestOutputBeforeExitIsNotAFailedStart(t *testing.T) {
+	s := startAgent(t, `echo 'command not found'; exit 1`)
+
+	eventually(t, "the program exits", func() bool { return !s.Alive() })
+	if s.ExitedBeforeStart() {
+		t.Error("a program that printed its error counts as exited before start")
+	}
+}
