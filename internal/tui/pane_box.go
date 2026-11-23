@@ -24,7 +24,7 @@ func (m Model) paneFrame(screen string, p sessionPane, border lipgloss.Style) st
 	if !m.paneBoxes {
 		return screen
 	}
-	return renderPaneBox(screen, paneTitle(p.s), p.w, p.h, border)
+	return renderPaneBox(screen, paneTitle(p.s), m.heldNote(p.s), p.w, p.h, border)
 }
 
 // paneTitle is the name in a pane's top border: "nvim", or the agent's name.
@@ -37,8 +37,9 @@ func paneTitle(s *session.Session) string {
 
 // renderPaneBox draws a rounded border in the border style around a session's
 // screen, which is w×h cells inside the border, with the title in the top
-// border after the corner and one line.
-func renderPaneBox(screen, title string, w, h int, border lipgloss.Style) string {
+// border after the corner and one line, and the note (if any) at the right end
+// of the bottom border.
+func renderPaneBox(screen, title, note string, w, h int, border lipgloss.Style) string {
 	edge := lipgloss.RoundedBorder()
 	lines := splitLines(screen)
 	left, right := border.Render(edge.Left), border.Render(edge.Right)
@@ -61,7 +62,7 @@ func renderPaneBox(screen, title string, w, h int, border lipgloss.Style) string
 		line = ansi.Truncate(line, w, "") + "\x1b[m"
 		rows = append(rows, left+padLine(line, w)+right)
 	}
-	rows = append(rows, bottomBorder(edge, border, "", w+2))
+	rows = append(rows, bottomBorder(edge, border, note, w+2))
 
 	return strings.Join(rows, "\n")
 }

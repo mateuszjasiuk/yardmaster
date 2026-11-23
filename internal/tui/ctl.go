@@ -160,6 +160,7 @@ func (m Model) ctlInfo(it activeItem) ctl.WorktreeInfo {
 	info.Open, info.Agents = m.ctlAgents(key)
 	if m.state != nil {
 		info.Queued = len(m.state.Queue(key))
+		info.Held = m.heldForDraft(key) > 0
 		if feature, ok := m.state.FeatureOf(key); ok {
 			info.Feature, info.Manager = feature, m.state.Features[feature].Manager == key
 		}
@@ -477,13 +478,20 @@ func (m Model) ctlSend(p *ctl.Pending) (tea.Model, tea.Cmd) {
 	mm, cmd, now := m.enqueue(key, text)
 	if now {
 		p.Reply(ctl.Response{OK: true, Message: "sent to " + key})
-	} else {
-		n := 0
-		if mm.state != nil {
-			n = len(mm.state.Queue(key))
-		}
-		p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; delivered when the agent is idle)", key, n)})
+		return mm, cmd
 	}
+
+	if held := mm.heldForDraft(key); held > 0 {
+		p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; held: the user is typing in its agent, delivered after they send or clear it)", key, held)})
+		return mm, tea.Batch(cmd, mm.flashCmd(fmt.Sprintf("%d queued for %s, waiting for your draft", held, key)))
+	}
+
+	n := 0
+	if mm.state != nil {
+		n = len(mm.state.Queue(key))
+	}
+	p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; delivered when the agent is idle)", key, n)})
+
 	return mm, cmd
 }
 
@@ -501,12 +509,15 @@ func (m Model) enqueue(key, text string) (Model, tea.Cmd, bool) {
 
 // deliverQueued hands each workspace's next queued message to its active agent
 // when that agent is idle. Called after every status change; the queue is
-// otherwise left alone, so a message never lands mid-turn or on a permission
-// prompt. m is a pointer receiver because delivery pops the queue.
+// otherwise left alone, so a message never lands mid-turn, on a permission
+// prompt or in text the user is typing. m is a pointer receiver because
+// delivery pops the queue.
 func (m *Model) deliverQueued() tea.Cmd {
 	if m.state == nil {
 		return nil
 	}
+	m.settleDrafts()
+
 	var cmds []tea.Cmd
 	for key := range m.state.Queues {
 		ws, ok := m.mgr.Workspace(key)
@@ -525,6 +536,9 @@ func (m *Model) deliverQueued() tea.Cmd {
 			continue
 		}
 		if at, ok := m.queueSent[key]; ok && time.Since(at) < queueRetry {
+			continue
+		}
+		if _, typing := m.drafts[s]; typing {
 			continue
 		}
 		queued := m.state.Drain(key)

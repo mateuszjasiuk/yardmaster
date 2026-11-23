@@ -543,8 +543,8 @@ func (b sidePanelBoxLook) render(title, body, stage string, target sidePanelRow)
 	return rows
 }
 
-// bottomBorder is a box's bottom border, boxW wide, with the stage (if any) at
-// its right end in a dim colour.
+// bottomBorder is a box's bottom border, boxW wide, with the stage (or a pane's
+// note, if any) at its right end in a dim colour.
 func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, boxW int) string {
 	if stage == "" {
 		return border.Render(edge.BottomLeft + strings.Repeat(edge.Bottom, boxW-2) + edge.BottomRight)
