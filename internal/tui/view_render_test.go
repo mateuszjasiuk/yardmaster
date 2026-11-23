@@ -482,6 +482,32 @@ func TestScanThatWorksAfterAFailedOneClearsTheFailure(t *testing.T) {
 	}
 }
 
+func TestDeckStartsWithFocusOnActive(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+	groups := []Group{{Repo: repo.Repo{Name: "api"}, Worktrees: []WorktreeView{
+		{WT: repo.Worktree{Repo: "api", Name: "(main)", Branch: "main", IsMain: true}},
+		{WT: repo.Worktree{Repo: "api", Name: "spike", Branch: "spike"}},
+	}}}
+
+	mm, _ := m.update(loadedMsg{groups: groups})
+	m = mm.(Model)
+
+	if m.focus != focusActive || m.filter.Focused() {
+		t.Errorf("focus = %v, filter focused = %v; want ACTIVE and the filter idle", m.focus, m.filter.Focused())
+	}
+}
+
+func TestDeckWithNoWorktreesMovesFocusToNew(t *testing.T) {
+	m := New(&Controller{}, session.NewManager())
+
+	mm, _ := m.update(loadedMsg{groups: nil})
+	m = mm.(Model)
+
+	if m.focus != focusNew || !m.filter.Focused() {
+		t.Errorf("focus = %v, filter focused = %v; want NEW with the filter ready", m.focus, m.filter.Focused())
+	}
+}
+
 func TestFirstFrameBeforeTheWindowSizeIsEmpty(t *testing.T) {
 	m := New(&Controller{}, session.NewManager())
 

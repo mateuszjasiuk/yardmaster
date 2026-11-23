@@ -22,7 +22,8 @@ workspaces` when some failed to start. It stops waiting after 30 s.
 ![The ym deck showing repositories, active worktrees, branch divergence, and the ambient plasma panel](screenshots/worktree-deck.png)
 
 The deck (seedling) has a `NEW` repo fuzzy-finder and an `ACTIVE` list of your worktrees grouped
-by repo (`●` running · `○` stopped · `✷` uncommitted changes).
+by repo (`●` running · `○` stopped · `✷` uncommitted changes). ym starts with the focus on
+`ACTIVE`; when you have no worktrees yet, it moves to `NEW` once the scan is done.
 
 - Within each repo, worktrees are ordered by when you last opened them in ym (most recent first),
   falling back to git commit time for ones you haven't opened yet. The three most recently opened

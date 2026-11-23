@@ -2136,7 +2136,9 @@ func TestPasteReachesSession(t *testing.T) {
 // TestPasteReachesPickerFilter: a paste on the picker still lands in the
 // focused filter input (the pre-existing textinput behavior is preserved).
 func TestPasteReachesPickerFilter(t *testing.T) {
-	m := sampleModel() // picker, NEW section, filter focused
+	m := sampleModel()
+	m.focus = focusNew
+	m.filter.Focus()
 	if !m.filter.Focused() {
 		t.Fatal("precondition: the picker filter should be focused")
 	}

@@ -52,6 +52,9 @@ func stripModelKeys(t *testing.T, w int, keys ...string) Model {
 		})
 		mm, _ = m.activate(repoName, name, dir)
 		m = mm.(Model)
+	}
+	// Wait after opening them all, so the agents start side by side.
+	for _, key := range keys {
 		ws, _ := m.mgr.Workspace(key)
 		for _, a := range ws.Agents {
 			waitStarted(t, a)
