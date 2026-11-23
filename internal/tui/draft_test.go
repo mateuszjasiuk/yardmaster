@@ -32,8 +32,7 @@ func draftModel(t *testing.T) (Model, *session.Session) {
 func typeKeys(t *testing.T, m Model, keys ...tea.KeyPressMsg) Model {
 	t.Helper()
 	for _, k := range keys {
-		mm, _ := m.handleKey(k)
-		m = mm.(Model)
+		m, _ = press(t, m, k)
 	}
 
 	return m
@@ -82,9 +81,9 @@ func TestDeliverQueuedHoldsForTheUsersDraftUntilItIsSent(t *testing.T) {
 
 func TestDraftMarkKeys(t *testing.T) {
 	tests := []struct {
-		name  string
-		keys  []tea.KeyPressMsg
-		draft bool
+		name      string
+		keys      []tea.KeyPressMsg
+		wantDraft bool
 	}{
 		{"typing marks a draft", []tea.KeyPressMsg{keyH}, true},
 		{"Up can recall a prompt", []tea.KeyPressMsg{{Code: tea.KeyUp}}, true},
@@ -100,8 +99,8 @@ func TestDraftMarkKeys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, s := draftModel(t)
 			m = typeKeys(t, m, tt.keys...)
-			if _, got := m.drafts[s]; got != tt.draft {
-				t.Fatalf("draft = %t, want %t", got, tt.draft)
+			if _, got := m.drafts[s]; got != tt.wantDraft {
+				t.Fatalf("draft = %t, want %t", got, tt.wantDraft)
 			}
 		})
 	}
@@ -143,14 +142,7 @@ func TestDraftMarkEdges(t *testing.T) {
 }
 
 func TestCtlSendSaysTheQueueIsHeldForTheDraft(t *testing.T) {
-	m := ctlModel(t)
-	ws, err := m.mgr.Activate("r/a", t.TempDir(), []session.Spec{
-		{Kind: session.Agent, SessionID: "one", Argv: []string{"cat"}},
-	}, session.SameSize(80, 24))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(m.mgr.CloseAll)
+	ws, _, m := stageModel(t)
 	s := ws.ActiveAgentSession()
 	m.agentStatus = map[int]AgentStatus{s.Pid(): {Status: "idle"}}
 	m.drafts[s] = draft{}

@@ -40,7 +40,8 @@ func (m Model) noteDraftKey(s *session.Session, key string) {
 		if !has {
 			return
 		}
-		if !d.escAt.IsZero() && time.Since(d.escAt) <= draftEscWindow {
+		doubleEsc := !d.escAt.IsZero() && time.Since(d.escAt) <= draftEscWindow
+		if doubleEsc {
 			delete(m.drafts, s)
 			return
 		}
@@ -51,7 +52,7 @@ func (m Model) noteDraftKey(s *session.Session, key string) {
 			return
 		}
 		// A busy Claude queues the typed message itself and empties the box.
-		if m.agentStatus[s.Pid()].Status == "busy" {
+		if m.agentBusy(s) {
 			delete(m.drafts, s)
 			return
 		}
@@ -72,39 +73,48 @@ func (m Model) noteDraftPaste(s *session.Session) {
 // after the Enter) and of sessions that have ended.
 func (m Model) settleDrafts() {
 	for s, d := range m.drafts {
-		if !s.Alive() || d.sent && m.agentStatus[s.Pid()].Status == "busy" {
+		taken := d.sent && m.agentBusy(s)
+		if !s.Alive() || taken {
 			delete(m.drafts, s)
 		}
 	}
 }
 
-// heldForDraft is how many queued messages for key wait because its active
-// agent has a draft; 0 when nothing is held.
-func (m Model) heldForDraft(key string) int {
-	if m.state == nil {
-		return 0
+// queueHeld reports whether key's queue waits because its active agent has a
+// draft.
+func (m Model) queueHeld(key string) bool {
+	if m.state == nil || len(m.state.Queue(key)) == 0 {
+		return false
 	}
 	ws, ok := m.mgr.Workspace(key)
 	if !ok {
-		return 0
+		return false
 	}
-	if _, has := m.drafts[ws.ActiveAgentSession()]; !has {
-		return 0
-	}
+	agent := ws.ActiveAgentSession()
+	_, hasDraft := m.drafts[agent]
 
-	return len(m.state.Queue(key))
+	return hasDraft
 }
 
 // heldNote is the sign in an agent pane's bottom border while its queue waits
 // for the user's draft, or "".
 func (m Model) heldNote(s *session.Session) string {
-	if m.current == nil || m.current.ws == nil || s != m.current.ws.ActiveAgentSession() {
+	if m.current == nil || m.current.ws == nil || m.state == nil {
 		return ""
 	}
-	n := m.heldForDraft(m.current.key)
-	if n == 0 {
+	if _, hasDraft := m.drafts[s]; !hasDraft {
+		return ""
+	}
+	onActiveAgent := s == m.current.ws.ActiveAgentSession()
+	n := len(m.state.Queue(m.current.key))
+	if !onActiveAgent || n == 0 {
 		return ""
 	}
 
 	return fmt.Sprintf("%d queued · waiting for your draft", n)
+}
+
+// agentBusy reports whether ym last saw agent s in a turn.
+func (m Model) agentBusy(s *session.Session) bool {
+	return m.agentStatus[s.Pid()].Status == "busy"
 }

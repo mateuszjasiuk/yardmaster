@@ -160,7 +160,7 @@ func (m Model) ctlInfo(it activeItem) ctl.WorktreeInfo {
 	info.Open, info.Agents = m.ctlAgents(key)
 	if m.state != nil {
 		info.Queued = len(m.state.Queue(key))
-		info.Held = m.heldForDraft(key) > 0
+		info.Held = m.queueHeld(key)
 		if feature, ok := m.state.FeatureOf(key); ok {
 			info.Feature, info.Manager = feature, m.state.Features[feature].Manager == key
 		}
@@ -481,14 +481,13 @@ func (m Model) ctlSend(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		return mm, cmd
 	}
 
-	if held := mm.heldForDraft(key); held > 0 {
-		p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; held: the user is typing in its agent, delivered after they send or clear it)", key, held)})
-		return mm, tea.Batch(cmd, mm.flashCmd(fmt.Sprintf("%d queued for %s, waiting for your draft", held, key)))
-	}
-
 	n := 0
 	if mm.state != nil {
 		n = len(mm.state.Queue(key))
+	}
+	if mm.queueHeld(key) {
+		p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; held: the user is typing in its agent, delivered after they send or clear it)", key, n)})
+		return mm, tea.Batch(cmd, mm.flashCmd(fmt.Sprintf("%d queued for %s, waiting for your draft", n, key)))
 	}
 	p.Reply(ctl.Response{OK: true, Message: fmt.Sprintf("queued for %s (%d waiting; delivered when the agent is idle)", key, n)})
 
@@ -538,7 +537,7 @@ func (m *Model) deliverQueued() tea.Cmd {
 		if at, ok := m.queueSent[key]; ok && time.Since(at) < queueRetry {
 			continue
 		}
-		if _, typing := m.drafts[s]; typing {
+		if _, hasDraft := m.drafts[s]; hasDraft {
 			continue
 		}
 		queued := m.state.Drain(key)
