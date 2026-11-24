@@ -537,7 +537,7 @@ func (m *Model) deliverQueued() tea.Cmd {
 		if at, ok := m.queueSent[key]; ok && time.Since(at) < queueRetry {
 			continue
 		}
-		if _, hasDraft := m.drafts[s]; hasDraft {
+		if m.hasDraft(s) {
 			continue
 		}
 		queued := m.state.Drain(key)
