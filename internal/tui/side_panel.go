@@ -543,20 +543,20 @@ func (b sidePanelBoxLook) render(title, body, stage string, target sidePanelRow)
 	return rows
 }
 
-// bottomBorder is a box's bottom border, boxW wide, with the label (a stage or
-// a pane's note, if any) at its right end in a dim colour.
-func bottomBorder(edge lipgloss.Border, border lipgloss.Style, label string, boxW int) string {
-	if label == "" {
+// bottomBorder is a box's bottom border, boxW wide, with the stage (if any) at
+// its right end in a dim colour.
+func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, boxW int) string {
+	if stage == "" {
 		return border.Render(edge.BottomLeft + strings.Repeat(edge.Bottom, boxW-2) + edge.BottomRight)
 	}
 
-	// Around the label: the corner and at least one line before it, a space on
+	// Around the stage: the corner and at least one line before it, a space on
 	// each side, one line and the corner after it.
 	const around = 6
-	label = truncateTo(label, boxW-around)
-	line := strings.Repeat(edge.Bottom, boxW-around+1-lipgloss.Width(label))
+	stage = truncateTo(stage, boxW-around)
+	line := strings.Repeat(edge.Bottom, boxW-around+1-lipgloss.Width(stage))
 
-	return border.Render(edge.BottomLeft+line+" ") + dimStyle.Render(label) + border.Render(" "+edge.Bottom+edge.BottomRight)
+	return border.Render(edge.BottomLeft+line+" ") + dimStyle.Render(stage) + border.Render(" "+edge.Bottom+edge.BottomRight)
 }
 
 // sidePanelRepo renders a repo's header, w columns wide. An extra Claude

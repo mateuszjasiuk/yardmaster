@@ -100,7 +100,7 @@ func (m Model) queueHeld(key string) bool {
 	return m.hasDraft(ws.ActiveAgentSession())
 }
 
-// heldNote is the sign in an agent pane's bottom border while its queue waits
+// heldNote is the sign in an agent pane's top border while its queue waits
 // for the user's draft, or "".
 func (m Model) heldNote(s *session.Session) string {
 	if m.current == nil || m.current.ws == nil {

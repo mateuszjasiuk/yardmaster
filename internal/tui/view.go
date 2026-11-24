@@ -64,6 +64,8 @@ var (
 	// stackWaitStyle colours the deck's "checks pending" stack glyph (yellow),
 	// kept distinct from the ahead/behind hues it sits beside in the row cluster.
 	stackWaitStyle = lipgloss.NewStyle().Foreground(cYellow)
+	// heldStyle colours the sign of a queue that waits for the user's draft.
+	heldStyle = lipgloss.NewStyle().Foreground(cYellow)
 
 	// Non-bold accent foreground for the bar's pane indicator and the accent
 	// split divider.

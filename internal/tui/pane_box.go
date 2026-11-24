@@ -37,19 +37,27 @@ func paneTitle(s *session.Session) string {
 
 // renderPaneBox draws a rounded border in the border style around a session's
 // screen, which is w×h cells inside the border, with the title in the top
-// border after the corner and one line, and the note (if any) at the right end
-// of the bottom border.
+// border after the corner and one line, and the note (if any) in yellow after
+// the title.
 func renderPaneBox(screen, title, note string, w, h int, border lipgloss.Style) string {
 	edge := lipgloss.RoundedBorder()
 	lines := splitLines(screen)
 	left, right := border.Render(edge.Left), border.Render(edge.Right)
 
-	// One line before the title and at least one after it.
+	// One line before the title and at least one after it (and after the note).
 	title = truncateTo(title, w-2)
-	fill := strings.Repeat(edge.Top, w-1-lipgloss.Width(title))
+	head := border.Render(edge.TopLeft + edge.Top + title)
+	used := 2 + lipgloss.Width(title)
+	const aroundNote = 4 // " ─ " before it, " " after it
+	if room := w - used - aroundNote; note != "" && room > 0 {
+		note = truncateTo(note, room)
+		head += border.Render(" "+edge.Top+" ") + heldStyle.Render(note) + border.Render(" ")
+		used += aroundNote + lipgloss.Width(note)
+	}
+	fill := strings.Repeat(edge.Top, w+1-used)
 
 	rows := make([]string, 0, h+2)
-	rows = append(rows, border.Render(edge.TopLeft+edge.Top+title+fill+edge.TopRight))
+	rows = append(rows, head+border.Render(fill+edge.TopRight))
 	for i := range h {
 		line := ""
 		if i < len(lines) {
@@ -62,7 +70,7 @@ func renderPaneBox(screen, title, note string, w, h int, border lipgloss.Style) 
 		line = ansi.Truncate(line, w, "") + "\x1b[m"
 		rows = append(rows, left+padLine(line, w)+right)
 	}
-	rows = append(rows, bottomBorder(edge, border, note, w+2))
+	rows = append(rows, bottomBorder(edge, border, "", w+2))
 
 	return strings.Join(rows, "\n")
 }

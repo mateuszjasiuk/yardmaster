@@ -24,8 +24,8 @@ ym ctl stage "in review" --worktree myrepo/fix-login  # the same for a worktree'
 - They also wait while you are typing in that agent, so they never land in your own half-written
   message. ym can't read the input box, so it goes by your keys: any key marks a draft, and the
   mark goes when the agent starts the turn after your Enter, or on ctrl+c or Esc twice. The
-  agent pane's bottom border shows `1 queued · waiting for your draft`, and `ym ctl list` shows
-  `held`. A draft you abandon keeps the queue waiting until you clear it.
+  agent pane's top border shows `1 queued · waiting for your draft` in yellow, and `ym ctl list`
+  shows `held`. A draft you abandon keeps the queue waiting until you clear it.
 - `spawn` creates the worktree and starts an agent on the prompt without switching your view.
   The reply says the agent's name (`… started a claude agent named Squirtle`), picked from
   `agent_names` (see [config.md](config.md)).
