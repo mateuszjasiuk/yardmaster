@@ -16,25 +16,31 @@ const draftEscWindow = time.Second
 // ym cannot read the box; it only sees the keys it forwards, so the mark is
 // kept from those keys. While it is set, queued messages wait.
 type draft struct {
-	// sent is set by an Enter while the agent was not busy. The text counts as
-	// sent once the agent turns busy: an Enter that picks an @file or /command
-	// item leaves the agent idle and the text in the box.
-	sent bool
+	// entered is set by an Enter while the agent was not busy. The text counts
+	// as sent once the agent turns busy: an Enter that picks an @file or
+	// /command item leaves the agent idle and the text in the box.
+	entered bool
 	// escAt is when the last Esc came, to spot a double Esc.
 	escAt time.Time
 }
 
-// noteDraftKey updates s's draft mark for a key the user sends it. Every key
-// marks a draft, except ctrl+c and a double Esc, which empty the box, and
-// Enter, which sends it.
+// noteDraftKey updates s's draft mark for a key the user sends it. ctrl+c and a
+// double Esc empty the box; a single Esc or an Enter only changes a draft that
+// is already marked; every other key marks one.
 func (m Model) noteDraftKey(s *session.Session, key string) {
 	if s.Kind != session.Agent {
+		return
+	}
+	// On a permission prompt or a question, keys answer it and leave the box
+	// alone.
+	if m.agentStatus[s.Pid()].Status == "waiting" {
 		return
 	}
 
 	d, has := m.drafts[s]
 	switch key {
-	case "ctrl+c":
+	// Two Esc that arrive in one read come in as a single alt+esc.
+	case "ctrl+c", "alt+esc":
 		delete(m.drafts, s)
 	case "esc":
 		if !has {
@@ -56,7 +62,7 @@ func (m Model) noteDraftKey(s *session.Session, key string) {
 			delete(m.drafts, s)
 			return
 		}
-		m.drafts[s] = draft{sent: true}
+		m.drafts[s] = draft{entered: true}
 	default:
 		m.drafts[s] = draft{}
 	}
@@ -73,7 +79,7 @@ func (m Model) noteDraftPaste(s *session.Session) {
 // after the Enter) and of sessions that have ended.
 func (m Model) settleDrafts() {
 	for s, d := range m.drafts {
-		taken := d.sent && m.agentBusy(s)
+		taken := d.entered && m.agentBusy(s)
 		if !s.Alive() || taken {
 			delete(m.drafts, s)
 		}
@@ -90,28 +96,28 @@ func (m Model) queueHeld(key string) bool {
 	if !ok {
 		return false
 	}
-	agent := ws.ActiveAgentSession()
-	_, hasDraft := m.drafts[agent]
 
-	return hasDraft
+	return m.hasDraft(ws.ActiveAgentSession())
 }
 
 // heldNote is the sign in an agent pane's bottom border while its queue waits
 // for the user's draft, or "".
 func (m Model) heldNote(s *session.Session) string {
-	if m.current == nil || m.current.ws == nil || m.state == nil {
-		return ""
-	}
-	if _, hasDraft := m.drafts[s]; !hasDraft {
+	if m.current == nil || m.current.ws == nil {
 		return ""
 	}
 	onActiveAgent := s == m.current.ws.ActiveAgentSession()
-	n := len(m.state.Queue(m.current.key))
-	if !onActiveAgent || n == 0 {
+	if !onActiveAgent || !m.queueHeld(m.current.key) {
 		return ""
 	}
 
-	return fmt.Sprintf("%d queued · waiting for your draft", n)
+	return fmt.Sprintf("%d queued · waiting for your draft", len(m.state.Queue(m.current.key)))
+}
+
+// hasDraft reports whether agent s may hold text the user typed.
+func (m Model) hasDraft(s *session.Session) bool {
+	_, has := m.drafts[s]
+	return has
 }
 
 // agentBusy reports whether ym last saw agent s in a turn.

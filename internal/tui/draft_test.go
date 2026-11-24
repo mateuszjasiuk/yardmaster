@@ -29,6 +29,7 @@ func draftModel(t *testing.T) (Model, *session.Session) {
 	return m, s
 }
 
+// typeKeys presses keys in order on m's active session.
 func typeKeys(t *testing.T, m Model, keys ...tea.KeyPressMsg) Model {
 	t.Helper()
 	for _, k := range keys {
@@ -92,6 +93,7 @@ func TestDraftMarkKeys(t *testing.T) {
 		{"one Esc keeps the text", []tea.KeyPressMsg{keyH, keyEsc}, true},
 		{"a double Esc empties the box", []tea.KeyPressMsg{keyH, keyEsc, keyEsc}, false},
 		{"a key between two Esc", []tea.KeyPressMsg{keyH, keyEsc, keyH, keyEsc}, true},
+		{"a fast double Esc read as alt+esc", []tea.KeyPressMsg{keyH, {Code: tea.KeyEscape, Mod: tea.ModAlt}}, false},
 		{"Esc alone marks nothing", []tea.KeyPressMsg{keyEsc}, false},
 		{"Enter alone marks nothing", []tea.KeyPressMsg{keyEnter}, false},
 	}
@@ -122,6 +124,14 @@ func TestDraftMarkEdges(t *testing.T) {
 		m = typeKeys(t, m, keyEsc)
 		if _, got := m.drafts[s]; !got {
 			t.Fatal("two Esc far apart are not a double Esc")
+		}
+	})
+	t.Run("keys on a prompt answer it and leave the mark alone", func(t *testing.T) {
+		m, s := draftModel(t)
+		m.agentStatus[s.Pid()] = AgentStatus{Status: "waiting", WaitingFor: "permission prompt"}
+		m = typeKeys(t, m, tea.KeyPressMsg{Code: '1', Text: "1"})
+		if m.hasDraft(s) {
+			t.Fatal("a number key that answers a prompt types nothing into the box")
 		}
 	})
 	t.Run("a paste marks a draft", func(t *testing.T) {
