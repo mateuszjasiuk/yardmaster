@@ -65,7 +65,7 @@ func TestPaneBoxNamesTheAgentSideBySide(t *testing.T) {
 }
 
 func TestRenderPaneBoxCutsALongTitle(t *testing.T) {
-	top := ansi.Strip(strings.Split(renderPaneBox("", "a-very-long-name", 8, 1, barSep), "\n")[0])
+	top := ansi.Strip(strings.Split(renderPaneBox("", "a-very-long-name", "", 8, 1, barSep), "\n")[0])
 	if top != "╭─a-ver…─╮" {
 		t.Fatalf("a long title should be cut to fit, got %q", top)
 	}
@@ -118,14 +118,30 @@ func TestPaneBoxesOffKeepsTheLineAndTheDivider(t *testing.T) {
 }
 
 func TestRenderPaneBoxKeepsTheBorderInPlace(t *testing.T) {
-	box := renderPaneBox("\x1b[41mabcdefghij", "", 4, 1, barSep)
+	box := renderPaneBox("\x1b[41mabcdefghij", "", "", 4, 1, barSep)
 	row := strings.Split(box, "\n")[1]
 
 	if got := ansi.Strip(row); got != "│abcd│" {
 		t.Fatalf("a line wider than the box should be cut, got %q", got)
 	}
-	short := strings.Split(renderPaneBox("\x1b[41mab", "", 4, 1, barSep), "\n")[1]
+	short := strings.Split(renderPaneBox("\x1b[41mab", "", "", 4, 1, barSep), "\n")[1]
 	if !strings.Contains(short, "ab\x1b[m  ") {
 		t.Fatalf("the colour should be reset before the padding, got %q", short)
+	}
+}
+
+func TestPaneBoxShowsTheNoteAfterTheTitle(t *testing.T) {
+	rows := strings.Split(renderPaneBox("", "claude", "1 queued", 20, 1, barSep), "\n")
+	top, bottom := ansi.Strip(rows[0]), ansi.Strip(rows[2])
+	if top != "╭─claude ─ 1 queued ─╮" {
+		t.Fatalf("the note should follow the title in the top border, got %q", top)
+	}
+	if strings.Contains(bottom, "queued") {
+		t.Fatalf("the bottom border should stay plain, got %q", bottom)
+	}
+
+	narrow := ansi.Strip(strings.Split(renderPaneBox("", "claude", "1 queued", 8, 1, barSep), "\n")[0])
+	if ansi.StringWidth(narrow) != 10 {
+		t.Fatalf("a narrow box should keep its width, got %q", narrow)
 	}
 }

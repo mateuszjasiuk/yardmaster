@@ -439,6 +439,10 @@ type Model struct {
 	// can drive that overlay without switching Codex into jittery raw mode.
 	codexTranscript map[*session.Session]bool
 
+	// drafts marks the agent sessions whose input box may hold the user's text,
+	// so deliverQueued does not paste into it (see draft.go).
+	drafts map[*session.Session]draft
+
 	// live agent statuses from `claude agents --json`, keyed by pid
 	agentStatus     map[int]AgentStatus
 	agentPrevStatus map[int]string    // pid → status from previous poll, for transition detection
@@ -675,6 +679,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		highlightColors: highlightColors(ctrl.HighlightColors()),
 		removed:         map[int]int64{},
 		codexTranscript: map[*session.Session]bool{},
+		drafts:          map[*session.Session]draft{},
 		stackInfo:       map[string]stackEntry{},
 		stackFetch:      stack.Status,
 		stackSubmit:     stack.Submit,
@@ -1967,6 +1972,7 @@ func (m Model) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	if onSession {
 		if s := m.activeSession(); s != nil {
 			m = m.dismissHint() // first input into a session retires the hint
+			m.noteDraftPaste(s)
 			s.Paste(msg.Content)
 		}
 		return m, nil
@@ -4216,6 +4222,7 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				delete(m.codexTranscript, s)
 			}
 		}
+		m.noteDraftKey(s, msg.String())
 		s.SendKey(toUVKey(msg))
 	}
 	return m, nil

@@ -362,6 +362,9 @@ func formatWorktree(wt ctl.WorktreeInfo) string {
 	}
 	if wt.Queued > 0 {
 		b.WriteString(fmt.Sprintf("  queued=%d", wt.Queued))
+		if wt.Held {
+			b.WriteString("  held")
+		}
 	}
 	if wt.StackTotal > 0 {
 		b.WriteString("  stack=")
