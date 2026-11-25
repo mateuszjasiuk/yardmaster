@@ -330,24 +330,31 @@ func TestSidePanelShowsTheStageInTheBottomBorder(t *testing.T) {
 	}
 }
 
-func TestStageStyleColoursKnownWords(t *testing.T) {
+func TestStageStyleColoursEachPhase(t *testing.T) {
 	cases := []struct {
 		stage string
 		want  lipgloss.Style
 	}{
 		{"plan", placeStyle},
-		{"Planning", placeStyle},
+		{"design grill", placeStyle},
+		{"Plan Review", placeStyle},
 		{"step 2", accentStyle},
-		{"build", accentStyle},
-		{"in review", identityStyle},
+		{"step 12", accentStyle},
+		{"fixes", accentStyle},
+		{"review", identityStyle},
+		{"grill", identityStyle},
+		{"ready", boldPurple},
 		{"QA", groupStyle},
-		{"manual qa", groupStyle},
 		{"done", dimStyle},
-		{"stepping", dimStyle},
+		{"step", dimStyle},
+		{"step two", dimStyle},
+		{"in review", dimStyle},
 	}
 	for _, tc := range cases {
-		if got := stageStyle(tc.stage); got.GetForeground() != tc.want.GetForeground() {
-			t.Errorf("stageStyle(%q) = %v, want %v", tc.stage, got.GetForeground(), tc.want.GetForeground())
+		got := stageStyle(tc.stage)
+		sameLook := got.GetForeground() == tc.want.GetForeground() && got.GetBold() == tc.want.GetBold()
+		if !sameLook {
+			t.Errorf("stageStyle(%q) = %v bold %v, want %v bold %v", tc.stage, got.GetForeground(), got.GetBold(), tc.want.GetForeground(), tc.want.GetBold())
 		}
 	}
 }

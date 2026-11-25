@@ -149,7 +149,7 @@ Rules:
 
 - Assign color by meaning, not by feature preference. A new thing on screen takes the hue of its role in the table above.
 - Status colours a sign and a border; it never replaces an identity colour. In the side panel a session's name stays purple whatever its state. The agent strip is the exception: it has no border, so the name itself takes the status colour.
-- A session's stage borrows four hues so the stage can be read at a glance: `plan` cyan, `step N` or `build` blue, `review` purple, `QA` orange; any other word is secondary gray. The first known word counts, ignoring case (`in review` is review). Stages never take a status colour, because the box already shows the agent's status.
+- A session's stage borrows four hues, one per phase, so it can be read at a glance: planning (`plan`, `design grill`, `plan review`) cyan, building (`step N`, `fixes`) blue, checking (`review`, `grill`, and `ready` in bold, as the session waits for the user) purple, `QA` orange. `done` and any other word are secondary gray. Stages never take a status colour, because the box already shows the agent's status.
 - The accent border means focus. A faint border means structure without focus.
 - Flag (highlight) colours are the user's own marks, so their defaults avoid every hue in the table above.
 - Selection uses a neutral filled background with bright primary text. Use accent-filled chips only for small binary/segmented choices.

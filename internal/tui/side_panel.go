@@ -559,22 +559,28 @@ func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, box
 	return border.Render(edge.BottomLeft+line+" ") + stageStyle(stage).Render(stage) + border.Render(" "+edge.Bottom+edge.BottomRight)
 }
 
-// stageStyle colours a stage by the first word it knows, ignoring case, so
-// "in review" is review: plan cyan, step or build blue, review purple, QA
-// orange. Any other stage is dim. Green, yellow and red stay for the agent's
-// status on the same box.
+// stageStyle colours a stage by its phase, so it can be read at a glance:
+// planning cyan, building blue, checking purple (ready, where the session
+// waits for the user, in bold), QA orange. Any other stage, done among them,
+// is dim. Green, yellow and red stay for the agent's status on the same box.
 func stageStyle(stage string) lipgloss.Style {
-	for _, word := range strings.Fields(strings.ToLower(stage)) {
-		switch word {
-		case "plan", "planning":
-			return placeStyle
-		case "step", "build", "building":
-			return accentStyle
-		case "review":
-			return identityStyle
-		case "qa":
-			return groupStyle
-		}
+	stage = strings.ToLower(stage)
+	n, isStep := strings.CutPrefix(stage, "step ")
+	if isStep && n != "" && strings.Trim(n, "0123456789") == "" {
+		return accentStyle
+	}
+
+	switch stage {
+	case "plan", "design grill", "plan review":
+		return placeStyle
+	case "fixes":
+		return accentStyle
+	case "review", "grill":
+		return identityStyle
+	case "ready":
+		return boldPurple
+	case "qa":
+		return groupStyle
 	}
 
 	return dimStyle
