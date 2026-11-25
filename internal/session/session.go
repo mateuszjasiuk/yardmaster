@@ -74,16 +74,20 @@ type Session struct {
 	dirty         func(*Session) // signalled when the screen changes
 	companion     io.Closer
 
-	// Starting state: from StartSpec until an agent or the editor first draws
-	// visible text. A terminal is never starting: a shell may wait silently
-	// and never draw. Keys typed into a starting agent wait in held, because a
-	// program that has not taken over its terminal yet gets them echoed as
-	// plain text and may lose them. heldMu orders held keys before any key
-	// sent after the first draw.
+	// Starting state: from StartSpec until an agent or the editor has drawn
+	// visible text and gone quiet (settleAfterQuiet). A terminal is never
+	// starting: a shell may wait silently and never draw. Keys typed into a
+	// starting agent wait in held, because a program that has not taken over
+	// its terminal yet gets them echoed as plain text and may lose them.
+	// heldMu orders held keys before any key sent after the start.
 	startedAt time.Time
 	starting  atomic.Bool
 	heldMu    sync.Mutex
 	held      []func()
+
+	// firstTextAt and settle are touched only by the pty pump goroutine.
+	firstTextAt time.Time
+	settle      *time.Timer
 
 	// Render cache. emu.Render() re-serialises the entire w×h buffer to an ANSI
 	// string on every call (~60µs/616 allocs at 80×24 up to ~253µs/1,901 allocs
@@ -300,8 +304,8 @@ func (s *Session) pumpOutput() {
 		n, err := s.pty.Read(buf)
 		if n > 0 {
 			_, _ = s.emu.Write(guard.filter(buf[:n]))
-			if s.starting.Load() && s.hasVisibleText() {
-				s.finishStarting()
+			if s.starting.Load() {
+				s.noteStartingOutput()
 			}
 			// Mark the cache stale BEFORE signalling the repaint, so the frame
 			// this write triggers never serves the pre-write screen.
@@ -309,6 +313,9 @@ func (s *Session) pumpOutput() {
 			s.signal()
 		}
 		if err != nil {
+			if !s.firstTextAt.IsZero() {
+				s.finishStarting() // it drew before it exited, so it did start
+			}
 			s.closed.Store(true) // before dropHeld, so no key is held after it
 			s.dropHeld()
 			s.signal()
@@ -653,7 +660,41 @@ func (s *Session) sendOrHold(send func()) {
 	send()
 }
 
-// finishStarting ends the starting state and sends the held keys in order.
+// A starting program counts as started once it has drawn visible text and
+// then written nothing for settleAfterQuiet: Claude draws its logo, the
+// conversation and the input box in several writes. One that keeps writing
+// (an animation) counts as started settleAtMost after its first text.
+const (
+	settleAfterQuiet = 200 * time.Millisecond
+	settleAtMost     = 3 * time.Second
+)
+
+// noteStartingOutput runs on the pty pump after each write while the program
+// is starting: it waits for the first visible text, then for the output to go
+// quiet.
+func (s *Session) noteStartingOutput() {
+	if s.firstTextAt.IsZero() {
+		if !s.hasVisibleText() {
+			return
+		}
+		s.firstTextAt = time.Now()
+	}
+
+	if time.Since(s.firstTextAt) >= settleAtMost {
+		s.settle.Stop()
+		s.finishStarting()
+		return
+	}
+	if s.settle == nil {
+		s.settle = time.AfterFunc(settleAfterQuiet, s.finishStarting)
+		return
+	}
+	s.settle.Reset(settleAfterQuiet)
+}
+
+// finishStarting ends the starting state and sends the held keys in order. It
+// may run twice (the settle timer and the pump); the second run finds nothing
+// held.
 func (s *Session) finishStarting() {
 	s.heldMu.Lock()
 	defer s.heldMu.Unlock()
@@ -675,7 +716,7 @@ func (s *Session) dropHeld() {
 
 // hasVisibleText reports whether any screen cell shows a character. Escape
 // codes alone (alternate screen, modes, a cleared screen) leave every cell
-// blank. Called only while starting, so the scan stops after the first draw.
+// blank. Called only until the first visible text.
 func (s *Session) hasVisibleText() bool {
 	for y := range s.emu.Height() {
 		if s.rowHasText(y) {

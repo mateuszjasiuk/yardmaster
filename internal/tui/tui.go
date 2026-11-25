@@ -596,7 +596,6 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 	filter := textinput.New()
 	filter.Placeholder = "filter repos…"
 	filter.Prompt = "› "
-	filter.Focus()
 
 	name := textinput.New()
 	name.Placeholder = "branch-name"
@@ -672,7 +671,7 @@ func New(ctrl *Controller, mgr *session.Manager) Model {
 		boardInput:     boardInput,
 		agentProviders: providers, defaultAgentProvider: defaultProvider,
 		formProvider:    defaultProvider,
-		focus:           focusNew,
+		focus:           focusActive, // the first load moves it to NEW when there is nothing to pick
 		agentPrevStatus: map[int]string{},
 		attention:       map[int]attnEntry{},
 		highlighted:     map[string]int{},
@@ -1444,13 +1443,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recomputeActive()
 		m.computeRecentRanks()
 		m = m.showCtlRemove() // a parked `ym ctl remove`, once the deck is idle
-		var restore tea.Cmd
+		var restore, newFocus tea.Cmd
 		if firstLoad && m.ctrl.RestoreSessions() {
 			m, restore = m.restoreSessions()
 		}
+		if firstLoad {
+			m, newFocus = m.focusNewWhenNothingIsActive()
+		}
 		// Refresh the deck's stack cache for the active worktrees, respecting the
 		// freshness window (the deck's `r` re-kicks with force).
-		return m, tea.Batch(append(m.kickStackFetches(false), restore, m.refreshGhStacksCmd())...)
+		return m, tea.Batch(append(m.kickStackFetches(false), restore, newFocus, m.refreshGhStacksCmd())...)
 
 	case loadingTickMsg:
 		// The restore can only end here: its panes' first draws don't send a
@@ -3814,6 +3816,17 @@ func (m Model) worktreePath(key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// focusNewWhenNothingIsActive moves the deck's focus from an empty ACTIVE to
+// NEW, so a first run starts where the only choice is.
+func (m Model) focusNewWhenNothingIsActive() (Model, tea.Cmd) {
+	if m.focus != focusActive || len(m.active) > 0 || len(m.creating) > 0 {
+		return m, nil
+	}
+	m.focus = focusNew
+
+	return m, m.filter.Focus()
 }
 
 // restoreSessions reopens last run's workspaces in the background. It runs

@@ -1188,7 +1188,7 @@ func eventually(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting until %s", what)
 }
 
-func TestStartingEndsOnFirstVisibleText(t *testing.T) {
+func TestStartingEndsAfterTheFirstVisibleText(t *testing.T) {
 	s := startAgent(t, `printf '\033[?1049h\033[2J'; sleep 0.4; printf READY; sleep 5`)
 
 	if !s.Starting() {
@@ -1272,5 +1272,31 @@ func TestCtrlCWithCapsLockIsAStopKey(t *testing.T) {
 
 	if got := s.HeldKeys(); got != 0 {
 		t.Errorf("HeldKeys after Ctrl+C with caps lock = %d, want 0", got)
+	}
+}
+
+func TestStartingLastsUntilTheOutputGoesQuiet(t *testing.T) {
+	s := startAgent(t, `printf LOGO; sleep 0.1; printf ' CHAT'; sleep 0.1; printf ' INPUT'; sleep 5`)
+
+	waitFor(t, s, "LOGO")
+	if !s.Starting() {
+		t.Fatal("the first piece of a drawing ended the starting state")
+	}
+	eventually(t, "the output goes quiet", func() bool { return !s.Starting() })
+	if screen := s.Render(); !strings.Contains(screen, "INPUT") {
+		t.Errorf("starting ended before the last piece was drawn:\n%s", screen)
+	}
+}
+
+func TestOutputThatNeverStopsEndsStartingAfterTheLimit(t *testing.T) {
+	s := startAgent(t, `while true; do printf x; sleep 0.05; done`)
+
+	waitFor(t, s, "x")
+	deadline := time.Now().Add(settleAtMost + 2*time.Second)
+	for s.Starting() {
+		if time.Now().After(deadline) {
+			t.Fatal("a program that keeps drawing never stopped counting as starting")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

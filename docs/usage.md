@@ -22,7 +22,8 @@ workspaces` when some failed to start. It stops waiting after 30 s.
 ![The ym deck showing repositories, active worktrees, branch divergence, and the ambient plasma panel](screenshots/worktree-deck.png)
 
 The deck (seedling) has a `NEW` repo fuzzy-finder and an `ACTIVE` list of your worktrees grouped
-by repo (`●` running · `○` stopped · `✷` uncommitted changes).
+by repo (`●` running · `○` stopped · `✷` uncommitted changes). ym starts with the focus on
+`ACTIVE`; when you have no worktrees yet, it moves to `NEW` once the scan is done.
 
 - Within each repo, worktrees are ordered by when you last opened them in ym (most recent first),
   falling back to git commit time for ones you haven't opened yet. The three most recently opened
@@ -65,10 +66,12 @@ Pressing **enter** on a worktree starts nvim, an agent from `agents.default` and
 that worktree, and drops you into the nvim view. Sessions keep running: switching never relaunches
 them, and they last for ym's lifetime.
 
-An agent or nvim pane that has not drawn yet shows `⠹ starting claude…` in its middle (after 150 ms, so
-a fast start shows nothing). The seconds appear after 5 s, and after 30 s it says `still
-starting` and how to restart the agent. Keys you type into a starting agent wait and are sent
-once it has drawn (`3 keys waiting`); `esc` or `ctrl+c` drops them and goes through at once. A
+An agent or nvim pane that is still starting shows `⠹ starting claude…` in its middle (after 150 ms,
+so a fast start shows nothing). It counts as started once it has drawn something and then
+stayed quiet for 200 ms (at most 3 s after its first text), so Claude's screen appears in one
+piece. The seconds appear after 5 s, and after 30 s it says `still starting` and how to
+restart the agent. Keys you type into a starting agent wait and are sent once it has started
+(`3 keys waiting`); `esc` or `ctrl+c` drops them and goes through at once. A
 program that exits before it draws anything leaves a red `claude exited before it started`.
 
 - `alt+]` / `alt+[` cycle the views (nvim → agent → terminal → nvim), and `alt+1` / `alt+2` /
