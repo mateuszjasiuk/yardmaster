@@ -36,7 +36,8 @@ ym ctl stage "in review" --worktree myrepo/fix-login  # the same for a worktree'
 - A repo's main checkout is `<repo>/main` (`ym ctl open <repo>/main`). `ym ctl` refuses to spawn
   or remove it.
 - `stage` sets a short word for what a session is at (`plan`, `step 2`, `review`), at most 16
-  characters, shown in the session list's box and in `ym ctl list`. Run from an agent, it is for
+  characters, shown in the session list's box and in `ym ctl list`. In the box, `plan`, `step N`/`build`,
+  `review` and `QA` each have their own colour; any other word is gray. Run from an agent, it is for
   that agent's own session: ym gives each agent it starts a `YM_AGENT` token. With `--worktree`,
   it is for that worktree's active session. `--clear` removes it. ym keeps it with the session, so it
   is back after a restart.

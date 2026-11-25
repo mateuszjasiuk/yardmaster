@@ -544,7 +544,7 @@ func (b sidePanelBoxLook) render(title, body, stage string, target sidePanelRow)
 }
 
 // bottomBorder is a box's bottom border, boxW wide, with the stage (if any) at
-// its right end in a dim colour.
+// its right end in its stage colour.
 func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, boxW int) string {
 	if stage == "" {
 		return border.Render(edge.BottomLeft + strings.Repeat(edge.Bottom, boxW-2) + edge.BottomRight)
@@ -556,7 +556,28 @@ func bottomBorder(edge lipgloss.Border, border lipgloss.Style, stage string, box
 	stage = truncateTo(stage, boxW-around)
 	line := strings.Repeat(edge.Bottom, boxW-around+1-lipgloss.Width(stage))
 
-	return border.Render(edge.BottomLeft+line+" ") + dimStyle.Render(stage) + border.Render(" "+edge.Bottom+edge.BottomRight)
+	return border.Render(edge.BottomLeft+line+" ") + stageStyle(stage).Render(stage) + border.Render(" "+edge.Bottom+edge.BottomRight)
+}
+
+// stageStyle colours a stage by the first word it knows, ignoring case, so
+// "in review" is review: plan cyan, step or build blue, review purple, QA
+// orange. Any other stage is dim. Green, yellow and red stay for the agent's
+// status on the same box.
+func stageStyle(stage string) lipgloss.Style {
+	for _, word := range strings.Fields(strings.ToLower(stage)) {
+		switch word {
+		case "plan", "planning":
+			return placeStyle
+		case "step", "build", "building":
+			return accentStyle
+		case "review":
+			return identityStyle
+		case "qa":
+			return groupStyle
+		}
+	}
+
+	return dimStyle
 }
 
 // sidePanelRepo renders a repo's header, w columns wide. An extra Claude

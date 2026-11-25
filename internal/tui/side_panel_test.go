@@ -330,6 +330,28 @@ func TestSidePanelShowsTheStageInTheBottomBorder(t *testing.T) {
 	}
 }
 
+func TestStageStyleColoursKnownWords(t *testing.T) {
+	cases := []struct {
+		stage string
+		want  lipgloss.Style
+	}{
+		{"plan", placeStyle},
+		{"Planning", placeStyle},
+		{"step 2", accentStyle},
+		{"build", accentStyle},
+		{"in review", identityStyle},
+		{"QA", groupStyle},
+		{"manual qa", groupStyle},
+		{"done", dimStyle},
+		{"stepping", dimStyle},
+	}
+	for _, tc := range cases {
+		if got := stageStyle(tc.stage); got.GetForeground() != tc.want.GetForeground() {
+			t.Errorf("stageStyle(%q) = %v, want %v", tc.stage, got.GetForeground(), tc.want.GetForeground())
+		}
+	}
+}
+
 func TestMainThenFeaturesComeFirstWithTheManagerLeading(t *testing.T) {
 	stacked := func(index int) ghstack.Position { return ghstack.Position{Bottom: "s1", Index: index} }
 	groups := []agentGroup{
