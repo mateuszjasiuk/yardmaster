@@ -53,8 +53,7 @@ func (m Model) loading() bool {
 		}
 	}
 	if m.boardOpen {
-		rows, _ := m.buildBoard()
-		return slices.ContainsFunc(rows, boardRow.spinning)
+		return slices.ContainsFunc(m.mgr.Keys(), m.workspaceStarting)
 	}
 
 	return false
@@ -178,22 +177,24 @@ func (m Model) restoringSign() string {
 // flash would hide it.
 func (m Model) finishRestore() (Model, tea.Cmd) {
 	total := len(m.restoring)
-	if total == 0 || len(m.restoreQueue) > 0 || m.restoresStarting() > 0 {
+	waiting := len(m.restoreWaiting()) > 0
+	if total == 0 || waiting || m.restoresStarting() > 0 {
 		return m, nil
 	}
 
 	_, restored := m.restoreProgress()
-	m.restoring, m.restoreStarted = nil, nil
+	m.restoring, m.restoreStartedAt = nil, nil
 	text := "restored " + pluralize(total, "workspace")
 	if restored < total {
 		text = fmt.Sprintf("restored %d of %d workspaces", restored, total)
 	}
-	if m.boardOpen && m.restoreBoardUntouched {
+	switch {
+	case !m.boardOpen:
+	case m.restoreBoardUntouched:
 		m = m.closeBoard()
-	} else if m.boardOpen {
+	default:
 		m.restoreResult = text
 	}
-	m.restoreBoardUntouched = false
 	if m.statusLevel == statusError {
 		return m, nil
 	}
@@ -220,7 +221,7 @@ func (m Model) showRestoreBoard() (Model, tea.Cmd) {
 // neither.
 func (m Model) restoreProgress() (settled, restored int) {
 	for _, key := range m.restoring {
-		if slices.Contains(m.restoreQueue, key) {
+		if !m.restoreStarted(key) {
 			continue
 		}
 		ws, ok := m.openWorkspace(key)
@@ -248,6 +249,13 @@ func (m Model) boardRestoreLine() string {
 	}
 
 	return m.restoringSign()
+}
+
+// workspaceStarting reports whether an open workspace has a program that has
+// not drawn yet.
+func (m Model) workspaceStarting(key string) bool {
+	ws, ok := m.openWorkspace(key)
+	return ok && ws.Starting()
 }
 
 // spinning reports whether a board row shows the spinner: its agent is

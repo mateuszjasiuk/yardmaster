@@ -742,7 +742,7 @@ func (m Model) renderBoard(h int) string {
 	}
 	agentCount := 0
 	for _, r := range rows {
-		if r.kind == rowAgent || r.kind == rowQueued {
+		if r.isAgent() {
 			agentCount++
 		}
 	}
@@ -914,9 +914,11 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 	case strings.HasPrefix(status, "working"):
 		statusSt = accentStyle
 	}
-	right := statusSt.Render(status)
+	var right string
 	if spinning {
 		right = m.loadingLine(status)
+	} else {
+		right = statusSt.Render(status)
 	}
 	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 	return left + strings.Repeat(" ", gap) + right

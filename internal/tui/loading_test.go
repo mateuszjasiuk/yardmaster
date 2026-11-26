@@ -267,9 +267,9 @@ func TestRestoreKeepsAnErrorOnTheBar(t *testing.T) {
 // restoringSince marks keys as restored workspaces that the restore started at.
 func restoringSince(m Model, at time.Time, keys ...string) Model {
 	m.restoring = keys
-	m.restoreStarted = map[string]time.Time{}
+	m.restoreStartedAt = map[string]time.Time{}
 	for _, key := range keys {
-		m.restoreStarted[key] = at
+		m.restoreStartedAt[key] = at
 	}
 
 	return m

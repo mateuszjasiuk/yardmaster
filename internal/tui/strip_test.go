@@ -69,8 +69,14 @@ func stripModelKeys(t *testing.T, w int, keys ...string) Model {
 // those arguments and exit, and a pty may lose that last output.
 func drawingAgent(t *testing.T) string {
 	t.Helper()
+	return scriptAgent(t, "echo ready\nexec cat >/dev/null")
+}
+
+// scriptAgent writes a stand-in agent command that runs the shell script body.
+func scriptAgent(t *testing.T, body string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "agent")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\necho ready\nexec cat >/dev/null\n"), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 

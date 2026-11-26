@@ -379,19 +379,13 @@ func (m Model) openBackground(key, dir string, provider agent.Provider, prompt s
 	if err != nil {
 		return m, nil, err
 	}
-	return m.activateBackground(key, dir, specs)
+	return m.activateBackground(key, dir, specs, true)
 }
 
 // activateBackground opens workspace key from specs without making it
-// current, recording it as a first activation would.
-func (m Model) activateBackground(key, dir string, specs []session.Spec) (Model, tea.Cmd, error) {
-	return m.startBackground(key, dir, specs, true)
-}
-
-// startBackground is activateBackground; touch=false leaves the worktree's
-// last-opened time alone, for the startup restore, which reopens worktrees
-// without the user opening them.
-func (m Model) startBackground(key, dir string, specs []session.Spec, touch bool) (Model, tea.Cmd, error) {
+// current, recording it as a first activation would. recordOpened=false keeps
+// its last-opened time, for the startup restore: the user did not open it.
+func (m Model) activateBackground(key, dir string, specs []session.Spec, recordOpened bool) (Model, tea.Cmd, error) {
 	specs, err := m.prepareWorkspaceSpecs(dir, specs)
 	if err != nil {
 		return m, nil, err
@@ -405,7 +399,7 @@ func (m Model) startBackground(key, dir string, specs []session.Spec, touch bool
 	}
 	var save tea.Cmd
 	if m.state != nil {
-		if touch {
+		if recordOpened {
 			m.state.Touch(key)
 		}
 		m.persistAgents(key)
@@ -728,7 +722,7 @@ func (m Model) ctlOpen(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		p.Reply(ctl.Response{OK: true, Message: key + " is already open"})
 		return m, nil
 	}
-	m, cmd, err := m.openWorkspaceBackground(key, dir)
+	m, cmd, err := m.openWorkspaceBackground(key, dir, true)
 	if err != nil {
 		p.Fail(err)
 		return m, nil
@@ -761,7 +755,7 @@ func (m Model) ctlReopen(p *ctl.Pending) (tea.Model, tea.Cmd) {
 		onScreen = &ref
 	}
 	m.stopWorkspace(key)
-	m, cmd, err := m.openWorkspaceBackground(key, dir)
+	m, cmd, err := m.openWorkspaceBackground(key, dir, true)
 	if err != nil {
 		p.Fail(err)
 		return m, m.loadCmd()
@@ -824,12 +818,12 @@ func (m Model) showCtlRemove() Model {
 
 // openWorkspaceBackground opens workspace key from its saved pool without
 // making it current. An empty pool gets one fresh default agent.
-func (m Model) openWorkspaceBackground(key, dir string) (Model, tea.Cmd, error) {
+func (m Model) openWorkspaceBackground(key, dir string, recordOpened bool) (Model, tea.Cmd, error) {
 	specs, err := m.workspaceSpecs(key, true)
 	if err != nil {
 		return m, nil, err
 	}
-	return m.activateBackground(key, dir, specs)
+	return m.activateBackground(key, dir, specs, recordOpened)
 }
 
 // promptedAgentName is the name of the agent openBackground gave the prompt

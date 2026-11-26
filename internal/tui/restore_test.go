@@ -1,9 +1,8 @@
 package tui
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +33,7 @@ func restoreModel(t *testing.T, agent string, n int) Model {
 	m.state = &state.State{LastOpened: map[string]int64{}, Workspaces: map[string]*state.WorkspaceState{}}
 	var open []string
 	for i := 1; i <= n; i++ {
-		name := "w" + string(rune('0'+i))
+		name := "w" + strconv.Itoa(i)
 		g.Worktrees = append(g.Worktrees, WorktreeView{WT: repo.Worktree{Repo: "r", Name: name, Path: t.TempDir(), Branch: name}})
 		key := "r/" + name
 		m.state.LastOpened[key] = int64(1000 - i)
@@ -52,12 +51,7 @@ func restoreModel(t *testing.T, agent string, n int) Model {
 // hangingAgent never draws, so its workspace stays starting.
 func hangingAgent(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "agent")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	return path
+	return scriptAgent(t, "exec sleep 30")
 }
 
 func TestRestoreStartsTheLastOpenedFirstAFewAtATime(t *testing.T) {
@@ -69,8 +63,8 @@ func TestRestoreStartsTheLastOpenedFirstAFewAtATime(t *testing.T) {
 	if got := m.mgr.Keys(); len(got) != restoreAtOnce || !slices.Contains(got, "r/w1") || !slices.Contains(got, "r/w3") {
 		t.Errorf("open = %v, want the %d most recently opened", got, restoreAtOnce)
 	}
-	if !slices.Equal(m.restoreQueue, []string{"r/w4", "r/w5"}) {
-		t.Errorf("queue = %v, want the older ones, newest first", m.restoreQueue)
+	if !slices.Equal(m.restoreWaiting(), []string{"r/w4", "r/w5"}) {
+		t.Errorf("waiting = %v, want the older ones, newest first", m.restoreWaiting())
 	}
 	if m.state.Opened("r/w1") != 999 || m.state.Opened("r/w5") != before {
 		t.Error("the restore changed the last-opened times; the next start would lose the order")
@@ -87,16 +81,16 @@ func TestRestoreStartsTheNextOnceOneIsUp(t *testing.T) {
 
 	m, _ = m.startQueuedRestores()
 
-	if len(m.restoreQueue) != 0 || !m.mgr.Has("r/w4") {
-		t.Errorf("queue = %v; the last worktree should start once the others are up", m.restoreQueue)
+	if waiting := m.restoreWaiting(); len(waiting) != 0 || !m.mgr.Has("r/w4") {
+		t.Errorf("waiting = %v; the last worktree should start once the others are up", waiting)
 	}
 }
 
 func TestRestoreGivesAHangingWorktreesPlaceUp(t *testing.T) {
 	m := restoreModel(t, hangingAgent(t), 4)
 	m, _ = m.restoreSessions()
-	for key := range m.restoreStarted {
-		m.restoreStarted[key] = time.Now().Add(-startingTooLong)
+	for key := range m.restoreStartedAt {
+		m.restoreStartedAt[key] = time.Now().Add(-startingTooLong)
 	}
 
 	m, _ = m.startQueuedRestores()
@@ -135,7 +129,7 @@ func TestEnterOnAQueuedRowOpensItAtOnce(t *testing.T) {
 		t.Fatalf("enter should open the queued worktree's agent, current = %+v", m.current)
 	}
 	m, _ = m.startQueuedRestores()
-	if slices.Contains(m.restoreQueue, "r/w4") {
+	if m.restoreWaitsFor("r/w4") {
 		t.Error("an opened worktree should leave the queue")
 	}
 }
