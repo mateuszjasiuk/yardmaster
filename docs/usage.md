@@ -13,9 +13,14 @@ on the right. You can **click** any of the four icons to jump to that view (the 
 nothing until a workspace is active).
 
 At startup the deck shows `⠹ scanning repos…` until git has looked at every worktree. ym then
-reopens the worktrees you had open, and the bar shows `⠹ restoring 3 of 14…` until each one's
-nvim and agents have drawn; then it says `restored 14 workspaces`, or `restored 12 of 14
-workspaces` when some failed to start. It stops waiting after 30 s.
+reopens the worktrees you had open: the ones you opened last first, three at a time, so the
+machine stays responsive while the agents start. Meanwhile the agent board is open with
+`⠹ restoring 3 of 14…` at the top. Every worktree being restored has its rows from the start,
+with a spinner until it is up, so you can search for one and open it with `enter` at once; `esc`
+goes to the deck. The bar shows the same count on every screen until each worktree's nvim and
+agents have drawn; then it says `restored 14 workspaces`, or `restored 12 of 14 workspaces` when
+some failed to start. A worktree that hangs gives its place up after 30 s. The board closes by
+itself when the restore ends, unless you have used it.
 
 ## The deck
 
