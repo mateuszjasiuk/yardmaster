@@ -742,12 +742,15 @@ func (m Model) renderBoard(h int) string {
 	}
 	agentCount := 0
 	for _, r := range rows {
-		if r.kind == rowAgent {
+		if r.isAgent() {
 			agentCount++
 		}
 	}
 
 	top := []string{header("agents", agentCount), "", "  " + m.boardInput.View(), ""}
+	if line := m.boardRestoreLine(); line != "" {
+		top = append(top, "  "+line, "")
+	}
 	separator := helpStyle.Render("  ·  ")
 	hints := []string{"",
 		"  " + strings.Join([]string{
@@ -820,7 +823,7 @@ func (m Model) boardGroupLines(rows []boardRow, selRow, agentCount, innerW int) 
 			} else {
 				lines = append(lines, dimStyle.Render("  + new agent…"))
 			}
-		case rowAgent:
+		case rowAgent, rowQueued:
 			content := m.boardAgentLine(r, false, innerW)
 			if i == selRow {
 				lines = append(lines, selBar(content, innerW))
@@ -857,7 +860,7 @@ func (m Model) boardMatchLines(rows []boardRow, selRow, innerW, rowsAvail int) [
 		switch rows[i].kind {
 		case rowWorktree:
 			content = boardWorktreeLine(rows[i], m.boardWorktreeStyle(rows[i].key), innerW)
-		case rowAgent:
+		case rowAgent, rowQueued:
 			content = m.boardAgentLine(rows[i], true, innerW)
 		}
 		if i == selRow {
@@ -894,7 +897,12 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 	}
 	left += helpKeyStyle.Render(normalizedProvider(r.provider).String()) +
 		dimStyle.Render(" · ") + identityStyle.Render(r.label)
-	status := truncateTo(r.status, max(0, innerW-lipgloss.Width(left)-2))
+	spinning := r.spinning()
+	statusW := innerW - lipgloss.Width(left) - 2
+	if spinning {
+		statusW -= 2 // the spinner and its space
+	}
+	status := truncateTo(r.status, max(0, statusW))
 	statusSt := dimStyle
 	switch {
 	case r.attn == attnWaiting:
@@ -906,7 +914,12 @@ func (m Model) boardAgentLine(r boardRow, withWorktree bool, innerW int) string 
 	case strings.HasPrefix(status, "working"):
 		statusSt = accentStyle
 	}
-	right := statusSt.Render(status)
+	var right string
+	if spinning {
+		right = m.loadingLine(status)
+	} else {
+		right = statusSt.Render(status)
+	}
 	gap := max(2, innerW-lipgloss.Width(left)-lipgloss.Width(right))
 	return left + strings.Repeat(" ", gap) + right
 }

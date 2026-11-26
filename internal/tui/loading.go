@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -43,13 +44,16 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 // loading reports whether anything on screen shows a spinner, so the tick
 // keeps running.
 func (m Model) loading() bool {
-	if m.scanning() || len(m.creating) > 0 || len(m.restoring) > 0 {
+	if m.scanning() || len(m.creating) > 0 || m.restoreStartedAt != nil {
 		return true
 	}
 	for _, s := range m.visibleSessions() {
 		if s.Starting() {
 			return true
 		}
+	}
+	if m.boardOpen {
+		return slices.ContainsFunc(m.mgr.Keys(), m.workspaceStarting)
 	}
 
 	return false
@@ -165,39 +169,61 @@ func (m Model) restoringSign() string {
 	return m.loadingLine(fmt.Sprintf("restoring %d of %d…", settled, len(m.restoring)))
 }
 
-// finishRestore ends the restore sign once every restored workspace has come
-// up or failed, and says how many came back. A pane that hangs keeps its own
-// sign, so the restore gives up waiting for it after startingTooLong; the tick
-// would otherwise never stop. An error on the bar stays: the flash would hide it.
+// finishRestore ends the restore once the queue is empty and every restored
+// workspace has come up or failed, and says how many came back. A pane that
+// hangs keeps its own sign, so the restore gives up waiting for it after
+// startingTooLong; the tick would otherwise never stop. The board the restore
+// opened closes, unless the user has used it. An error on the bar stays: the
+// flash would hide it.
 func (m Model) finishRestore() (Model, tea.Cmd) {
 	total := len(m.restoring)
-	if total == 0 {
+	waiting := len(m.restoreWaiting()) > 0
+	if m.restoreStartedAt == nil || waiting || m.restoresStarting() > 0 {
 		return m, nil
 	}
 
-	settled, restored := m.restoreProgress()
-	timedOut := time.Since(m.restoreSince) >= startingTooLong
-	if !timedOut && settled < total {
-		return m, nil
-	}
-	m.restoring = nil
-	if m.statusLevel == statusError {
-		return m, nil
-	}
-
+	_, restored := m.restoreProgress()
+	m.restoring, m.restoreStartedAt = nil, nil
 	text := "restored " + pluralize(total, "workspace")
 	if restored < total {
 		text = fmt.Sprintf("restored %d of %d workspaces", restored, total)
+	}
+	switch {
+	case !m.boardOpen:
+	case m.restoreBoardUntouched:
+		m = m.closeBoard()
+	default:
+		m.restoreResult = text
+	}
+	if m.statusLevel == statusError {
+		return m, nil
 	}
 
 	return m, m.flashCmd(text)
 }
 
+// showRestoreBoard opens the board at startup while the restore runs, so the
+// sessions can be found and opened as they come up.
+func (m Model) showRestoreBoard() (Model, tea.Cmd) {
+	if m.boardOpen {
+		return m, nil
+	}
+	m, focus := m.showBoard()
+	m.boardCursor = 0
+	m.restoreBoardUntouched = true
+
+	return m, focus
+}
+
 // restoreProgress counts the restored workspaces whose panes are no longer
 // starting (settled), and of those the ones where every program started
-// (restored). A workspace closed meanwhile counts as both.
+// (restored). A workspace closed meanwhile counts as both; a queued one as
+// neither.
 func (m Model) restoreProgress() (settled, restored int) {
 	for _, key := range m.restoring {
+		if !m.restoreStarted(key) {
+			continue
+		}
 		ws, ok := m.openWorkspace(key)
 		if !ok {
 			settled, restored = settled+1, restored+1
@@ -213,4 +239,27 @@ func (m Model) restoreProgress() (settled, restored int) {
 	}
 
 	return settled, restored
+}
+
+// boardRestoreLine is the board's line about the startup restore: its progress
+// while it runs, then how it ended, or "".
+func (m Model) boardRestoreLine() string {
+	if m.restoreResult != "" {
+		return dimStyle.Render(m.restoreResult)
+	}
+
+	return m.restoringSign()
+}
+
+// workspaceStarting reports whether an open workspace has a program that has
+// not drawn yet.
+func (m Model) workspaceStarting(key string) bool {
+	ws, ok := m.openWorkspace(key)
+	return ok && ws.Starting()
+}
+
+// spinning reports whether a board row shows the spinner: its agent is
+// starting, and has not exited before it started.
+func (r boardRow) spinning() bool {
+	return r.starting && r.attn != attnWaiting
 }
