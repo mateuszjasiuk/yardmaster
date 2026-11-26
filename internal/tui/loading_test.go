@@ -178,7 +178,7 @@ func TestRestoreSignCountsTheWorkspacesThatCameUp(t *testing.T) {
 	openAgent(t, m, "r/slow", "sleep", "30")
 	ready := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
 	waitStarted(t, ready.Agents[0])
-	m.restoring, m.restoreSince = []string{"r/slow", "r/ready", "r/closed"}, time.Now()
+	m = restoringSince(m, time.Now(), "r/slow", "r/ready", "r/closed")
 
 	if got := ansi.Strip(barFirstRow(m)); !strings.Contains(got, "restoring 2 of 3…") {
 		t.Errorf("bar = %q, want the closed and the ready workspace counted", got)
@@ -193,7 +193,7 @@ func TestRestoreFlashesOnceEveryWorkspaceCameUp(t *testing.T) {
 	m := loadingModel()
 	ws := openAgent(t, m, "r/ready", "sh", "-c", "echo ready; exec cat")
 	waitStarted(t, ws.Agents[0])
-	m.restoring, m.restoreSince = []string{"r/ready"}, time.Now()
+	m = restoringSince(m, time.Now(), "r/ready")
 
 	m, cmd := m.finishRestore()
 	if cmd == nil || m.restoring != nil {
@@ -229,7 +229,7 @@ func TestNotificationZoneStaysClickableBesideTheRestoreSign(t *testing.T) {
 func TestRestoreStopsWaitingForAPaneThatHangs(t *testing.T) {
 	m := loadingModel()
 	openAgent(t, m, "r/slow", "sleep", "30")
-	m.restoring, m.restoreSince = []string{"r/slow"}, time.Now().Add(-startingTooLong)
+	m = restoringSince(m, time.Now().Add(-startingTooLong), "r/slow")
 
 	m, cmd := m.finishRestore()
 	if cmd == nil || m.restoring != nil {
@@ -243,7 +243,7 @@ func TestRestoreNamesTheWorkspacesThatFailed(t *testing.T) {
 	failed := openAgent(t, m, "r/failed", "/usr/bin/true")
 	waitStarted(t, ready.Agents[0])
 	waitStarted(t, failed.Agents[0])
-	m.restoring, m.restoreSince = []string{"r/ready", "r/failed"}, time.Now()
+	m = restoringSince(m, time.Now(), "r/ready", "r/failed")
 
 	m, _ = m.finishRestore()
 
@@ -254,7 +254,7 @@ func TestRestoreNamesTheWorkspacesThatFailed(t *testing.T) {
 
 func TestRestoreKeepsAnErrorOnTheBar(t *testing.T) {
 	m := loadingModel()
-	m.restoring, m.restoreSince = []string{"r/closed"}, time.Now()
+	m = restoringSince(m, time.Now(), "r/closed")
 	m.setError("restore error (r/x): gone")
 
 	m, cmd := m.finishRestore()
@@ -262,4 +262,15 @@ func TestRestoreKeepsAnErrorOnTheBar(t *testing.T) {
 	if cmd != nil || m.status != "restore error (r/x): gone" || m.restoring != nil {
 		t.Errorf("status = %q; the restore should end without covering the error", m.status)
 	}
+}
+
+// restoringSince marks keys as restored workspaces that the restore started at.
+func restoringSince(m Model, at time.Time, keys ...string) Model {
+	m.restoring = keys
+	m.restoreStarted = map[string]time.Time{}
+	for _, key := range keys {
+		m.restoreStarted[key] = at
+	}
+
+	return m
 }

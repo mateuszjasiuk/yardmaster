@@ -240,6 +240,7 @@ const (
 	rowAgent                            // an agent
 	rowNew                              // the trailing "+ new agent" row
 	rowWorktree                         // while searching: a worktree with no running agent
+	rowQueued                           // a saved agent the startup restore has not started yet
 )
 
 // boardRow is one row of the agent board.
@@ -548,11 +549,20 @@ type Model struct {
 	// (issue #54).
 	creating []creatingItem
 
-	// restoring holds the workspaces the startup restore reopened until all
-	// their panes have drawn or failed, or restoreSince is startingTooLong ago;
-	// the bar counts them meanwhile.
-	restoring    []string
-	restoreSince time.Time
+	// restoring holds the workspaces the startup restore reopens until all
+	// their panes have drawn or failed, or each has waited startingTooLong
+	// since restoreStarted; the bar counts them meanwhile. restoreQueue is the
+	// part not started yet, the most recently opened first.
+	restoring      []string
+	restoreQueue   []string
+	restoreStarted map[string]time.Time
+
+	// restoreBoardUntouched is set while the board the restore opened at
+	// startup has had no key yet; the restore then closes it when it ends.
+	// restoreResult is the board's last line once the restore ended with the
+	// board still open.
+	restoreBoardUntouched bool
+	restoreResult         string
 
 	// loadingTicking mirrors plasmaTicking: the spinner tick disarms itself
 	// when nothing is loading any more, so no timer runs at rest.
@@ -1457,16 +1467,17 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loadingTickMsg:
 		// The restore can only end here: its panes' first draws don't send a
 		// message of their own.
-		var restoredFlash tea.Cmd
+		var nextRestores, restoredFlash tea.Cmd
+		m, nextRestores = m.startQueuedRestores()
 		m, restoredFlash = m.finishRestore()
 		// Re-arm only while something is still loading, so the timer stops on
 		// its own once the last loading ends.
 		if !m.loading() {
 			m.loadingTicking = false
-			return m, restoredFlash
+			return m, tea.Batch(nextRestores, restoredFlash)
 		}
 		m.loadingTicking = true
-		return m, tea.Batch(restoredFlash, scheduleLoadingTick())
+		return m, tea.Batch(nextRestores, restoredFlash, scheduleLoadingTick())
 
 	case ctlRequestMsg:
 		return m.handleCtl(msg.p)
@@ -2198,6 +2209,9 @@ type agentGroup struct {
 // reports false when the workspace isn't open.
 func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool) {
 	ws, ok := m.mgr.Workspace(key)
+	if !ok && slices.Contains(m.restoreQueue, key) {
+		return m.queuedAgentGroup(key, repoName, wtName, path), true
+	}
 	if !ok {
 		if m.current == nil || m.current.key != key || m.current.ws == nil {
 			return agentGroup{}, false
@@ -2235,6 +2249,23 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 		g.starting = g.starting || starting
 	}
 	return g, true
+}
+
+// queuedAgentGroup is the board's group for a workspace still in the restore
+// queue: one row per saved agent, shown as starting.
+func (m Model) queuedAgentGroup(key, repoName, wtName, path string) agentGroup {
+	g := agentGroup{key: key, repo: repoName, worktree: wtName, path: path, opened: m.state.Opened(key), starting: true}
+	saved, _ := m.state.Agents(key)
+	for i, a := range saved {
+		provider := normalizedProvider(a.Provider)
+		g.agents = append(g.agents, boardRow{
+			kind: rowQueued, key: key, repo: repoName, worktree: wtName, path: path,
+			agentIdx: i, label: agentTitle(provider, a.Label), provider: provider,
+			status: "starting…", starting: true, stage: a.Stage,
+		})
+	}
+
+	return g
 }
 
 // stripGroups lists every open workspace for the bar's agent strip. Unlike the
@@ -2442,7 +2473,7 @@ func (m Model) boardView() (rows []boardRow, nav []int) {
 
 	var agents []boardRow
 	for _, r := range rows {
-		if r.kind == rowAgent {
+		if r.kind == rowAgent || r.kind == rowQueued {
 			agents = append(agents, r)
 		}
 	}
@@ -2547,6 +2578,7 @@ func (m Model) closeBoard() Model {
 	m.formOpen = false
 	m.boardInput.Blur()
 	m.boardInput.SetValue("")
+	m.restoreBoardUntouched, m.restoreResult = false, ""
 	return m
 }
 
@@ -2562,6 +2594,7 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.formOpen {
 		return m.handleBoardForm(msg)
 	}
+	m.restoreBoardUntouched = false
 
 	rows, nav := m.boardView()
 	rowAt := func(i int) (boardRow, bool) {
@@ -2613,7 +2646,7 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m.openNewAgentForm(), nil
 			case rowWorktree:
 				return m.closeBoard().activate(r.repo, r.worktree, r.path)
-			case rowAgent:
+			case rowAgent, rowQueued:
 				return m.focusBoardAgent(r)
 			}
 		}
@@ -3798,10 +3831,11 @@ func (m Model) FlushState() {
 }
 
 // recordOpen notes the open workspaces in the state about to be written, so
-// the next start can reopen them (see restoreSessions).
+// the next start can reopen them (see restoreSessions). The ones still waiting
+// in the restore queue count as open: quitting mid-restore must not lose them.
 func (m Model) recordOpen() {
 	if m.state != nil && m.mgr != nil {
-		m.state.SetOpen(m.mgr.Keys())
+		m.state.SetOpen(append(m.mgr.Keys(), m.restoreQueue...))
 	}
 }
 
@@ -3829,49 +3863,116 @@ func (m Model) focusNewWhenNothingIsActive() (Model, tea.Cmd) {
 	return m, m.filter.Focus()
 }
 
-// restoreSessions reopens last run's workspaces in the background. It runs
-// once, on the first deck load, when restore_sessions is on.
+// restoreAtOnce is how many restored workspaces start at the same time. A
+// Claude takes seconds of CPU to start, so starting a long list at once fills
+// every core and ym stops answering keys until they are all up.
+const restoreAtOnce = 3
+
+// restoreSessions reopens last run's workspaces in the background, the most
+// recently opened first, restoreAtOnce at a time, and shows the board meanwhile.
+// It runs once, on the first deck load, when restore_sessions is on.
 func (m Model) restoreSessions() (Model, tea.Cmd) {
 	if m.state == nil {
 		return m, nil
 	}
-	var cmds []tea.Cmd
-	var opened []string
+
+	var queue []string
 	for _, key := range m.state.Open {
 		if m.mgr.Has(key) {
 			continue
 		}
-		path, ok := m.worktreePath(key)
-		if key == homeKey {
-			home, err := m.ctrl.GlobalConfigDir()
-			if err == nil {
-				err = m.ctrl.EnsureHomeDirTrusted()
-			}
-			if err != nil {
-				m.setError("restore error: " + err.Error())
-				continue
-			}
-			m.homeWSPath, m.homeWSKey, path, ok = home, key, home, true
-		}
-		if !ok {
+		if _, ok := m.worktreePath(key); !ok && key != homeKey {
 			continue // the worktree is gone
 		}
+		queue = append(queue, key)
+	}
+	if len(queue) == 0 {
+		return m, nil
+	}
+	sort.SliceStable(queue, func(i, j int) bool { return m.state.Opened(queue[i]) > m.state.Opened(queue[j]) })
+	m.restoring, m.restoreQueue = queue, slices.Clone(queue)
+	m.restoreStarted = map[string]time.Time{}
+
+	m, start := m.startQueuedRestores()
+	m, board := m.showRestoreBoard()
+
+	return m, tea.Batch(start, board)
+}
+
+// startQueuedRestores starts queued workspaces while fewer than restoreAtOnce
+// restored ones are still starting. A queued workspace the user or ym ctl
+// opened meanwhile leaves the queue as if the restore had started it.
+func (m Model) startQueuedRestores() (Model, tea.Cmd) {
+	if len(m.restoreQueue) == 0 {
+		return m, nil
+	}
+	for _, key := range m.restoreQueue {
+		if m.mgr.Has(key) {
+			m.restoreStarted[key] = time.Now()
+		}
+	}
+	m.restoreQueue = slices.DeleteFunc(slices.Clone(m.restoreQueue), m.mgr.Has)
+
+	var cmds []tea.Cmd
+	for len(m.restoreQueue) > 0 && m.restoresStarting() < restoreAtOnce {
+		key := m.restoreQueue[0]
+		m.restoreQueue = m.restoreQueue[1:]
+		m.restoreStarted[key] = time.Now()
+
 		var (
 			cmd tea.Cmd
 			err error
 		)
-		if m, cmd, err = m.openWorkspaceBackground(key, path); err != nil {
+		if m, cmd, err = m.restoreWorkspace(key); err != nil {
 			m.setError("restore error (" + key + "): " + err.Error())
+			m.restoring = slices.DeleteFunc(slices.Clone(m.restoring), func(k string) bool { return k == key })
 			continue
 		}
 		cmds = append(cmds, cmd)
-		opened = append(opened, key)
 	}
-	if len(opened) > 0 {
+	if len(cmds) > 0 {
 		m.recomputeActive()
-		m.restoring, m.restoreSince = opened, time.Now() // finishRestore flashes once they have all come up
 	}
+
 	return m, tea.Batch(cmds...)
+}
+
+// restoresStarting counts the restored workspaces that are still starting and
+// have not waited startingTooLong yet. One that hangs gives its place up then.
+func (m Model) restoresStarting() int {
+	n := 0
+	for key, at := range m.restoreStarted {
+		ws, ok := m.openWorkspace(key)
+		if ok && ws.Starting() && time.Since(at) < startingTooLong {
+			n++
+		}
+	}
+
+	return n
+}
+
+// restoreWorkspace opens one saved workspace from its saved pool.
+func (m Model) restoreWorkspace(key string) (Model, tea.Cmd, error) {
+	path, ok := m.worktreePath(key)
+	if key == homeKey {
+		home, err := m.ctrl.GlobalConfigDir()
+		if err == nil {
+			err = m.ctrl.EnsureHomeDirTrusted()
+		}
+		if err != nil {
+			return m, nil, err
+		}
+		m.homeWSPath, m.homeWSKey, path, ok = home, key, home, true
+	}
+	if !ok {
+		return m, nil, errors.New("the worktree is gone")
+	}
+	specs, err := m.workspaceSpecs(key, true)
+	if err != nil {
+		return m, nil, err
+	}
+
+	return m.startBackground(key, path, specs, false)
 }
 
 // --- key handling ---

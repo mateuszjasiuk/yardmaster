@@ -385,6 +385,13 @@ func (m Model) openBackground(key, dir string, provider agent.Provider, prompt s
 // activateBackground opens workspace key from specs without making it
 // current, recording it as a first activation would.
 func (m Model) activateBackground(key, dir string, specs []session.Spec) (Model, tea.Cmd, error) {
+	return m.startBackground(key, dir, specs, true)
+}
+
+// startBackground is activateBackground; touch=false leaves the worktree's
+// last-opened time alone, for the startup restore, which reopens worktrees
+// without the user opening them.
+func (m Model) startBackground(key, dir string, specs []session.Spec, touch bool) (Model, tea.Cmd, error) {
 	specs, err := m.prepareWorkspaceSpecs(dir, specs)
 	if err != nil {
 		return m, nil, err
@@ -398,7 +405,9 @@ func (m Model) activateBackground(key, dir string, specs []session.Spec) (Model,
 	}
 	var save tea.Cmd
 	if m.state != nil {
-		m.state.Touch(key)
+		if touch {
+			m.state.Touch(key)
+		}
 		m.persistAgents(key)
 		save = m.writeStateCmd()
 	}
