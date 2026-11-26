@@ -187,3 +187,52 @@ func waitRestoredUp(t *testing.T, m Model) {
 		}
 	}
 }
+
+func TestStoppingAWaitingWorktreeKeepsTheRestoreFromStartingIt(t *testing.T) {
+	m := restoreModel(t, drawingAgent(t), 4)
+	m, _ = m.restoreSessions()
+
+	m.stopWorkspace("r/w4")
+	waitRestoredUp(t, m)
+	m, _ = m.startQueuedRestores()
+
+	if m.mgr.Has("r/w4") {
+		t.Error("the restore started a worktree the user stopped while it waited")
+	}
+}
+
+func TestRestoreWhereEveryStartFailedClosesItsBoard(t *testing.T) {
+	m := restoreModel(t, hangingAgent(t), 1)
+	m, _ = m.showRestoreBoard()
+	m.restoring, m.restoreStartedAt = nil, map[string]time.Time{"r/w1": time.Now()}
+
+	m, _ = m.finishRestore()
+
+	if m.boardOpen || m.restoreStartedAt != nil {
+		t.Error("a restore with nothing left should end and close its board")
+	}
+}
+
+func TestPastingIntoTheRestoreBoardKeepsItOpen(t *testing.T) {
+	m := restoreModel(t, drawingAgent(t), 2)
+	m, _ = m.restoreSessions()
+
+	mm, _ := m.typeBoardQuery(tea.PasteMsg{Content: "w2"})
+	m = mm.(Model)
+
+	if m.restoreBoardUntouched {
+		t.Error("a paste should count as using the board, or the restore closes it under the user")
+	}
+}
+
+func TestAWaitingWorktreeWithNoSavedAgentStillHasARow(t *testing.T) {
+	m := restoreModel(t, hangingAgent(t), 4)
+	m.state.SetAgents("r/w4", nil, 0)
+	m, _ = m.restoreSessions()
+
+	rows, _ := m.buildBoard()
+
+	if !slices.ContainsFunc(rows, func(r boardRow) bool { return r.key == "r/w4" && r.kind == rowQueued }) {
+		t.Error("a worktree that will start one default agent should have its row meanwhile")
+	}
+}

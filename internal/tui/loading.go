@@ -44,7 +44,7 @@ var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 // loading reports whether anything on screen shows a spinner, so the tick
 // keeps running.
 func (m Model) loading() bool {
-	if m.scanning() || len(m.creating) > 0 || len(m.restoring) > 0 {
+	if m.scanning() || len(m.creating) > 0 || m.restoreStartedAt != nil {
 		return true
 	}
 	for _, s := range m.visibleSessions() {
@@ -178,7 +178,7 @@ func (m Model) restoringSign() string {
 func (m Model) finishRestore() (Model, tea.Cmd) {
 	total := len(m.restoring)
 	waiting := len(m.restoreWaiting()) > 0
-	if total == 0 || waiting || m.restoresStarting() > 0 {
+	if m.restoreStartedAt == nil || waiting || m.restoresStarting() > 0 {
 		return m, nil
 	}
 

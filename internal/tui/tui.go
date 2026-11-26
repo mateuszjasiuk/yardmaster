@@ -2261,6 +2261,9 @@ func (m Model) agentGroup(key, repoName, wtName, path string) (agentGroup, bool)
 func (m Model) queuedAgentGroup(key, repoName, wtName, path string) agentGroup {
 	g := agentGroup{key: key, repo: repoName, worktree: wtName, path: path, opened: m.state.Opened(key), starting: true}
 	saved, _ := m.savedAgents(key)
+	if len(saved) == 0 {
+		saved = []state.AgentState{{Provider: m.defaultAgentProvider}} // the restore starts one default agent
+	}
 	for i, a := range saved {
 		provider := normalizedProvider(a.Provider)
 		g.agents = append(g.agents, boardRow{
@@ -2664,6 +2667,7 @@ func (m Model) handleBoard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // typeBoardQuery types a key or a paste into the finder query. The cursor goes
 // back to the top whenever the query changes, so the best match is selected.
 func (m Model) typeBoardQuery(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.restoreBoardUntouched = false // a paste reaches the query without handleBoard
 	before := m.boardInput.Value()
 	var cmd tea.Cmd
 	m.boardInput, cmd = m.boardInput.Update(msg)
@@ -3889,11 +3893,18 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 
 	var queue []string
 	for _, key := range m.state.Open {
-		if m.mgr.Has(key) {
+		if m.mgr.Has(key) || slices.Contains(queue, key) {
 			continue
 		}
-		_, exists := m.worktreePath(key)
-		if !exists && key != homeKey {
+		if key == homeKey {
+			// Known before its turn, so the board can list it meanwhile.
+			home, err := m.ctrl.GlobalConfigDir()
+			if err != nil {
+				m.setError("restore error (" + key + "): " + err.Error())
+				continue
+			}
+			m.homeWSPath, m.homeWSKey = home, key
+		} else if _, exists := m.worktreePath(key); !exists {
 			continue // the worktree is gone
 		}
 		queue = append(queue, key)
@@ -3905,6 +3916,9 @@ func (m Model) restoreSessions() (Model, tea.Cmd) {
 	m.restoring, m.restoreStartedAt = queue, map[string]time.Time{}
 
 	m, start := m.startQueuedRestores()
+	if len(m.restoring) == 0 {
+		return m, start // every start failed; the errors are on the bar
+	}
 	m, board := m.showRestoreBoard()
 
 	return m, tea.Batch(start, board)
@@ -3939,7 +3953,7 @@ func (m Model) startQueuedRestores() (Model, tea.Cmd) {
 		m, cmd, err = m.restoreWorkspace(key)
 		if err != nil {
 			m.setError("restore error (" + key + "): " + err.Error())
-			m.restoring = slices.DeleteFunc(slices.Clone(m.restoring), func(k string) bool { return k == key })
+			m.dropFromRestore(key)
 			continue
 		}
 		cmds = append(cmds, cmd)
@@ -3955,6 +3969,12 @@ func (m Model) startQueuedRestores() (Model, tea.Cmd) {
 // yet, in the order it starts them.
 func (m Model) restoreWaiting() []string {
 	return slices.DeleteFunc(slices.Clone(m.restoring), m.restoreStarted)
+}
+
+// dropFromRestore takes workspace key out of the restore: it failed to start,
+// or the user stopped or removed it before its turn.
+func (m *Model) dropFromRestore(key string) {
+	m.restoring = slices.DeleteFunc(slices.Clone(m.restoring), func(k string) bool { return k == key })
 }
 
 // restoreWaitsFor reports whether workspace key waits for its turn in the
@@ -3988,14 +4008,10 @@ func (m Model) restoresStarting() int {
 func (m Model) restoreWorkspace(key string) (Model, tea.Cmd, error) {
 	path, ok := m.worktreePath(key)
 	if key == homeKey {
-		home, err := m.ctrl.GlobalConfigDir()
-		if err == nil {
-			err = m.ctrl.EnsureHomeDirTrusted()
-		}
-		if err != nil {
+		if err := m.ctrl.EnsureHomeDirTrusted(); err != nil {
 			return m, nil, err
 		}
-		m.homeWSPath, m.homeWSKey, path, ok = home, key, home, true
+		path, ok = m.homeWSPath, true
 	}
 	if !ok {
 		return m, nil, errors.New("the worktree is gone")
@@ -5768,6 +5784,9 @@ func prevFileLine(fileLines []int, offset int) int {
 // stopWorkspace closes a workspace's sessions (dropping its stale attention
 // markers) and, if it was current, returns to the picker.
 func (m *Model) stopWorkspace(key string) {
+	if m.restoreWaitsFor(key) {
+		m.dropFromRestore(key) // or the restore would start it at its turn
+	}
 	if ws, ok := m.mgr.Workspace(key); ok {
 		for _, s := range ws.Agents {
 			m.clearAgentTracking(s.Pid())
